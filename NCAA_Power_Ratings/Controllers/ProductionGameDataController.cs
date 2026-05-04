@@ -883,6 +883,80 @@ namespace NCAA_Power_Ratings.Controllers
         }
 
         /// <summary>
+        /// Returns the projected conference championship game qualifiers for all
+        /// FBS conferences based on current season standings.
+        /// Example: GET /api/productiongamedata/championship-qualifiers?year=2025
+        /// </summary>
+        [HttpGet("championship-qualifiers")]
+        public async Task<IActionResult> GetChampionshipQualifiers([FromQuery] int? year)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                await using var context = await contextFactory.CreateDbContextAsync();
+
+                // Build fully-populated standings from Games table
+                var standingsByConference = await BuildConferenceStandings(context, targetYear);
+
+                var service = new ConferenceChampionshipService();
+
+                var results = standingsByConference
+                    .Where(kvp => kvp.Value.Count >= 2)
+                    .Select(kvp => service.GetQualifiers(kvp.Key, kvp.Value))
+                    .Where(r => r.Qualifier1 != null && r.Qualifier2 != null)
+                    .OrderBy(r => r.Conference switch
+                    {
+                        "SEC" => 1,
+                        "Big Ten" => 2,
+                        "ACC" => 3,
+                        "Big 12" => 4,
+                        "AAC" => 5,
+                        "MW" => 6,
+                        "MAC" => 7,
+                        "C-USA" => 8,
+                        "Sun Belt" => 9
+                        _ => 99   // anything else goes to the bottom
+                    })
+                    .Select(r => new
+                    {
+                        r.Conference,
+                        r.Format,
+                        Qualifier1 = new
+                        {
+                            r.Qualifier1.TeamName,
+                            r.Qualifier1.ConferenceWins,
+                            r.Qualifier1.ConferenceLosses,
+                            r.Qualifier1.OverallWins,
+                            r.Qualifier1.OverallLosses,
+                            r.Qualifier1.Division
+                        },
+                        Qualifier2 = new
+                        {
+                            r.Qualifier2.TeamName,
+                            r.Qualifier2.ConferenceWins,
+                            r.Qualifier2.ConferenceLosses,
+                            r.Qualifier2.OverallWins,
+                            r.Qualifier2.OverallLosses,
+                            r.Qualifier2.Division
+                        },
+                        r.Qualifier1Method,
+                        r.Qualifier2Method,
+                        r.TiebreakerLog,
+                        r.StubsApplied
+                    })
+                    .ToList();
+
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing championship qualifiers");
+                return StatusCode(500, "An error occurred computing championship qualifiers.");
+            }
+        }
+
+
+        /// <summary>
         /// Determines the conference tier for rankings.
         /// P4 = Power 4 conferences (SEC, Big Ten, Big 12, ACC)
         /// G5 = Group of 5 conferences (American, Mountain West, Sun Belt, MAC, C-USA)
@@ -926,6 +1000,140 @@ namespace NCAA_Power_Ratings.Controllers
                 return "Independent";
 
             return "Other";
+        }
+
+        /// <summary>
+        /// Builds fully-populated ConferenceStanding objects for all teams in a
+        /// given year by querying the Games table for conference-only matchups.
+        /// </summary>
+        private async Task<Dictionary<string, List<ConferenceStanding>>> BuildConferenceStandings(
+     NCAAContext context,
+     int year)
+        {
+            var teams = await context.Teams.ToDictionaryAsync(t => t.TeamID);
+            var records = await context.TeamRecords
+                .Where(tr => tr.Year == year)
+                .ToDictionaryAsync(tr => tr.TeamID);
+
+            // Pull FBS conference IDs
+            var fbsTeamIds = teams.Values
+                .Where(t => t.Division == "FBS")
+                .Select(t => t.TeamID)
+                .ToHashSet();
+
+            // Load regular season conference games only (week <= 15)
+            var allGames = await context.Games
+                .Where(g => g.Year == year && g.Week <= 15)
+                .ToListAsync();
+
+            var confGames = allGames.Where(g =>
+                fbsTeamIds.Contains(g.WinnerId) &&
+                fbsTeamIds.Contains(g.LoserId) &&
+                teams.TryGetValue(g.WinnerId, out var w) &&
+                teams.TryGetValue(g.LoserId, out var l) &&
+                w.ConferenceAbbr == l.ConferenceAbbr &&
+                !string.IsNullOrEmpty(w.ConferenceAbbr)
+            ).ToList();
+
+            // ── CTE 1: ConfRecords — conference W/L per team ──────────────────
+            var confRecords = teams.Values
+                .Where(t => t.Division == "FBS" && !string.IsNullOrEmpty(t.ConferenceAbbr))
+                .Select(t =>
+                {
+                    var confWins = confGames.Count(g => g.WinnerId == t.TeamID);
+                    var confLosses = confGames.Count(g => g.LoserId == t.TeamID);
+                    records.TryGetValue(t.TeamID, out var rec);
+
+                    return new ConferenceStanding
+                    {
+                        TeamId = t.TeamID,
+                        TeamName = t.TeamName,
+                        Conference = t.ConferenceAbbr,
+                        Division = GetDivision(t.TeamName, t.ConferenceAbbr),
+                        ConferenceWins = confWins,
+                        ConferenceLosses = confLosses,
+                        OverallWins = rec != null ? (int)rec.Wins : 0,
+                        OverallLosses = rec != null ? (int)rec.Losses : 0,
+                        ConfPointsFor = confGames
+                            .Where(g => g.WinnerId == t.TeamID).Sum(g => g.WPoints) +
+                            confGames
+                            .Where(g => g.LoserId == t.TeamID).Sum(g => g.LPoints),
+                        ConfPointsAgainst = confGames
+                            .Where(g => g.WinnerId == t.TeamID).Sum(g => g.LPoints) +
+                            confGames
+                            .Where(g => g.LoserId == t.TeamID).Sum(g => g.WPoints),
+                    };
+                })
+                .ToList();
+
+            // ── CTE 2: HeadToHeadResults — results vs conference opponents ────
+            foreach (var standing in confRecords)
+            {
+                standing.HeadToHeadResults = confGames
+                    .Where(g => g.WinnerId == standing.TeamId || g.LoserId == standing.TeamId)
+                    .GroupBy(g => g.WinnerId == standing.TeamId ? g.LoserId : g.WinnerId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Count(game => game.WinnerId == standing.TeamId) >
+                             g.Count(game => game.LoserId == standing.TeamId)
+                    );
+            }
+
+            // ── CTE 3: CommonOpponentWinPct — win pct vs conf opponents ──────
+            // (used as tiebreaker step 3 — refined to common opponents in engine)
+            foreach (var standing in confRecords)
+            {
+                var oppIds = standing.HeadToHeadResults.Keys.ToList();
+                var wins = standing.HeadToHeadResults.Values.Count(v => v);
+                var total = standing.HeadToHeadResults.Count;
+                standing.CommonOpponentWinPct = total > 0
+                    ? (double)wins / total : 0.0;
+            }
+
+            // ── CTE 4: ConfSOS — avg conf win pct of all conf opponents ──────
+            var recordById = confRecords.ToDictionary(r => r.TeamId);
+            foreach (var standing in confRecords)
+            {
+                var oppWinPcts = standing.HeadToHeadResults.Keys
+                    .Where(id => recordById.ContainsKey(id))
+                    .Select(id => recordById[id].ConferenceWinPct)
+                    .ToList();
+
+                standing.ConferenceOpponentWinPct = oppWinPcts.Any()
+                    ? oppWinPcts.Average() : 0.0;
+            }
+
+            // ── Group by conference ───────────────────────────────────────────
+            return confRecords                
+                .Where(s => s.Conference != "IND" &&
+                        s.Conference != "Pac-12" &&
+                        !string.IsNullOrEmpty(s.Conference))
+                .GroupBy(s => s.Conference)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        // Helper — maps team to their division for Sun Belt and SWAC
+        private static string GetDivision(string teamName, string conference)
+        {
+            if (conference == "Sun Belt")
+            {
+                var east = new HashSet<string>
+        {
+            "App State", "Coastal Carolina", "Georgia Southern",
+            "Georgia State", "James Madison", "Marshall",
+            "Old Dominion", "South Alabama", "Southern Miss"
+        };
+                return east.Contains(teamName) ? "East" : "West";
+            }
+            if (conference == "SWAC")
+            {
+                var east = new HashSet<string>
+        {
+            "Alabama A&M", "Alabama State", "Bethune-Cookman",
+            "Florida A&M", "Jackson State", "Miles College"
+        };
+                return east.Contains(teamName) ? "East" : "West";
+            }
+            return null; // No division
         }
     }
 
