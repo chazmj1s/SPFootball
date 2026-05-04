@@ -1406,7 +1406,7 @@ namespace NCAA_Power_Ratings.Controllers
         }
 
 
-        // Helper — maps team to their division for Sun Belt and SWAC
+        // Helper — maps team to their division for Sun Belt
 
 
         private static string GetDivision(string teamName, string conference)
@@ -1421,15 +1421,7 @@ namespace NCAA_Power_Ratings.Controllers
         };
                 return east.Contains(teamName) ? "East" : "West";
             }
-            if (conference == "SWAC")
-            {
-                var east = new HashSet<string>
-        {
-            "Alabama A&M", "Alabama State", "Bethune-Cookman",
-            "Florida A&M", "Jackson State", "Miles College"
-        };
-                return east.Contains(teamName) ? "East" : "West";
-            }
+            
             return null; // No division
         }
     }

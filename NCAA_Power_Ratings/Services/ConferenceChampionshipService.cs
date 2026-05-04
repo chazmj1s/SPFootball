@@ -117,7 +117,6 @@ namespace NCAA_Power_Ratings.Services
                 "MAC"          => GetTopTwo_MAC(standings),
                 "C-USA"        => GetTopTwo_CUSA(standings),
                 "Sun Belt"     => GetDivisionWinners_SunBelt(standings),
-                "SWAC"         => GetDivisionWinners_SWAC(standings),
                 _              => GetTopTwo_Generic(standings, conference)
             };
         }
@@ -414,42 +413,7 @@ namespace NCAA_Power_Ratings.Services
             return result;
         }
 
-        // ── Division-based: SWAC ─────────────────────────────────────────────
-
-        /// <summary>
-        /// SWAC: East and West division winners. Still division-based.
-        /// Tiebreaker within division: Head-to-head → division record →
-        /// common opponent WP → [STUB: external ranking] → coin flip.
-        /// </summary>
-        private ChampionshipQualificationResult GetDivisionWinners_SWAC(
-            List<ConferenceStanding> standings)
-        {
-            var result = new ChampionshipQualificationResult
-            {
-                Conference = "SWAC",
-                Format     = "Division winners (East vs West)"
-            };
-
-            var east = standings.Where(t => t.Division == "East")
-                                .OrderByDescending(t => t.ConferenceWinPct).ToList();
-            var west = standings.Where(t => t.Division == "West")
-                                .OrderByDescending(t => t.ConferenceWinPct).ToList();
-
-            if (!east.Any() || !west.Any())
-            {
-                result.TiebreakerLog.Add("ERROR: Missing division data for SWAC");
-                return result;
-            }
-
-            var q1 = ResolveTopSpot(east, result.TiebreakerLog, result.StubsApplied, "SWAC East", 1);
-            var q2 = ResolveTopSpot(west, result.TiebreakerLog, result.StubsApplied, "SWAC West", 1);
-
-            result.Qualifier1 = q1;
-            result.Qualifier2 = q2;
-            result.Qualifier1Method = "East Division winner";
-            result.Qualifier2Method = "West Division winner";
-            return result;
-        }
+        
 
         // ── Generic fallback ─────────────────────────────────────────────────
 
