@@ -1045,6 +1045,250 @@ namespace NCAA_Power_Ratings.Controllers
             }
         }
 
+        /// <summary>
+        /// Returns projected final conference standings for all FBS teams,
+        /// showing each team's actual results to date and projected results
+        /// for remaining games, with per-game detail.
+        ///
+        /// throughWeek: simulate mid-season by treating games after this week
+        /// as unplayed. Omit to use all actual results to date.
+        ///
+        /// conference: optional filter to a single conference abbreviation.
+        ///
+        /// Examples:
+        ///   GET /api/productiongamedata/projected-standings?year=2025
+        ///   GET /api/productiongamedata/projected-standings?year=2025&throughWeek=8
+        ///   GET /api/productiongamedata/projected-standings?year=2025&throughWeek=8&conference=SEC
+        /// </summary>
+        [HttpGet("projected-standings")]
+        public async Task<IActionResult> GetProjectedStandings(
+            [FromQuery] int? year,
+            [FromQuery] int? throughWeek,
+            [FromQuery] string conference = null,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                await using var context = await contextFactory.CreateDbContextAsync(token);
+
+                var teams = await context.Teams.ToDictionaryAsync(t => t.TeamID, token);
+                var records = await context.TeamRecords
+                    .Where(tr => tr.Year == targetYear)
+                    .ToDictionaryAsync(tr => tr.TeamID, token);
+
+                // FBS team IDs
+                var fbsTeamIds = teams.Values
+                    .Where(t => t.Division == "FBS")
+                    .Select(t => t.TeamID)
+                    .ToHashSet();
+
+                // All regular season games
+                var allGames = await context.Games
+                    .Where(g => g.Year == targetYear && g.Week < 16)
+                    .ToListAsync(token);
+
+                // Conference game predicate
+                bool IsConfGame(Game g) =>
+                    fbsTeamIds.Contains(g.WinnerId) &&
+                    fbsTeamIds.Contains(g.LoserId) &&
+                    teams.TryGetValue(g.WinnerId, out var w) &&
+                    teams.TryGetValue(g.LoserId, out var l) &&
+                    !string.IsNullOrEmpty(w.ConferenceAbbr) &&
+                    w.ConferenceAbbr == l.ConferenceAbbr;
+
+                // Split played vs unplayed
+                var playedConfGames = allGames
+                    .Where(g => IsConfGame(g) &&
+                                (g.WPoints > 0 || g.LPoints > 0) &&
+                                (!throughWeek.HasValue || g.Week <= throughWeek.Value))
+                    .ToList();
+
+                var unplayedConfGames = allGames
+                    .Where(g => IsConfGame(g) &&
+                                (g.WPoints == 0 && g.LPoints == 0 ||
+                                 throughWeek.HasValue && g.Week > throughWeek.Value))
+                    .ToList();
+
+                // ── Project unplayed games ────────────────────────────────────────
+                var matchupRequests = unplayedConfGames
+                    .Where(g => teams.ContainsKey(g.WinnerId) && teams.ContainsKey(g.LoserId))
+                    .Select(g => new MatchupRequest
+                    {
+                        TeamName = teams[g.WinnerId].TeamName,
+                        OpponentName = teams[g.LoserId].TeamName,
+                        Location = g.Location,
+                        Week = g.Week
+                    })
+                    .ToList();
+
+                var predictions = matchupRequests.Any()
+                    ? await predictionService.PredictMatchups(targetYear, matchupRequests, token)
+                    : new List<GamePrediction>();
+
+                // Key: "TeamName|OpponentName" → prediction
+                var predictionMap = predictions.ToDictionary(
+                    p => $"{p.TeamName}|{p.OpponentName}",
+                    p => p
+                );
+
+                // ── Build per-team projected schedule ─────────────────────────────
+                var targetTeams = teams.Values
+                    .Where(t => t.Division == "FBS" &&
+                                !string.IsNullOrEmpty(t.ConferenceAbbr) &&
+                                t.ConferenceAbbr != "IND" &&
+                                t.ConferenceAbbr != "Pac-12" &&
+                                (conference == null ||
+                                 t.ConferenceAbbr.Equals(conference, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                var teamResults = targetTeams.Select(team =>
+                {
+                    // All conference games involving this team
+                    var teamConfGames = allGames
+                        .Where(g => IsConfGame(g) &&
+                                    (g.WinnerId == team.TeamID || g.LoserId == team.TeamID) &&
+                                    g.Week < 16)
+                        .OrderBy(g => g.Week)
+                        .ToList();
+
+                    int actualWins = 0, actualLosses = 0;
+                    int projWins = 0, projLosses = 0;
+
+                    var gameDetails = teamConfGames.Select(g =>
+                    {
+                        var isHome = g.WinnerId == team.TeamID
+                            ? g.Location == 'W'
+                            : g.Location == 'L';
+                        var oppId = g.WinnerId == team.TeamID ? g.LoserId : g.WinnerId;
+                        teams.TryGetValue(oppId, out var opp);
+                        var oppName = opp?.ShortName ?? opp?.TeamName ?? "Unknown";
+
+                        bool isPlayed = (g.WPoints > 0 || g.LPoints > 0) &&
+                                         (!throughWeek.HasValue || g.Week <= throughWeek.Value);
+
+                        if (isPlayed)
+                        {
+                            bool won = g.WinnerId == team.TeamID;
+                            if (won) actualWins++; else actualLosses++;
+
+                            var teamScore = won ? g.WPoints : g.LPoints;
+                            var oppScore = won ? g.LPoints : g.WPoints;
+
+                            return new
+                            {
+                                g.Week,
+                                Opponent = oppName,
+                                Location = isHome ? "vs" : "@",
+                                Result = won ? "W" : "L",
+                                Score = $"{teamScore}-{oppScore}",
+                                ProjScore = (string)null,
+                                Confidence = (string)null,
+                                Type = "Actual",
+                                NeutralSite = g.Location == 'N'
+                            };
+                        }
+                        else
+                        {
+                            // Get projection
+                            var teamName = team.TeamName;
+                            var oppTeamName = opp?.TeamName ?? "Unknown";
+                            var key = $"{teamName}|{oppTeamName}";
+                            var altKey = $"{oppTeamName}|{teamName}";
+
+                            double projTeamScore = 0, projOppScore = 0;
+                            string confidence = "Unknown";
+                            bool projWin = false;
+
+                            if (predictionMap.TryGetValue(key, out var pred))
+                            {
+                                projTeamScore = pred.PredictedTeamScore;
+                                projOppScore = pred.PredictedOpponentScore;
+                                confidence = pred.Confidence;
+                                projWin = projTeamScore >= projOppScore;
+                            }
+                            else if (predictionMap.TryGetValue(altKey, out var altPred))
+                            {
+                                projTeamScore = altPred.PredictedOpponentScore;
+                                projOppScore = altPred.PredictedTeamScore;
+                                confidence = altPred.Confidence;
+                                projWin = projTeamScore >= projOppScore;
+                            }
+                            else
+                            {
+                                // No prediction — assume home team wins
+                                projWin = isHome;
+                            }
+
+                            if (projWin) projWins++; else projLosses++;
+
+                            return new
+                            {
+                                g.Week,
+                                Opponent = oppName,
+                                Location = isHome ? "vs" : "@",
+                                Result = projWin ? "W" : "L",
+                                Score = (string)null,
+                                ProjScore = projTeamScore > 0
+                                    ? $"{Math.Round(projTeamScore)}-{Math.Round(projOppScore)}"
+                                    : null,
+                                Confidence = confidence,
+                                Type = "Projected",
+                                NeutralSite = g.Location == 'N'
+                            };
+                        }
+                    }).ToList();
+
+                    // Projected finish rank within conference — computed after all teams processed
+                    return new
+                    {
+                        team.TeamName,
+                        Conference = team.ConferenceAbbr,
+                        Division = GetDivision(team.TeamName, team.ConferenceAbbr),
+                        ActualWins = actualWins,
+                        ActualLosses = actualLosses,
+                        ProjectedWins = actualWins + projWins,
+                        ProjectedLosses = actualLosses + projLosses,
+                        ProjectedWinPct = Math.Round(
+                            (actualWins + projWins + actualLosses + projLosses) > 0
+                                ? (double)(actualWins + projWins) /
+                                  (actualWins + projWins + actualLosses + projLosses)
+                                : 0.0, 3),
+                        Games = gameDetails,
+                        SimulatedThrough = throughWeek.HasValue
+                            ? $"Week {throughWeek}"
+                            : "Current"
+                    };
+                }).ToList();
+
+                // ── Sort: by conference, then projected win pct desc ──────────────
+                var sorted = teamResults
+                    .OrderBy(t => t.Conference switch
+                    {
+                        "SEC" => 1,
+                        "Big Ten" => 2,
+                        "ACC" => 3,
+                        "Big 12" => 4,
+                        "AAC" => 5,
+                        "MW" => 6,
+                        "MAC" => 7,
+                        "C-USA" => 8,
+                        "Sun Belt" => 9,
+                        _ => 99
+                    })
+                    .ThenByDescending(t => t.ProjectedWinPct)
+                    .ThenByDescending(t => t.ProjectedWins)
+                    .ToList();
+
+                return Ok(sorted);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing projected standings");
+                return StatusCode(500, "An error occurred computing projected standings.");
+            }
+        }
+
 
         /// <summary>
         /// Determines the conference tier for rankings.
