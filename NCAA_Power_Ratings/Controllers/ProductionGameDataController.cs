@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NCAA_Power_Ratings.Data;
+using NCAA_Power_Ratings.Models;
 using NCAA_Power_Ratings.Services;
 
 namespace NCAA_Power_Ratings.Controllers
@@ -11,10 +12,13 @@ namespace NCAA_Power_Ratings.Controllers
     [ApiController]
     [Route("api/[controller]")]
     public class ProductionGameDataController(
-        GamePredictionService gamePredictionService,
-        IDbContextFactory<NCAAContext> contextFactory,
-        ILogger<ProductionGameDataController> logger) : ControllerBase
+    IDbContextFactory<NCAAContext> contextFactory,
+    ILogger<ProductionGameDataController> logger,
+    GamePredictionService predictionService) : ControllerBase
     {
+        private readonly GamePredictionService _predictionService = predictionService;
+
+
         /// <summary>
         /// Predicts the score for a single matchup between two teams.
         /// Location: 'H' = team is home, 'A' = team is away, 'N' = neutral site
@@ -38,7 +42,7 @@ namespace NCAA_Power_Ratings.Controllers
 
                 var targetYear = year ?? DateTime.Now.Year;
 
-                var prediction = await gamePredictionService.PredictMatchup(
+                var prediction = await _predictionService.PredictMatchup(
                     targetYear, teamName, opponentName, location, week);
 
                 return Ok(new
@@ -79,7 +83,7 @@ namespace NCAA_Power_Ratings.Controllers
         {
             try
             {
-                var predictions = await gamePredictionService.PredictMatchups(
+                var predictions = await _predictionService.PredictMatchups(
                     request.Year, request.Matchups);
 
                 return Ok(new
@@ -914,7 +918,7 @@ namespace NCAA_Power_Ratings.Controllers
                         "MW" => 6,
                         "MAC" => 7,
                         "C-USA" => 8,
-                        "Sun Belt" => 9
+                        "Sun Belt" => 9,
                         _ => 99   // anything else goes to the bottom
                     })
                     .Select(r => new
@@ -952,6 +956,92 @@ namespace NCAA_Power_Ratings.Controllers
             {
                 logger.LogError(ex, "Error computing championship qualifiers");
                 return StatusCode(500, "An error occurred computing championship qualifiers.");
+            }
+        }
+
+        /// <summary>
+        /// Returns projected conference championship game qualifiers by combining
+        /// actual results through the specified week with GamePredictionService
+        /// projections for all remaining unplayed games.
+        ///
+        /// throughWeek parameter: simulate mid-season by treating games after
+        /// this week as unplayed. Omit to use all actual results to date.
+        ///
+        /// Examples:
+        ///   GET /api/productiongamedata/projected-championship-qualifiers?year=2025
+        ///   GET /api/productiongamedata/projected-championship-qualifiers?year=2025&throughWeek=8
+        /// </summary>
+        [HttpGet("projected-championship-qualifiers")]
+        public async Task<IActionResult> GetProjectedChampionshipQualifiers(
+            [FromQuery] int? year,
+            [FromQuery] int? throughWeek,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                await using var context = await contextFactory.CreateDbContextAsync(token);
+
+                var standingsByConference = await BuildProjectedConferenceStandings(
+                    context, targetYear, throughWeek, token);
+
+                var service = new ConferenceChampionshipService();
+
+                var results = standingsByConference
+                    .Where(kvp => kvp.Value.Count >= 2)
+                    .Select(kvp => service.GetQualifiers(kvp.Key, kvp.Value))
+                    .Where(r => r.Qualifier1 != null && r.Qualifier2 != null)
+                    .OrderBy(r => r.Conference switch
+                    {
+                        "SEC" => 1,
+                        "Big Ten" => 2,
+                        "ACC" => 3,
+                        "Big 12" => 4,
+                        "AAC" => 5,
+                        "MW" => 6,
+                        "MAC" => 7,
+                        "C-USA" => 8,
+                        "Sun Belt" => 9,
+                        _ => 99
+                    })
+                    .Select(r => new
+                    {
+                        r.Conference,
+                        r.Format,
+                        Qualifier1 = new
+                        {
+                            r.Qualifier1.TeamName,
+                            r.Qualifier1.ConferenceWins,
+                            r.Qualifier1.ConferenceLosses,
+                            r.Qualifier1.OverallWins,
+                            r.Qualifier1.OverallLosses,
+                            r.Qualifier1.Division
+                        },
+                        Qualifier2 = new
+                        {
+                            r.Qualifier2.TeamName,
+                            r.Qualifier2.ConferenceWins,
+                            r.Qualifier2.ConferenceLosses,
+                            r.Qualifier2.OverallWins,
+                            r.Qualifier2.OverallLosses,
+                            r.Qualifier2.Division
+                        },
+                        r.Qualifier1Method,
+                        r.Qualifier2Method,
+                        r.TiebreakerLog,
+                        r.StubsApplied,
+                        SimulatedThrough = throughWeek.HasValue
+                            ? $"Week {throughWeek} (weeks {throughWeek + 1}-15 projected)"
+                            : "Full season actual results"
+                    })
+                    .ToList();
+
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing projected championship qualifiers");
+                return StatusCode(500, "An error occurred computing projected championship qualifiers.");
             }
         }
 
@@ -1006,9 +1096,7 @@ namespace NCAA_Power_Ratings.Controllers
         /// Builds fully-populated ConferenceStanding objects for all teams in a
         /// given year by querying the Games table for conference-only matchups.
         /// </summary>
-        private async Task<Dictionary<string, List<ConferenceStanding>>> BuildConferenceStandings(
-     NCAAContext context,
-     int year)
+        private async Task<Dictionary<string, List<ConferenceStanding>>> BuildConferenceStandings(NCAAContext context,int year)
         {
             var teams = await context.Teams.ToDictionaryAsync(t => t.TeamID);
             var records = await context.TeamRecords
@@ -1111,7 +1199,216 @@ namespace NCAA_Power_Ratings.Controllers
                 .GroupBy(s => s.Conference)
                 .ToDictionary(g => g.Key, g => g.ToList());
         }
+
+        /// <summary>
+        /// Builds ConferenceStanding objects using:
+        ///   - Actual results for games played on or before throughWeek
+        ///   - GamePredictionService projections for all remaining games
+        /// If throughWeek is null, all games with scores are treated as played.
+        /// </summary>
+        private async Task<Dictionary<string, List<ConferenceStanding>>> BuildProjectedConferenceStandings(
+            NCAAContext context,
+            int year,
+            int? throughWeek = null,
+            CancellationToken token = default)
+        {
+            var teams = await context.Teams.ToDictionaryAsync(t => t.TeamID, token);
+            var records = await context.TeamRecords
+                .Where(tr => tr.Year == year)
+                .ToDictionaryAsync(tr => tr.TeamID, token);
+
+            // FBS team IDs
+            var fbsTeamIds = teams.Values
+                .Where(t => t.Division == "FBS")
+                .Select(t => t.TeamID)
+                .ToHashSet();
+
+            // All regular season games
+            var allGames = await context.Games
+                .Where(g => g.Year == year && g.Week < 16)
+                .ToListAsync(token);
+
+            // Conference game predicate
+            bool IsConfGame(Game g) =>
+                fbsTeamIds.Contains(g.WinnerId) &&
+                fbsTeamIds.Contains(g.LoserId) &&
+                teams.TryGetValue(g.WinnerId, out var w) &&
+                teams.TryGetValue(g.LoserId, out var l) &&
+                !string.IsNullOrEmpty(w.ConferenceAbbr) &&
+                w.ConferenceAbbr == l.ConferenceAbbr;
+
+            // Played = has a score AND within the cutoff week
+            var playedConfGames = allGames
+                .Where(g => IsConfGame(g) &&
+                            (g.WPoints > 0 || g.LPoints > 0) &&
+                            (!throughWeek.HasValue || g.Week <= throughWeek.Value))
+                .ToList();
+
+            // Unplayed = no score OR beyond the cutoff week
+            var unplayedConfGames = allGames
+                .Where(g => IsConfGame(g) &&
+                            (g.WPoints == 0 && g.LPoints == 0 ||
+                             throughWeek.HasValue && g.Week > throughWeek.Value))
+                .ToList();
+
+            // ── Project unplayed conference games ─────────────────────────────────
+            var matchupRequests = unplayedConfGames
+                .Where(g => teams.ContainsKey(g.WinnerId) && teams.ContainsKey(g.LoserId))
+                .Select(g => new MatchupRequest
+                {
+                    TeamName = teams[g.WinnerId].TeamName,
+                    OpponentName = teams[g.LoserId].TeamName,
+                    Location = g.Location,
+                    Week = g.Week
+                })
+                .ToList();
+
+            var predictions = matchupRequests.Any()
+                ? await _predictionService.PredictMatchups(year, matchupRequests, token)
+                : new List<GamePrediction>();
+
+            // Key: "TeamName|OpponentName" → prediction
+            var predictionMap = predictions.ToDictionary(
+                p => $"{p.TeamName}|{p.OpponentName}",
+                p => p
+            );
+
+            // Resolve projected winner for each unplayed game
+            // Returns (WinnerId, LoserId) tuples
+            var projectedResults = new List<(int WinnerId, int LoserId)>();
+
+            foreach (var g in unplayedConfGames)
+            {
+                if (!teams.TryGetValue(g.WinnerId, out var wTeam)) continue;
+                if (!teams.TryGetValue(g.LoserId, out var lTeam)) continue;
+
+                var key = $"{wTeam.TeamName}|{lTeam.TeamName}";
+                var altKey = $"{lTeam.TeamName}|{wTeam.TeamName}";
+
+                if (predictionMap.TryGetValue(key, out var pred))
+                {
+                    // WinnerId team is TeamName in prediction
+                    if (pred.PredictedTeamScore >= pred.PredictedOpponentScore)
+                        projectedResults.Add((g.WinnerId, g.LoserId));
+                    else
+                        projectedResults.Add((g.LoserId, g.WinnerId));
+                }
+                else if (predictionMap.TryGetValue(altKey, out var altPred))
+                {
+                    // WinnerId team is OpponentName in prediction
+                    if (altPred.PredictedOpponentScore >= altPred.PredictedTeamScore)
+                        projectedResults.Add((g.WinnerId, g.LoserId));
+                    else
+                        projectedResults.Add((g.LoserId, g.WinnerId));
+                }
+                else
+                {
+                    // No prediction — default to listed winner (home field advantage baked in)
+                    projectedResults.Add((g.WinnerId, g.LoserId));
+                }
+            }
+
+            // ── Build standings — actual + projected ──────────────────────────────
+            var confRecords = teams.Values
+                .Where(t => t.Division == "FBS" && !string.IsNullOrEmpty(t.ConferenceAbbr))
+                .Select(t =>
+                {
+                    var actualWins = playedConfGames.Count(g => g.WinnerId == t.TeamID);
+                    var actualLosses = playedConfGames.Count(g => g.LoserId == t.TeamID);
+
+                    var projWins = projectedResults.Count(r =>
+                        r.WinnerId == t.TeamID &&
+                        unplayedConfGames.Any(g =>
+                            g.WinnerId == r.WinnerId && g.LoserId == r.LoserId));
+
+                    var projLosses = projectedResults.Count(r =>
+                        r.LoserId == t.TeamID &&
+                        unplayedConfGames.Any(g =>
+                            g.WinnerId == r.WinnerId && g.LoserId == r.LoserId));
+
+                    records.TryGetValue(t.TeamID, out var rec);
+
+                    return new ConferenceStanding
+                    {
+                        TeamId = t.TeamID,
+                        TeamName = t.TeamName,
+                        Conference = t.ConferenceAbbr,
+                        Division = GetDivision(t.TeamName, t.ConferenceAbbr),
+                        ConferenceWins = actualWins + projWins,
+                        ConferenceLosses = actualLosses + projLosses,
+                        OverallWins = rec != null ? (int)rec.Wins : 0,
+                        OverallLosses = rec != null ? (int)rec.Losses : 0,
+                        ConfPointsFor =
+                            playedConfGames.Where(g => g.WinnerId == t.TeamID).Sum(g => g.WPoints) +
+                            playedConfGames.Where(g => g.LoserId == t.TeamID).Sum(g => g.LPoints),
+                        ConfPointsAgainst =
+                            playedConfGames.Where(g => g.WinnerId == t.TeamID).Sum(g => g.LPoints) +
+                            playedConfGames.Where(g => g.LoserId == t.TeamID).Sum(g => g.WPoints),
+                    };
+                })
+                .ToList();
+
+            // ── Head-to-head: actual results take precedence over projected ───────
+            foreach (var standing in confRecords)
+            {
+                // Actual H2H
+                var playedH2H = playedConfGames
+                    .Where(g => g.WinnerId == standing.TeamId || g.LoserId == standing.TeamId)
+                    .GroupBy(g => g.WinnerId == standing.TeamId ? g.LoserId : g.WinnerId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Count(game => game.WinnerId == standing.TeamId) >
+                             g.Count(game => game.LoserId == standing.TeamId)
+                    );
+
+                // Projected H2H — only for opponents not yet played
+                var projH2H = projectedResults
+                    .Where(r =>
+                        (r.WinnerId == standing.TeamId || r.LoserId == standing.TeamId) &&
+                        !playedH2H.ContainsKey(
+                            r.WinnerId == standing.TeamId ? r.LoserId : r.WinnerId))
+                    .GroupBy(r => r.WinnerId == standing.TeamId ? r.LoserId : r.WinnerId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Count(r => r.WinnerId == standing.TeamId) >
+                             g.Count(r => r.LoserId == standing.TeamId)
+                    );
+
+                standing.HeadToHeadResults = playedH2H
+                    .Concat(projH2H)
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            }
+
+            // ── CommonOpponentWinPct and ConfSOS ──────────────────────────────────
+            var recordById = confRecords.ToDictionary(r => r.TeamId);
+
+            foreach (var standing in confRecords)
+            {
+                var wins = standing.HeadToHeadResults.Values.Count(v => v);
+                var total = standing.HeadToHeadResults.Count;
+                standing.CommonOpponentWinPct = total > 0 ? (double)wins / total : 0.0;
+
+                var oppWinPcts = standing.HeadToHeadResults.Keys
+                    .Where(id => recordById.ContainsKey(id))
+                    .Select(id => recordById[id].ConferenceWinPct)
+                    .ToList();
+                standing.ConferenceOpponentWinPct = oppWinPcts.Any()
+                    ? oppWinPcts.Average() : 0.0;
+            }
+
+            // ── Filter and group ──────────────────────────────────────────────────
+            return confRecords
+                .Where(s => s.Conference != "IND" &&
+                            s.Conference != "Pac-12" &&
+                            !string.IsNullOrEmpty(s.Conference))
+                .GroupBy(s => s.Conference)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+
         // Helper — maps team to their division for Sun Belt and SWAC
+
+
         private static string GetDivision(string teamName, string conference)
         {
             if (conference == "Sun Belt")
