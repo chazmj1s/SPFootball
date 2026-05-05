@@ -9,48 +9,35 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 {
     public class ScheduleViewModel : BaseViewModel
     {
-        private readonly GameDataApiService _apiService;
+        private readonly GameDataApiService    _apiService;
+        private readonly SharedNavigationStateService _navState;
         private List<GameResult> _allGames = new();
         private ObservableCollection<GameResult> _games = new();
-        private bool _isBusy;
-        private int _selectedYear = 2025;
-        private int _selectedWeek = 1;
-        private string _activeFilter = "All";
+        private bool   _isBusy;
+        private string _activeFilter   = "All";
         private string _selectedFilter = "All";
-        private string _statusMessage = string.Empty;
+        private string _statusMessage  = string.Empty;
 
-        public ScheduleViewModel(GameDataApiService apiService, FollowService followService)
+        public ScheduleViewModel(
+            GameDataApiService apiService,
+            FollowService followService,
+            SharedNavigationStateService navState)
             : base(followService)
         {
             _apiService = apiService;
+            _navState   = navState;
 
             LoadDataCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-            RefreshCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-            SelectWeekCommand = new Microsoft.Maui.Controls.Command<int>(OnWeekSelected);
-
-            SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
-            {
-                var years = Enumerable.Range(1965, 2025 - 1965 + 1)
-                    .Select(y => y.ToString())
-                    .Reverse()
-                    .ToArray();
-
-                var result = await Shell.Current.DisplayActionSheet(
-                    "Select Year", "Cancel", null, years);
-
-                if (result != null && result != "Cancel" && int.TryParse(result, out int year))
-                    SelectedYear = year;
-            });
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var options = new List<string> { "All", "Followed", "P4", "G5", "── Conf ──" };
-                options.AddRange(ConferenceHelper.OrderedConferences.Select(c => c.Display));
+                var options = new List<string> { "All", "Followed", "P4", "G5" };
 
                 var result = await Shell.Current.DisplayActionSheet(
                     "Filter", "Cancel", null, options.ToArray());
 
-                if (result != null && result != "Cancel" && !result.StartsWith("──"))
+                if (result != null && result != "Cancel")
                 {
                     _activeFilter = result;
                     SelectedFilter = result;
@@ -60,20 +47,31 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
             PreviousWeekCommand = new Microsoft.Maui.Controls.Command(() =>
             {
-                var idx = Weeks.ToList().FindIndex(w => w.Week == _selectedWeek);
-                if (idx > 0) OnWeekSelected(Weeks[idx - 1].Week);
+                var idx = _navState.Weeks.ToList().FindIndex(w => w.Week == _navState.SelectedWeek);
+                if (idx > 0) _navState.SelectedWeek = _navState.Weeks[idx - 1].Week;
             });
 
             NextWeekCommand = new Microsoft.Maui.Controls.Command(() =>
             {
-                var idx = Weeks.ToList().FindIndex(w => w.Week == _selectedWeek);
-                if (idx < Weeks.Count - 1) OnWeekSelected(Weeks[idx + 1].Week);
+                var idx = _navState.Weeks.ToList().FindIndex(w => w.Week == _navState.SelectedWeek);
+                if (idx < _navState.Weeks.Count - 1)
+                    _navState.SelectedWeek = _navState.Weeks[idx + 1].Week;
             });
 
+            _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
         }
 
-        // ── Bindable collections ──────────────────────────────────────
+        private void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
+                _ = LoadDataAsync();
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek) ||
+                e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                ApplyFiltersAndSort();
+        }
+
+        // ── Bindable collections ──────────────────────────────────────────
 
         public ObservableCollection<GameResult> Games
         {
@@ -81,9 +79,7 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             set { _games = value; OnPropertyChanged(); }
         }
 
-        public ObservableCollection<WeekItem> Weeks { get; } = new();
-
-        // ── Bindable properties ───────────────────────────────────────
+        // ── Bindable properties ───────────────────────────────────────────
 
         public bool IsBusy
         {
@@ -91,7 +87,8 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             set { _isBusy = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsLoading)); }
         }
 
-        public bool IsLoading => _isBusy;
+        public bool   IsLoading => _isBusy;
+        public bool   HasLoaded { get; private set; }
 
         public string StatusMessage
         {
@@ -99,45 +96,21 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             set { _statusMessage = value; OnPropertyChanged(); }
         }
 
-        public int SelectedYear
-        {
-            get => _selectedYear;
-            set
-            {
-                if (_selectedYear != value)
-                {
-                    _selectedYear = value;
-                    OnPropertyChanged();
-                    _ = LoadDataAsync();
-                }
-            }
-        }
-
-        public int SelectedWeek
-        {
-            get => _selectedWeek;
-            set { _selectedWeek = value; OnPropertyChanged(); }
-        }
-
         public string SelectedFilter
         {
             get => _selectedFilter;
             set { _selectedFilter = value; OnPropertyChanged(); }
         }
-        public bool HasLoaded { get; private set; }
 
+        // ── Commands ──────────────────────────────────────────────────────
 
-        // ── Commands ──────────────────────────────────────────────────
-
-        public ICommand LoadDataCommand { get; }
-        public ICommand RefreshCommand { get; }
-        public ICommand SelectWeekCommand { get; }
-        public ICommand SelectYearCommand { get; }
+        public ICommand LoadDataCommand     { get; }
+        public ICommand RefreshCommand      { get; }
         public ICommand SelectFilterCommand { get; }
         public ICommand PreviousWeekCommand { get; }
-        public ICommand NextWeekCommand { get; }
+        public ICommand NextWeekCommand     { get; }
 
-        // ── Load ──────────────────────────────────────────────────────
+        // ── Load ──────────────────────────────────────────────────────────
 
         public async Task LoadDataAsync()
         {
@@ -147,46 +120,31 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
             try
             {
-                var games = await _apiService.GetScheduleAsync(_selectedYear);
+                var games = await _apiService.GetScheduleAsync(_navState.SelectedYear);
                 if (games == null || games.Count == 0)
                 {
                     StatusMessage = "No games found";
                     return;
                 }
 
-                // Stamp sequence numbers
                 for (int i = 0; i < games.Count; i++)
                     games[i].SequenceNumber = i + 1;
 
                 _allGames = games;
 
-                // Sync follow state
                 var followedIds = _followService.GetFollowedIds();
                 foreach (var g in _allGames)
                 {
                     g.WinnerIsFollowed = followedIds.Contains(g.WinnerId);
-                    g.LoserIsFollowed = followedIds.Contains(g.LoserId);
+                    g.LoserIsFollowed  = followedIds.Contains(g.LoserId);
                 }
 
-                // Build week list
                 var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
-                Weeks.Clear();
-                foreach (var w in weeks) Weeks.Add(new WeekItem { Week = w });
-
-                // Default to most recent week with played games
-                var lastPlayedWeek = games
-                    .Where(g => g.IsPlayed)
-                    .Select(g => g.Week)
-                    .DefaultIfEmpty(weeks.First())
-                    .Max();
-
-                _selectedWeek = lastPlayedWeek;
-                OnPropertyChanged(nameof(SelectedWeek));
-                foreach (var w in Weeks) w.IsSelected = w.Week == _selectedWeek;
+                _navState.SetWeeks(weeks);
+                _navState.SetDefaultWeek(games.Where(g => g.IsPlayed).Select(g => g.Week));
 
                 ApplyFiltersAndSort();
                 StatusMessage = "( ) = projected value";
-                
                 HasLoaded = true;
             }
             catch (Exception ex)
@@ -199,42 +157,37 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             }
         }
 
-        // ── Filter / sort ─────────────────────────────────────────────
-
-        private void OnWeekSelected(int week)
-        {
-            _selectedWeek = week;
-            foreach (var w in Weeks) w.IsSelected = w.Week == _selectedWeek;
-            OnPropertyChanged(nameof(SelectedWeek));
-            ApplyFiltersAndSort();
-        }
+        // ── Filter / sort ─────────────────────────────────────────────────
 
         private void ApplyFiltersAndSort()
         {
             IEnumerable<GameResult> filtered = _allGames;
 
             // Week filter
-            filtered = filtered.Where(g => g.Week == _selectedWeek);
+            filtered = filtered.Where(g => g.Week == _navState.SelectedWeek);
 
-            // Tier / conference / followed filter
+            // Conference filter from shared nav state
+            var conf = _navState.SelectedConference;
+            if (conf != "All")
+            {
+                var abbr = ConferenceHelper.DisplayToAbbr(conf);
+                filtered = filtered.Where(g =>
+                    g.WinnerConf.Equals(abbr, StringComparison.OrdinalIgnoreCase) ||
+                    g.LoserConf.Equals(abbr,  StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Additional filter (All/Followed/P4/G5)
             filtered = _activeFilter switch
             {
-                "All" => filtered,
+                "All"      => filtered,
                 "Followed" => filtered.Where(g => g.WinnerIsFollowed || g.LoserIsFollowed),
-                "P4" => filtered.Where(g => g.WinnerTier == "P4" || g.LoserTier == "P4"),
-                "G5" => filtered.Where(g => g.WinnerTier == "G5" || g.LoserTier == "G5"),
-                _ => filtered.Where(g =>
-                {
-                    var abbr = ConferenceHelper.DisplayToAbbr(_activeFilter);
-                    return g.WinnerConf.Equals(abbr, StringComparison.OrdinalIgnoreCase) ||
-                           g.LoserConf.Equals(abbr, StringComparison.OrdinalIgnoreCase);
-                })
+                "P4"       => filtered.Where(g => g.WinnerTier == "P4" || g.LoserTier == "P4"),
+                "G5"       => filtered.Where(g => g.WinnerTier == "G5" || g.LoserTier == "G5"),
+                _          => filtered
             };
 
-            // Sort by original sequence (preserves date/game order within week)
             var sorted = filtered.OrderBy(g => g.SequenceNumber).ToList();
 
-            // Stamp ShowGroupHeader — true for first game of each date group
             string lastHeader = null;
             foreach (var g in sorted)
             {
@@ -245,14 +198,14 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             Games = new ObservableCollection<GameResult>(sorted);
         }
 
-        // ── Follow sync ───────────────────────────────────────────────
+        // ── Follow sync ───────────────────────────────────────────────────
 
         private void OnTeamFollowChanged(int teamId, bool isFollowed)
         {
             foreach (var g in _allGames)
             {
                 if (g.WinnerId == teamId) g.WinnerIsFollowed = isFollowed;
-                if (g.LoserId == teamId) g.LoserIsFollowed = isFollowed;
+                if (g.LoserId  == teamId) g.LoserIsFollowed  = isFollowed;
             }
 
             MainThread.BeginInvokeOnMainThread(() =>
@@ -269,13 +222,13 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
         }
     }
 
-    // ── Week selector item ────────────────────────────────────────────
+    // ── Week selector item ────────────────────────────────────────────────
 
     public class WeekItem : INotifyPropertyChanged
     {
         private bool _isSelected;
 
-        public int Week { get; init; }
+        public int    Week  { get; init; }
         public string Label => $"Wk{Week}";
 
         public bool IsSelected

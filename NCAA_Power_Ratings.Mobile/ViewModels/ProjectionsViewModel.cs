@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Text.Json;
 using System.Windows.Input;
 using NCAA_Power_Ratings.Mobile.Helpers;
 using NCAA_Power_Ratings.Mobile.Models;
@@ -10,74 +9,29 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 {
     public class ProjectionsViewModel : BaseViewModel
     {
-        private readonly GameDataApiService _apiService;
+        private readonly GameDataApiService    _apiService;
+        private readonly SharedNavigationStateService _navState;
 
-        private bool   _isBusy;
-        private int    _selectedYear    = 2025;
-        private int    _selectedWeek    = 15;
-        private string _selectedView    = "Standings";   // "Standings" | "Championship"
-        private string _activeConference = "All";
-        private string _selectedConference = "All";
-        private string _statusMessage   = string.Empty;
-
-        // Raw data from API
         private List<ProjectedTeamStanding>  _allStandings     = new();
         private List<ChampionshipMatchup>    _allChampionships = new();
+        private bool   _isBusy;
+        private string _selectedView  = "Standings";
+        private string _statusMessage = string.Empty;
 
-        public ProjectionsViewModel(GameDataApiService apiService, FollowService followService)
+        public ProjectionsViewModel(
+            GameDataApiService apiService,
+            FollowService followService,
+            SharedNavigationStateService navState)
             : base(followService)
         {
             _apiService = apiService;
+            _navState   = navState;
 
             LoadDataCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-
-            SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
-            {
-                var years = Enumerable.Range(1965, 2025 - 1965 + 1)
-                    .Select(y => y.ToString())
-                    .Reverse()
-                    .ToArray();
-
-                var result = await Shell.Current.DisplayActionSheet(
-                    "Select Year", "Cancel", null, years);
-
-                if (result != null && result != "Cancel" && int.TryParse(result, out int year))
-                    SelectedYear = year;
-            });
-
-            SelectWeekCommand = new Microsoft.Maui.Controls.Command<int>(OnWeekSelected);
 
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
                 SelectedView = view;
-            });
-
-            SelectConferenceCommand = new Microsoft.Maui.Controls.Command(async () =>
-            {
-                var fbsConferences = new List<string> { "All" };
-                fbsConferences.AddRange(ConferenceHelper.OrderedConferences.Select(c => c.Display));
-
-                var result = await Shell.Current.DisplayActionSheet(
-                    "Filter by Conference", "Cancel", null, fbsConferences.ToArray());
-
-                if (result != null && result != "Cancel")
-                {
-                    _activeConference  = result;
-                    SelectedConference = result;
-                    ApplyConferenceFilter();
-                }
-            });
-
-            PreviousWeekCommand = new Microsoft.Maui.Controls.Command(() =>
-            {
-                var idx = Weeks.ToList().FindIndex(w => w.Week == _selectedWeek);
-                if (idx > 0) OnWeekSelected(Weeks[idx - 1].Week);
-            });
-
-            NextWeekCommand = new Microsoft.Maui.Controls.Command(() =>
-            {
-                var idx = Weeks.ToList().FindIndex(w => w.Week == _selectedWeek);
-                if (idx < Weeks.Count - 1) OnWeekSelected(Weeks[idx + 1].Week);
             });
 
             ToggleTeamExpandCommand = new Microsoft.Maui.Controls.Command<ProjectedTeamStanding>(team =>
@@ -94,11 +48,20 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             {
                 if (matchup != null) matchup.IsContendersExpanded = !matchup.IsContendersExpanded;
             });
+
+            // React to shared navigation changes
+            _navState.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
+                    e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                    _ = LoadDataAsync();
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                    ApplyConferenceFilter();
+            };
         }
 
         // ── Bindable collections ──────────────────────────────────────────
 
-        public ObservableCollection<WeekItem>             Weeks         { get; } = new();
         public ObservableCollection<ProjectedTeamStanding> Standings    { get; } = new();
         public ObservableCollection<ChampionshipMatchup>  Championships { get; } = new();
 
@@ -119,26 +82,6 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             set { _statusMessage = value; OnPropertyChanged(); }
         }
 
-        public int SelectedYear
-        {
-            get => _selectedYear;
-            set
-            {
-                if (_selectedYear != value)
-                {
-                    _selectedYear = value;
-                    OnPropertyChanged();
-                    _ = LoadDataAsync();
-                }
-            }
-        }
-
-        public int SelectedWeek
-        {
-            get => _selectedWeek;
-            set { _selectedWeek = value; OnPropertyChanged(); }
-        }
-
         public string SelectedView
         {
             get => _selectedView;
@@ -154,23 +97,12 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
         public bool IsStandingsView    => _selectedView == "Standings";
         public bool IsChampionshipView => _selectedView == "Championship";
 
-        public string SelectedConference
-        {
-            get => _selectedConference;
-            set { _selectedConference = value; OnPropertyChanged(); }
-        }
-
         // ── Commands ──────────────────────────────────────────────────────
 
-        public ICommand LoadDataCommand          { get; }
-        public ICommand SelectYearCommand        { get; }
-        public ICommand SelectWeekCommand        { get; }
-        public ICommand SelectViewCommand        { get; }
-        public ICommand SelectConferenceCommand  { get; }
-        public ICommand PreviousWeekCommand      { get; }
-        public ICommand NextWeekCommand          { get; }
-        public ICommand ToggleTeamExpandCommand  { get; }
-        public ICommand ToggleMatchupExpandCommand { get; }
+        public ICommand LoadDataCommand               { get; }
+        public ICommand SelectViewCommand             { get; }
+        public ICommand ToggleTeamExpandCommand       { get; }
+        public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
@@ -183,9 +115,10 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
             try
             {
-                // Load both endpoints in parallel
-                var standingsTask      = _apiService.GetProjectedStandingsAsync(_selectedYear, _selectedWeek);
-                var championshipsTask  = _apiService.GetProjectedChampionshipQualifiersAsync(_selectedYear, _selectedWeek);
+                var standingsTask     = _apiService.GetProjectedStandingsAsync(
+                    _navState.SelectedYear, _navState.SelectedWeek);
+                var championshipsTask = _apiService.GetProjectedChampionshipQualifiersAsync(
+                    _navState.SelectedYear, _navState.SelectedWeek);
 
                 await Task.WhenAll(standingsTask, championshipsTask);
 
@@ -198,14 +131,6 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                     return;
                 }
 
-                // ── Build week list from standings data ───────────────────
-                // Use weeks 1-15 as the range
-                var weekNums = Enumerable.Range(1, 15).ToList();
-                Weeks.Clear();
-                foreach (var w in weekNums)
-                    Weeks.Add(new WeekItem { Week = w, IsSelected = w == _selectedWeek });
-
-                // ── Process standings ─────────────────────────────────────
                 // Compute projected finish rank within each conference
                 var byConference = standings
                     .GroupBy(s => s.Conference)
@@ -218,17 +143,12 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                     for (int i = 0; i < conf.Count; i++)
                         conf[i].ProjectedFinish = i + 1;
 
-                _allStandings = standings;
+                _allStandings     = standings;
                 _allChampionships = championships;
 
                 ApplyConferenceFilter();
 
-                // Refresh championships (no conference filter)
-                Championships.Clear();
-                foreach (var c in championships)
-                    Championships.Add(c);
-
-                StatusMessage = $"Week {_selectedWeek} projections";
+                StatusMessage = $"Week {_navState.SelectedWeek} projections";
                 HasLoaded = true;
             }
             catch (Exception ex)
@@ -241,31 +161,37 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             }
         }
 
-        // ── Week selection ────────────────────────────────────────────────
-
-        private void OnWeekSelected(int week)
-        {
-            _selectedWeek = week;
-            foreach (var w in Weeks) w.IsSelected = w.Week == _selectedWeek;
-            OnPropertyChanged(nameof(SelectedWeek));
-            _ = LoadDataAsync();  // reload with new throughWeek
-        }
-
-        // ── Conference filter (Standings only) ────────────────────────────
+        // ── Conference filter ─────────────────────────────────────────────
 
         private void ApplyConferenceFilter()
         {
-            var filtered = _activeConference == "All"
+            var conf = _navState.SelectedConference;
+
+            // Filter standings
+            var filteredStandings = conf == "All"
                 ? _allStandings
                 : _allStandings.Where(s =>
                 {
-                    var abbr = ConferenceHelper.DisplayToAbbr(_activeConference);
+                    var abbr = ConferenceHelper.DisplayToAbbr(conf);
                     return s.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase);
                 }).ToList();
 
             Standings.Clear();
-            foreach (var s in filtered)
+            foreach (var s in filteredStandings)
                 Standings.Add(s);
+
+            // Filter championships
+            var filteredChamps = conf == "All"
+                ? _allChampionships
+                : _allChampionships.Where(c =>
+                {
+                    var abbr = ConferenceHelper.DisplayToAbbr(conf);
+                    return c.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase);
+                }).ToList();
+
+            Championships.Clear();
+            foreach (var c in filteredChamps)
+                Championships.Add(c);
         }
     }
 }

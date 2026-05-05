@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using NCAA_Power_Ratings.Mobile.Helpers;
 using NCAA_Power_Ratings.Mobile.Models;
@@ -8,54 +7,60 @@ using NCAA_Power_Ratings.Mobile.Services;
 
 namespace NCAA_Power_Ratings.Mobile.ViewModels
 {
-    /// <summary>
-    /// ViewModel for the Power Rankings page with sorting and filtering
-    /// </summary>
     public class PowerRankingsViewModel : BaseViewModel
     {
-       private readonly GameDataApiService _apiService;
+        private readonly GameDataApiService    _apiService;
+        private readonly SharedNavigationStateService _navState;
         private List<TeamRanking> _allTeams = new();
         private ObservableCollection<TeamRanking> _filteredTeams = new();
-        private bool _isBusy;
-        private string _selectedConference = "All";
-        private RankingFilter _currentFilter = RankingFilter.All;
-        private RankingSort _currentSort = RankingSort.PowerRating;
-        private bool _isSortAscending = false; // PowerRating defaults descending (highest = #1)
-        private int _selectedYear;
-        private string _selectedConferenceFilter = "All";
+        private bool          _isBusy;
+        private RankingFilter _currentFilter   = RankingFilter.All;
+        private RankingSort   _currentSort     = RankingSort.PowerRating;
+        private bool          _isSortAscending = false;
+        private string        _selectedFilterDisplay = "All";
 
-
-        public PowerRankingsViewModel(GameDataApiService apiService, FollowService followService)
+        public PowerRankingsViewModel(
+            GameDataApiService apiService,
+            FollowService followService,
+            SharedNavigationStateService navState)
             : base(followService)
         {
             _apiService = apiService;
+            _navState   = navState;
 
-            _selectedYear = 2025; // Default to most recent year with data
-
-            // Initialize commands - use Microsoft.Maui.Controls.Command
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
+            LoadDataCommand   = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
+            RefreshCommand    = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
             ApplyFilterCommand = new Microsoft.Maui.Controls.Command<string>(ApplyFilter);
-            ApplySortCommand = new Microsoft.Maui.Controls.Command<RankingSort>(ApplySort);
-            SortColumnCommand = new Microsoft.Maui.Controls.Command<string>(SortByColumn);
-            RefreshCommand = new Microsoft.Maui.Controls.Command(async () => await RefreshDataAsync());
+            ApplySortCommand   = new Microsoft.Maui.Controls.Command<RankingSort>(ApplySort);
+            SortColumnCommand  = new Microsoft.Maui.Controls.Command<string>(SortByColumn);
 
-            // Available conferences for filtering
-            Conferences = new ObservableCollection<string>(ConferenceHelper.FilterDisplayList());
+            SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var options = new List<string> { "All", "Top 25", "── Tier ──", "P4", "G5", "Independent" };
+
+                var result = await Shell.Current.DisplayActionSheet(
+                    "Filter", "Cancel", null, options.ToArray());
+
+                if (result != null && result != "Cancel" && !result.StartsWith("──"))
+                {
+                    SelectedFilterDisplay = result;
+                    ApplyFilter(result == "Top 25" ? "Top25" : result);
+                }
+            });
+
+            // React to shared nav changes
+            _navState.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
+                    _ = LoadDataAsync();
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                    ApplyFiltersAndSort();
+            };
+
             _followService.TeamFollowChanged += OnTeamFollowChanged;
         }
 
-        private void OnTeamFollowChanged(int teamId, bool isFollowed)
-        {
-            var team = _allTeams.FirstOrDefault(t => t.TeamID == teamId);
-            if (team != null)
-            {
-                team.IsFollowed = isFollowed;
-                // No re-sort needed here — rankings stay in rank order
-                // but the star on that row will update via INotifyPropertyChanged
-            }
-        }
-
-        #region Properties
+        // ── Bindable collections ──────────────────────────────────────────
 
         public ObservableCollection<TeamRanking> FilteredTeams
         {
@@ -63,7 +68,7 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             set { _filteredTeams = value; OnPropertyChanged(); }
         }
 
-        public ObservableCollection<string> Conferences { get; }
+        // ── Bindable properties ───────────────────────────────────────────
 
         public bool IsBusy
         {
@@ -71,35 +76,15 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             set { _isBusy = value; OnPropertyChanged(); }
         }
 
-        public string SelectedConference
+        public string SelectedFilterDisplay
         {
-            get => _selectedConference;
-            set
-            {
-                _selectedConference = value;
-                OnPropertyChanged();
-                ApplyFilter("Conference");
-            }
-        }
-
-        public int SelectedYear
-        {
-            get => _selectedYear;
-            set
-            {
-                if (_selectedYear != value)
-                {
-                    _selectedYear = value;
-                    OnPropertyChanged();
-                    // Reload data when year changes
-                    _ = LoadDataAsync();
-                }
-            }
+            get => _selectedFilterDisplay;
+            set { _selectedFilterDisplay = value; OnPropertyChanged(); }
         }
 
         public string StatusMessage { get; private set; } = "Loading...";
+        public bool   HasLoaded    { get; private set; }
 
-        /// <summary>Header label for the dynamic sort column shown in the list.</summary>
         public string ActiveSortLabel => _currentSort switch
         {
             RankingSort.PowerRating => "Rating",
@@ -110,7 +95,6 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             _                      => "Rating"
         };
 
-        /// <summary>Returns the display value for the active sort column for a given team.</summary>
         public string GetActiveSortValue(TeamRanking t) => _currentSort switch
         {
             RankingSort.PowerRating => t.DisplayRanking,
@@ -121,69 +105,49 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             _                      => t.DisplayRanking
         };
 
-        public string SelectedConferenceFilter
-        {
-            get => _selectedConferenceFilter;
-            set
-            {
-                _selectedConferenceFilter = value;
-                OnPropertyChanged();
-            }
-        }
-        public bool HasLoaded { get; private set; }
+        // ── Commands ──────────────────────────────────────────────────────
 
-        #endregion
+        public ICommand LoadDataCommand      { get; }
+        public ICommand RefreshCommand       { get; }
+        public ICommand ApplyFilterCommand   { get; }
+        public ICommand ApplySortCommand     { get; }
+        public ICommand SortColumnCommand    { get; }
+        public ICommand SelectFilterCommand  { get; }
 
-        #region Commands
-
-        public ICommand LoadDataCommand { get; }
-        public ICommand ApplyFilterCommand { get; }
-        public ICommand ApplySortCommand { get; }
-        public ICommand SortColumnCommand { get; }
-        public ICommand RefreshCommand { get; }
-
-        #endregion
-
-        #region Methods
+        // ── Load ──────────────────────────────────────────────────────────
 
         public async Task LoadDataAsync()
         {
             if (IsBusy) return;
-
             IsBusy = true;
             StatusMessage = "Loading rankings...";
             OnPropertyChanged(nameof(StatusMessage));
 
             try
             {
-                System.Diagnostics.Debug.WriteLine($"[PowerRankings] Starting to load data for year {SelectedYear}");
-
-                var teams = await _apiService.GetPowerRankingsAsync(SelectedYear);
+                var teams = await _apiService.GetPowerRankingsAsync(_navState.SelectedYear);
 
                 if (teams != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[PowerRankings] Loaded {teams.Count} teams");
                     _allTeams = teams;
 
                     var followedIds = _followService.GetFollowedIds();
                     foreach (var t in _allTeams)
                         t.IsFollowed = followedIds.Contains(t.TeamID);
-                    
+
                     ApplyFiltersAndSort();
-                    StatusMessage = $"Loaded {teams.Count} teams";
+                    StatusMessage = $"{teams.Count} teams";
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("[PowerRankings] No teams returned from API");
                     StatusMessage = "Failed to load rankings";
                 }
-                
+
                 HasLoaded = true;
             }
             catch (Exception ex)
             {
                 StatusMessage = $"Error: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"[PowerRankings] Error loading data: {ex}");
             }
             finally
             {
@@ -192,10 +156,7 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             }
         }
 
-        private async Task RefreshDataAsync()
-        {
-            await LoadDataAsync();
-        }
+        // ── Filter / sort ─────────────────────────────────────────────────
 
         public void ApplyFilter(string filterType)
         {
@@ -203,13 +164,9 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             {
                 case "All":
                     _currentFilter = RankingFilter.All;
-                    _selectedConferenceFilter = "All";
                     break;
                 case "Top25":
                     _currentFilter = RankingFilter.Top25;
-                    break;
-                case "Conference":
-                    _currentFilter = RankingFilter.Conference;
                     break;
                 case "P4":
                     _currentFilter = RankingFilter.P4;
@@ -221,12 +178,9 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                     _currentFilter = RankingFilter.Independent;
                     break;
                 default:
-                    // Translate display name → ConferenceAbbr
-                    _currentFilter = RankingFilter.Conference;
-                    _selectedConferenceFilter = ConferenceHelper.DisplayToAbbr(filterType);
+                    _currentFilter = RankingFilter.All;
                     break;
             }
-
             ApplyFiltersAndSort();
         }
 
@@ -237,38 +191,31 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             ApplyFiltersAndSort();
         }
 
-        /// <summary>
-        /// Handles column header clicks - toggles sort direction if same column, otherwise sets new column
-        /// </summary>
         public void SortByColumn(string columnName)
         {
             var newSort = columnName switch
             {
-                "Rank" => RankingSort.Rank,
-                "Team" => RankingSort.TeamName,
-                "Record" => RankingSort.Record,
-                "Rating" => RankingSort.PowerRating,
+                "Rank"       => RankingSort.Rank,
+                "Team"       => RankingSort.TeamName,
+                "Record"     => RankingSort.Record,
+                "Rating"     => RankingSort.PowerRating,
                 "Conference" => RankingSort.Conference,
-                "SOS" => RankingSort.SOS,
-                "TierRank" => RankingSort.TierRank,
-                "Tier" => RankingSort.Tier,
-                _ => RankingSort.Rank
+                "SOS"        => RankingSort.SOS,
+                "TierRank"   => RankingSort.TierRank,
+                "Tier"       => RankingSort.Tier,
+                _            => RankingSort.Rank
             };
 
-            // If clicking the same column, toggle direction
             if (_currentSort == newSort)
-            {
                 _isSortAscending = !_isSortAscending;
-            }
             else
             {
-                // New column, default to ascending (except for rating/SOS which default to descending)
                 _currentSort = newSort;
                 _isSortAscending = newSort switch
                 {
                     RankingSort.PowerRating => false,
-                    RankingSort.SOS => false,
-                    _ => true
+                    RankingSort.SOS        => false,
+                    _                      => true
                 };
             }
 
@@ -278,29 +225,33 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
         private void ApplyFiltersAndSort()
         {
-            // Start with all teams
             var filtered = _allTeams.AsEnumerable();
 
-            // Apply filters
+            // Conference filter from shared nav state
+            var conf = _navState.SelectedConference;
+            if (conf != "All")
+            {
+                var abbr = ConferenceHelper.DisplayToAbbr(conf);
+                filtered = filtered.Where(t =>
+                    (t.ConferenceAbbr != null &&
+                        t.ConferenceAbbr.Equals(abbr, StringComparison.OrdinalIgnoreCase)) ||
+                    (t.Conference != null &&
+                        t.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            // Additional filter (All/Top25/P4/G5/Independent)
             filtered = _currentFilter switch
             {
-                RankingFilter.Top25 => filtered.Where(t => t.IsTop25),
-                RankingFilter.Conference when _selectedConferenceFilter != "All" =>
-                    filtered.Where(t =>
-                        (t.ConferenceAbbr != null &&
-                            t.ConferenceAbbr.Equals(_selectedConferenceFilter, StringComparison.OrdinalIgnoreCase)) ||
-                        (t.Conference != null &&
-                            t.Conference.Equals(_selectedConferenceFilter, StringComparison.OrdinalIgnoreCase))),
-                RankingFilter.P4 => filtered.Where(t => t.Tier == "P4"),
-                RankingFilter.G5 => filtered.Where(t => t.Tier == "G5"),
+                RankingFilter.Top25       => filtered.Where(t => t.IsTop25),
+                RankingFilter.P4          => filtered.Where(t => t.Tier == "P4"),
+                RankingFilter.G5          => filtered.Where(t => t.Tier == "G5"),
                 RankingFilter.Independent => filtered.Where(t => t.Tier == "Independent"),
-                _ => filtered
+                _                         => filtered
             };
 
-            // Apply sorting with direction
             IOrderedEnumerable<TeamRanking> sorted = _currentSort switch
             {
-                RankingSort.Rank => _isSortAscending 
+                RankingSort.Rank => _isSortAscending
                     ? filtered.OrderBy(t => t.Rank)
                     : filtered.OrderByDescending(t => t.Rank),
                 RankingSort.TeamName => _isSortAscending
@@ -331,9 +282,16 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             foreach (var team in result)
                 team.ActiveSortValue = GetActiveSortValue(team);
 
+            for (int i = 0; i < result.Count; i++)
+                result[i].IsOddRow = i % 2 == 1;
+
             FilteredTeams = new ObservableCollection<TeamRanking>(result);
         }
 
-        #endregion
+        private void OnTeamFollowChanged(int teamId, bool isFollowed)
+        {
+            var team = _allTeams.FirstOrDefault(t => t.TeamID == teamId);
+            if (team != null) team.IsFollowed = isFollowed;
+        }
     }
 }

@@ -1,35 +1,40 @@
+using Microsoft.Maui.Layouts;
+using NCAA_Power_Ratings.Mobile.Services;
 using NCAA_Power_Ratings.Mobile.ViewModels;
 
 namespace NCAA_Power_Ratings.Mobile.Views
 {
     public partial class MainPage : ContentPage
     {
-        private readonly MainViewModel     _vm;
-        private readonly SchedulePage      _schedulePage;
-        private readonly PowerRankingsPage _rankingsPage;
-        private readonly TeamsPage         _teamsPage;
-        private readonly RivalriesPage     _rivalriesPage;
-        private readonly ConfigPage        _configPage;
-        private readonly ProjectionsPage   _projectionsPage;
+        private readonly MainViewModel               _vm;
+        private readonly SchedulePage                _schedulePage;
+        private readonly PowerRankingsPage           _rankingsPage;
+        private readonly TeamsPage                   _teamsPage;
+        private readonly RivalriesPage               _rivalriesPage;
+        private readonly ProjectionsPage             _projectionsPage;
+        private readonly ConfigPage                  _configPage;
+        private readonly SharedNavigationStateService _navState;
 
         public MainPage(
+            SharedNavigationStateService navState,
             MainViewModel mainViewModel,
             SchedulePage schedulePage,
             PowerRankingsPage rankingsPage,
             TeamsPage teamsPage,
             RivalriesPage rivalriesPage,
-            ConfigPage configPage,
-            ProjectionsPage projectionsPage)
+            ProjectionsPage projectionsPage,
+            ConfigPage configPage)
         {
             InitializeComponent();
 
-            _vm            = mainViewModel;
-            _schedulePage  = schedulePage;
-            _rankingsPage  = rankingsPage;
-            _teamsPage     = teamsPage;
-            _rivalriesPage = rivalriesPage;
-            _configPage    = configPage;
+            _navState        = navState;
+            _vm              = mainViewModel;
+            _schedulePage    = schedulePage;
+            _rankingsPage    = rankingsPage;
+            _teamsPage       = teamsPage;
+            _rivalriesPage   = rivalriesPage;
             _projectionsPage = projectionsPage;
+            _configPage      = configPage;
 
             BindingContext = _vm;
 
@@ -39,17 +44,15 @@ namespace NCAA_Power_Ratings.Mobile.Views
             for (int i = 0; i < labels.Length; i++)
                 _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == 0 });
 
-            // Add all page views to the host grid, stacked on top of each other
-            // Each page's Content (the root View) is added directly so BindingContext is preserved
-            PageHost.Add(new ContentView { Content = _schedulePage.Content, BindingContext = _schedulePage.BindingContext });
-            PageHost.Add(new ContentView { Content = _rankingsPage.Content, BindingContext = _rankingsPage.BindingContext });
-            PageHost.Add(new ContentView { Content = _teamsPage.Content, BindingContext = _teamsPage.BindingContext });
-            PageHost.Add(new ContentView { Content = _rivalriesPage.Content, BindingContext = _rivalriesPage.BindingContext });
-            PageHost.Add(new ContentView { Content = _projectionsPage.Content, BindingContext = _projectionsPage.BindingContext });
-            PageHost.Add(new ContentView { Content = _configPage.Content, BindingContext = _configPage.BindingContext });
+            // Add pages to AbsoluteLayout — each fills the entire host
+            AddPageToHost(_schedulePage);
+            AddPageToHost(_rankingsPage);
+            AddPageToHost(_teamsPage);
+            AddPageToHost(_rivalriesPage);
+            AddPageToHost(_projectionsPage);
+            AddPageToHost(_configPage);
 
-
-            // Sync tab underline + page visibility when index changes
+            // Sync tab underline + page visibility on index change
             _vm.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(MainViewModel.SelectedIndex))
@@ -57,15 +60,38 @@ namespace NCAA_Power_Ratings.Mobile.Views
                     SyncTabItems(_vm.SelectedIndex);
                     SyncPage(_vm.SelectedIndex);
                 }
+                if (e.PropertyName == nameof(MainViewModel.SelectedWeek))
+                    ScrollToSelectedWeek();
             };
 
             // Show initial page
             SyncPage(0);
 
             // Trigger initial data load
-            if (_schedulePage.BindingContext is ScheduleViewModel svm)
-                _ = svm.LoadDataAsync();
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await Task.Delay(200);
+                if (_schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded)
+                    await svm.LoadDataAsync();
+            });
         }
+
+        // ── Page host helpers ─────────────────────────────────────────────
+
+        private void AddPageToHost(ContentPage page)
+        {
+            var wrapper = new ContentView
+            {
+                Content        = page.Content,
+                BindingContext = page.BindingContext,
+                IsVisible      = false
+            };
+            AbsoluteLayout.SetLayoutBounds(wrapper, new Rect(0, 0, 1, 1));
+            AbsoluteLayout.SetLayoutFlags(wrapper, AbsoluteLayoutFlags.All);
+            PageHost.Add(wrapper);
+        }
+
+        // ── Tab sync ──────────────────────────────────────────────────────
 
         private void SyncTabItems(int index)
         {
@@ -83,7 +109,6 @@ namespace NCAA_Power_Ratings.Mobile.Views
                         ve.IsVisible = i == index;
 
                 // Lazy load on first visit
-                await Task.Delay(100);
                 switch (index)
                 {
                     case 0 when _schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded:
@@ -97,6 +122,25 @@ namespace NCAA_Power_Ratings.Mobile.Views
                     case 4 when _projectionsPage.BindingContext is ProjectionsViewModel pvm && !pvm.HasLoaded:
                         await pvm.LoadDataAsync(); break;
                 }
+            });
+        }
+
+        // ── Week scroll sync ──────────────────────────────────────────────
+
+        private void ScrollToSelectedWeek()
+        {
+            var weeks    = _vm.Weeks;
+            var selected = _vm.SelectedWeek;
+            var index    = weeks.ToList().FindIndex(w => w.Week == selected);
+            if (index < 0) return;
+
+            const double itemWidth = 42.0;
+            var scrollX = Math.Max(0, (index * itemWidth) - 150);
+
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await Task.Delay(100);
+                await WeekScrollView.ScrollToAsync(scrollX, 0, animated: true);
             });
         }
     }

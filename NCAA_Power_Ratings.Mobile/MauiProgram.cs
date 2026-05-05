@@ -26,6 +26,7 @@ public static class MauiProgram
 		builder.Services.AddHttpClient();
         builder.Services.AddSingleton<FollowService>();
 
+        builder.Services.AddSingleton<SharedNavigationStateService>();
 
         // Register Services with HttpClient factory
         builder.Services.AddSingleton<GameDataApiService>(sp => 
@@ -42,8 +43,9 @@ public static class MauiProgram
 			return new PredictionApiService(httpClient);
 		});
 
-		// Register ViewModels
-		builder.Services.AddTransient<PowerRankingsViewModel>();
+
+        // Register ViewModels
+        builder.Services.AddTransient<PowerRankingsViewModel>();
 		builder.Services.AddTransient<ScheduleViewModel>();
 		builder.Services.AddTransient<TeamsViewModel>();
         builder.Services.AddTransient<RivalriesViewModel>();

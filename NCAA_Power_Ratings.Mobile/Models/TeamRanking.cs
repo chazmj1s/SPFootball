@@ -50,6 +50,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
         public string ActiveSortValue { get; set; } = string.Empty;
 
         public bool IsTop25 => Rank <= 25;
+        public bool IsOddRow { get; set; }
 
         private bool _isFollowed;
         public bool IsFollowed
