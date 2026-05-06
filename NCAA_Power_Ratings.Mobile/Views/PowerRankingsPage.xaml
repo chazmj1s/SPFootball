@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:NCAA_Power_Ratings.Mobile.Models"
+             xmlns:controls="clr-namespace:NCAA_Power_Ratings.Mobile.Controls"
              x:Class="NCAA_Power_Ratings.Mobile.Views.PowerRankingsPage"
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
@@ -58,18 +59,6 @@
             <Grid Padding="4,3" ColumnDefinitions="44,22,*,55,70,60">
 
               <!-- Rank badge -->
-              <!--<Border Grid.Column="0"
-                      BackgroundColor="{Binding IsTop25, Converter={StaticResource BoolToColorConverter}}"
-                      StrokeThickness="0" Padding="2,2"
-                      HeightRequest="26" WidthRequest="40"
-                      HorizontalOptions="Center" VerticalOptions="Center">
-                <Border.StrokeShape>
-                  <RoundRectangle CornerRadius="3"/>
-                </Border.StrokeShape>
-                <Label Text="{Binding OverallRank}"
-                       FontSize="11" FontAttributes="Bold" TextColor="White"
-                       HorizontalOptions="Center" VerticalOptions="Center"/>
-              </Border>-->
               <Grid Grid.Column="0"
                     Padding="2,2"
                     HeightRequest="26"
@@ -90,25 +79,18 @@
                     VerticalOptions="Center" />
               </Grid>
 
-                <!-- Star -->
-                <Label Grid.Column="1" Text="♥" FontSize="10"
-                     HorizontalOptions="Center" VerticalOptions="Center">
-                <Label.GestureRecognizers>
-                  <TapGestureRecognizer
-                      Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                      CommandParameter="{Binding .}" />
-                </Label.GestureRecognizers>
-                    <Label.Triggers>
-                        <DataTrigger TargetType="Label" Binding="{Binding VisitorIsFollowed}" Value="True">
-                            <Setter Property="Text" Value="♥" />
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding VisitorIsFollowed}" Value="False">
-                            <Setter Property="Text" Value="♡" />
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
-                        </DataTrigger>
-                    </Label.Triggers>
-                </Label>
+              <!-- Heart: follow team -->
+              <controls:FollowTeamIcon
+                    Grid.Column="1"
+                    IsFollowed="{Binding IsFollowed}"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center">
+                    <controls:FollowTeamIcon.GestureRecognizers>
+                        <TapGestureRecognizer
+                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                            CommandParameter="{Binding .}" />
+                    </controls:FollowTeamIcon.GestureRecognizers>
+              </controls:FollowTeamIcon>
 
               <!-- Team + Conf · Tier -->
               <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">

@@ -27,17 +27,19 @@ namespace NCAA_Power_Ratings.Mobile.Services
         /// <summary>
         /// Gets power rankings for a specific year
         /// </summary>
-        public async Task<List<Models.TeamRanking>?> GetPowerRankingsAsync(int? year = null)
+        public async Task<List<Models.TeamRanking>?> GetPowerRankingsAsync(int? year = null, int? week = null)
         {
             try
             {
                 var currentYear = year ?? DateTime.Now.Year;
 
                 System.Diagnostics.Debug.WriteLine($"[API] ========================================");
-                System.Diagnostics.Debug.WriteLine($"[API] Fetching power rankings for year {currentYear}");
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching power rankings for year {currentYear}, week {week?.ToString() ?? "all"}");
                 System.Diagnostics.Debug.WriteLine($"[API] Base URL: {_baseUrl}");
 
                 var url = $"{_baseUrl}/powerrankings?year={currentYear}";
+                if (week.HasValue)
+                    url += $"&week={week.Value}";
                 System.Diagnostics.Debug.WriteLine($"[API] Full URL: {url}");
 
                 var response = await _httpClient.GetAsync(url);

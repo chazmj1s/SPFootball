@@ -51,7 +51,8 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             // React to shared nav changes
             _navState.PropertyChanged += (s, e) =>
             {
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
+                    e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
                     _ = LoadDataAsync();
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
                     ApplyFiltersAndSort();
@@ -125,7 +126,7 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
             try
             {
-                var teams = await _apiService.GetPowerRankingsAsync(_navState.SelectedYear);
+                var teams = await _apiService.GetPowerRankingsAsync(_navState.SelectedYear, _navState.SelectedWeek);
 
                 if (teams != null)
                 {
