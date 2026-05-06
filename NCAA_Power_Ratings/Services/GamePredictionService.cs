@@ -299,6 +299,7 @@ namespace NCAA_Power_Ratings.Services
                 PredictedOpponentScore = Math.Round(predictedOppScore, 1),
                 ExpectedMargin = Math.Round(deltaFromTeamPerspective, 1),
                 MarginOfError = Math.Round(marginOfError, 1),
+                RawStdDev = stdDev, // Unclamped — used for win probability math
                 Confidence = CalculateConfidence(stdDev, varianceMultiplier),
                 RivalryNote = rivalryNote,
                 TeamPowerRating = teamRecord.PowerRating,
@@ -390,6 +391,13 @@ namespace NCAA_Power_Ratings.Services
         public double PredictedOpponentScore { get; set; }
         public double ExpectedMargin { get; set; }
         public double MarginOfError { get; set; }
+
+        /// <summary>
+        /// Unclamped standard deviation (stdDev * varianceMultiplier) used for win
+        /// probability. Distinct from MarginOfError which is capped at [7, 21] for display.
+        /// </summary>
+        public double RawStdDev { get; set; }
+
         public string Confidence { get; set; }
         public string RivalryNote { get; set; }
         public decimal? TeamPowerRating { get; set; }
@@ -403,8 +411,60 @@ namespace NCAA_Power_Ratings.Services
             _ => ""
         };
 
-        public string PredictionSummary => 
+        /// <summary>
+        /// Win probability for TeamName as 0.0–1.0.
+        /// Uses the same normal CDF conversion a sportsbook uses to go from a
+        /// point spread to a moneyline — just expressed as a percentage.
+        ///
+        ///   ExpectedMargin > 0  → favored   → WinProbability > 0.50
+        ///   ExpectedMargin == 0 → pick 'em  → WinProbability == 0.50
+        ///   ExpectedMargin < 0  → underdog  → WinProbability < 0.50
+        /// </summary>
+        public double WinProbability
+        {
+            get
+            {
+                // Floor at 7 matches the MarginOfError minimum and prevents
+                // extreme probabilities from very small sample sizes.
+                var sigma = Math.Max(RawStdDev, 7.0);
+                return NormalCdf(ExpectedMargin / sigma);
+            }
+        }
+
+        /// <summary>Win probability for the opponent (always 1 - WinProbability).</summary>
+        public double OpponentWinProbability => 1.0 - WinProbability;
+
+        /// <summary>WinProbability as a display string, e.g. "67%".</summary>
+        public string WinProbabilityDisplay => $"{WinProbability:P0}";
+
+        /// <summary>OpponentWinProbability as a display string, e.g. "33%".</summary>
+        public string OpponentWinProbabilityDisplay => $"{OpponentWinProbability:P0}";
+
+        public string PredictionSummary =>
             $"{TeamName} {PredictedTeamScore:F1} {LocationDisplay} {OpponentName} {PredictedOpponentScore:F1} " +
-            $"(±{MarginOfError:F1}, {Confidence} confidence)";
+            $"(±{MarginOfError:F1}, {Confidence} confidence, {WinProbabilityDisplay})";
+
+        // ── Normal CDF ───────────────────────────────────────────────────────────
+        // Abramowitz & Stegun approximation (26.2.17). Accurate to ~7 decimal places.
+
+        private static double NormalCdf(double z)
+        {
+            const double p  =  0.2316419;
+            const double b1 =  0.319381530;
+            const double b2 = -0.356563782;
+            const double b3 =  1.781477937;
+            const double b4 = -1.821255978;
+            const double b5 =  1.330274429;
+
+            bool negative = z < 0;
+            z = Math.Abs(z);
+
+            double t    = 1.0 / (1.0 + p * z);
+            double poly = t * (b1 + t * (b2 + t * (b3 + t * (b4 + t * b5))));
+            double pdf  = Math.Exp(-0.5 * z * z) / Math.Sqrt(2 * Math.PI);
+            double cdf  = 1.0 - pdf * poly;
+
+            return negative ? 1.0 - cdf : cdf;
+        }
     }
 }
