@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
+
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:NCAA_Power_Ratings.Mobile.Models"
+             xmlns:controls="clr-namespace:NCAA_Power_Ratings.Mobile.Controls"    
              x:Class="NCAA_Power_Ratings.Mobile.Views.SchedulePage"
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
 
   <Grid RowDefinitions="Auto,*,24">
 
-       <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 1: Games list                                   -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ROW 0: Games list                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
     <ActivityIndicator Grid.Row="0"
                        IsRunning="{Binding IsLoading}"
@@ -35,38 +37,64 @@
                      VerticalOptions="Center" />
             </Grid>
 
-            <!-- Game card -->
+            <!-- Game card                                                -->
+            <!-- Col 0 = Wk label + ☆ game follow (32px)                 -->
+            <!-- Col 1 = ♡ team follow (28px)                            -->
+            <!-- Col 2 = team name (*)                                   -->
+            <!-- Col 3 = score (52px)                                    -->
+            <!-- Col 4 = margin/ou (96px)                                -->
             <Grid ColumnDefinitions="32,28,*,52,96"
                   RowDefinitions="Auto,Auto"
                   Padding="6,5,10,5"
                   BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
-              <Label Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
-                     Text="{Binding Week, StringFormat='Wk{0}'}"
-                     FontSize="10"
-                     TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
-                     HorizontalOptions="Start" VerticalOptions="Center" />
+              <!-- Wk label + ☆ game follow stacked in col 0, span both rows -->
+              <VerticalStackLayout Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
+                                   Spacing="2" VerticalOptions="Center"
+                                   HorizontalOptions="Start">
 
-              <!-- Visitor star -->
-              <Label Grid.Row="0" Grid.Column="1"
-                     Text="☆" FontSize="17"
-                     HorizontalOptions="Center" VerticalOptions="Center">
-                <Label.GestureRecognizers>
-                  <TapGestureRecognizer
-                      Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                      CommandParameter="{Binding VisitorId}" />
-                </Label.GestureRecognizers>
-                <Label.Triggers>
-                  <DataTrigger TargetType="Label" Binding="{Binding VisitorIsFollowed}" Value="True">
-                    <Setter Property="Text" Value="★" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
-                  </DataTrigger>
-                  <DataTrigger TargetType="Label" Binding="{Binding VisitorIsFollowed}" Value="False">
-                    <Setter Property="Text" Value="☆" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#BBBBBB, Dark=#555555}" />
-                  </DataTrigger>
-                </Label.Triggers>
-              </Label>
+                <Label Text="{Binding Week, StringFormat='Wk{0}'}"
+                       FontSize="10"
+                       TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                       HorizontalOptions="Start" />
+
+               <!-- Star: follow this game -->
+               <controls:FollowGameIcon
+                    Grid.Column="0"
+                    IsFollowed="{Binding IsPersonalFollowed}"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start">
+
+                    <controls:FollowGameIcon.GestureRecognizers>
+
+                        <TapGestureRecognizer
+                            Command="{Binding Source={x:Reference ThisPage},
+                                  Path=BindingContext.TogglePersonalGameCommand}"
+                            CommandParameter="{Binding .}" />
+
+                    </controls:FollowGameIcon.GestureRecognizers>
+
+              </controls:FollowGameIcon>
+             </VerticalStackLayout>
+
+            <!-- Heart: follow visitor team -->
+            <controls:FollowTeamIcon
+                    Grid.Row="0" Grid.Column="1"
+                    IsFollowed="{Binding VisitorIsFollowed}"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start">
+
+                    <controls:FollowTeamIcon.GestureRecognizers>
+
+                        <TapGestureRecognizer
+                            Command="{Binding Source={x:Reference ThisPage},
+                                    Path=BindingContext.TogglePersonalGameCommand}"
+                            CommandParameter="{Binding .}" />
+
+                    </controls:FollowTeamIcon.GestureRecognizers>
+            </controls:FollowTeamIcon>
+
+
 
               <Label Grid.Row="0" Grid.Column="2"
                      Text="{Binding VisitorName}"
@@ -84,26 +112,21 @@
                      FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
                      TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
 
-              <!-- Home star -->
-              <Label Grid.Row="1" Grid.Column="1"
-                     Text="☆" FontSize="17"
-                     HorizontalOptions="Center" VerticalOptions="Center">
-                <Label.GestureRecognizers>
-                  <TapGestureRecognizer
-                      Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                      CommandParameter="{Binding HomeId}" />
-                </Label.GestureRecognizers>
-                <Label.Triggers>
-                  <DataTrigger TargetType="Label" Binding="{Binding HomeIsFollowed}" Value="True">
-                    <Setter Property="Text" Value="★" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
-                  </DataTrigger>
-                  <DataTrigger TargetType="Label" Binding="{Binding HomeIsFollowed}" Value="False">
-                    <Setter Property="Text" Value="☆" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#BBBBBB, Dark=#555555}" />
-                  </DataTrigger>
-                </Label.Triggers>
-              </Label>
+              <!-- Heart: follow home team -->
+              <controls:FollowTeamIcon
+                    Grid.Row="1" Grid.Column="1"
+                    IsFollowed="{Binding HomeIsFollowed}"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start">
+
+                    <controls:FollowTeamIcon.GestureRecognizers>
+                        <TapGestureRecognizer
+                            Command="{Binding Source={x:Reference ThisPage},
+                                    Path=BindingContext.TogglePersonalGameCommand}"
+                            CommandParameter="{Binding .}" />
+
+                    </controls:FollowTeamIcon.GestureRecognizers>
+               </controls:FollowTeamIcon>
 
               <Label Grid.Row="1" Grid.Column="2"
                      FontSize="14" VerticalOptions="Center"

@@ -17,6 +17,11 @@
             <converters:OddRowBackgroundConverter x:Key="OddRowBackgroundConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
             <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
+
+            <!-- Follow Styles-->
+            <x:Double x:Key="TeamIconSize">10</x:Double>
+            <x:Double x:Key="GameStarSize">16</x:Double>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

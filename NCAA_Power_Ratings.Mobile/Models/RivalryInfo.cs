@@ -26,6 +26,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
         public decimal UpsetRate { get; set; }
         public int FirstPlayed { get; set; }
         public int LastPlayed { get; set; }
+        public bool IsPersonalFollowed { get; set; }
 
         // Derived display helpers
         public string DisplayMatchup => $"{Team1ShortName} vs {Team2ShortName}";

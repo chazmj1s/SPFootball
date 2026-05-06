@@ -90,25 +90,25 @@
                     VerticalOptions="Center" />
               </Grid>
 
-                            <!-- Star -->
-              <Label Grid.Column="1" Text="☆" FontSize="16"
+                <!-- Star -->
+                <Label Grid.Column="1" Text="♥" FontSize="10"
                      HorizontalOptions="Center" VerticalOptions="Center">
                 <Label.GestureRecognizers>
                   <TapGestureRecognizer
                       Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
                       CommandParameter="{Binding .}" />
                 </Label.GestureRecognizers>
-                <Label.Triggers>
-                  <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="True">
-                    <Setter Property="Text" Value="★" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
-                  </DataTrigger>
-                  <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="False">
-                    <Setter Property="Text" Value="☆" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
-                  </DataTrigger>
-                </Label.Triggers>
-              </Label>
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding VisitorIsFollowed}" Value="True">
+                            <Setter Property="Text" Value="♥" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding VisitorIsFollowed}" Value="False">
+                            <Setter Property="Text" Value="♡" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
 
               <!-- Team + Conf · Tier -->
               <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">

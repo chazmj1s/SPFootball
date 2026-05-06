@@ -2,7 +2,6 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:NCAA_Power_Ratings.Mobile.Models"
-             xmlns:viewmodels="clr-namespace:NCAA_Power_Ratings.Mobile.ViewModels"
              x:Class="NCAA_Power_Ratings.Mobile.Views.FollowingPage"
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
@@ -10,7 +9,7 @@
   <Grid RowDefinitions="Auto,*,24">
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 0: Teams | Rivalries toggle                     -->
+    <!-- ROW 0: Teams | Games toggle                         -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="0"
           ColumnDefinitions="*,*"
@@ -47,25 +46,25 @@
               Margin="4,0,0,0" Padding="0,6"
               StrokeShape="RoundRectangle 6" StrokeThickness="0">
         <Border.Triggers>
-          <DataTrigger TargetType="Border" Binding="{Binding IsRivalriesView}" Value="True">
+          <DataTrigger TargetType="Border" Binding="{Binding IsGamesView}" Value="True">
             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
           </DataTrigger>
-          <DataTrigger TargetType="Border" Binding="{Binding IsRivalriesView}" Value="False">
+          <DataTrigger TargetType="Border" Binding="{Binding IsGamesView}" Value="False">
             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#E0E0E0, Dark=#333333}" />
           </DataTrigger>
         </Border.Triggers>
-        <Label Text="Rivalries" FontSize="13" FontAttributes="Bold" HorizontalOptions="Center">
+        <Label Text="Games" FontSize="13" FontAttributes="Bold" HorizontalOptions="Center">
           <Label.Triggers>
-            <DataTrigger TargetType="Label" Binding="{Binding IsRivalriesView}" Value="True">
+            <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="True">
               <Setter Property="TextColor" Value="White" />
             </DataTrigger>
-            <DataTrigger TargetType="Label" Binding="{Binding IsRivalriesView}" Value="False">
+            <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="False">
               <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
             </DataTrigger>
           </Label.Triggers>
         </Label>
         <Border.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Rivalries" />
+          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
         </Border.GestureRecognizers>
       </Border>
 
@@ -82,7 +81,7 @@
                        VerticalOptions="Center" />
 
     <!-- ─────────────────────────────────────────────────── -->
-    <!-- TEAMS VIEW                                          -->
+    <!-- TEAMS VIEW — hearts for team follow                 -->
     <!-- ─────────────────────────────────────────────────── -->
     <Grid Grid.Row="1"
           RowDefinitions="Auto,Auto,*"
@@ -121,15 +120,14 @@
       </Grid>
 
       <!-- Teams list -->
-      <CollectionView Grid.Row="2"
-                      ItemsSource="{Binding Teams}">
+      <CollectionView Grid.Row="2" ItemsSource="{Binding Teams}">
         <CollectionView.ItemTemplate>
           <DataTemplate x:DataType="models:TeamInfo">
-            <Grid ColumnDefinitions="28,*,60"
-                  Padding="10,7,10,7">
+            <Grid ColumnDefinitions="28,*,60" Padding="10,7,10,7">
 
+              <!-- Heart: follow team -->
               <Label Grid.Column="0"
-                     Text="☆" FontSize="18"
+                     Text="♡" FontSize="10"
                      HorizontalOptions="Center" VerticalOptions="Center">
                 <Label.GestureRecognizers>
                   <TapGestureRecognizer
@@ -138,11 +136,11 @@
                 </Label.GestureRecognizers>
                 <Label.Triggers>
                   <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="True">
-                    <Setter Property="Text" Value="★" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
+                    <Setter Property="Text" Value="♥" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
                   </DataTrigger>
                   <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="False">
-                    <Setter Property="Text" Value="☆" />
+                    <Setter Property="Text" Value="♡" />
                     <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
                   </DataTrigger>
                 </Label.Triggers>
@@ -161,7 +159,6 @@
                      FontSize="11"
                      TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
                      HorizontalOptions="Center" VerticalOptions="Center" />
-
             </Grid>
           </DataTemplate>
         </CollectionView.ItemTemplate>
@@ -174,11 +171,11 @@
     </Grid>
 
     <!-- ─────────────────────────────────────────────────── -->
-    <!-- RIVALRIES VIEW                                      -->
+    <!-- GAMES VIEW — stars for game follow                  -->
     <!-- ─────────────────────────────────────────────────── -->
     <Grid Grid.Row="1"
           RowDefinitions="Auto,Auto,*"
-          IsVisible="{Binding IsRivalriesView}">
+          IsVisible="{Binding IsGamesView}">
 
       <!-- Tier filter bar -->
       <Grid Grid.Row="0"
@@ -198,7 +195,7 @@
 
       <!-- Column headers -->
       <Grid Grid.Row="1"
-            ColumnDefinitions="28,*,110,90"
+            ColumnDefinitions="28,*,110,90,32"
             Padding="10,4,10,4"
             BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#2A2A2A}">
         <Label Grid.Column="0" Text="" />
@@ -214,17 +211,17 @@
                FontSize="11" FontAttributes="Bold"
                TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
                HorizontalOptions="End" VerticalOptions="Center" />
+        <Label Grid.Column="4" Text="" />
       </Grid>
 
-      <!-- Rivalries list -->
-      <CollectionView Grid.Row="2"
-                      ItemsSource="{Binding Rivalries}">
+      <!-- Games list -->
+      <CollectionView Grid.Row="2" ItemsSource="{Binding Games}">
         <CollectionView.ItemTemplate>
           <DataTemplate x:DataType="models:RivalryInfo">
             <VerticalStackLayout Spacing="0">
 
-              <!-- Rivalry name + tier badge -->
-              <Grid ColumnDefinitions="*,Auto" Padding="10,5,10,2">
+              <!-- Rivalry name + tier badge + star follow toggle -->
+              <Grid ColumnDefinitions="*,Auto,32" Padding="10,5,10,2">
                 <Label Grid.Column="0"
                        Text="{Binding RivalryName}"
                        FontSize="12" FontAttributes="Bold"
@@ -233,17 +230,37 @@
                        Text="{Binding TierBadge}"
                        FontSize="16"
                        VerticalOptions="Center" HorizontalOptions="End" />
+                <!-- Heart: follow this game -->
+                 <Label Grid.Column="2"
+                        FontSize="10"
+                        HorizontalOptions="Center" VerticalOptions="Center">
+                   <Label.Triggers>
+                     <DataTrigger TargetType="Label" Binding="{Binding IsPersonalFollowed}" Value="True">
+                       <Setter Property="Text" Value="♥" />
+                       <Setter Property="TextColor" Value="{AppThemeBinding Light=#333333, Dark=#CCCCCC}" />
+                     </DataTrigger>
+                     <DataTrigger TargetType="Label" Binding="{Binding IsPersonalFollowed}" Value="False">
+                       <Setter Property="Text" Value="♡" />
+                       <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                     </DataTrigger>
+                   </Label.Triggers>
+                  <Label.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
+                        CommandParameter="{Binding .}" />
+                  </Label.GestureRecognizers>
+                </Label>
               </Grid>
 
-              <!-- Teams rows -->
+              <!-- Teams rows — hearts for team follow -->
               <Grid ColumnDefinitions="28,*,110,90"
                     RowDefinitions="Auto,Auto"
                     Padding="10,2,10,5">
 
-                <!-- Star 1 -->
-                <Label Grid.Row="0" Grid.Column="0"
-                       Text="☆" FontSize="18"
-                       HorizontalOptions="Center" VerticalOptions="Center">
+                <!-- Heart 1 -->
+                 <Label Grid.Row="0" Grid.Column="0"
+                        Text="♡" FontSize="10"
+                        HorizontalOptions="Center" VerticalOptions="Center">
                   <Label.GestureRecognizers>
                     <TapGestureRecognizer
                         Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
@@ -251,11 +268,11 @@
                   </Label.GestureRecognizers>
                   <Label.Triggers>
                     <DataTrigger TargetType="Label" Binding="{Binding Team1IsFollowed}" Value="True">
-                      <Setter Property="Text" Value="★" />
-                      <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
+                      <Setter Property="Text" Value="♥" />
+                      <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
                     </DataTrigger>
                     <DataTrigger TargetType="Label" Binding="{Binding Team1IsFollowed}" Value="False">
-                      <Setter Property="Text" Value="☆" />
+                      <Setter Property="Text" Value="♡" />
                       <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
                     </DataTrigger>
                   </Label.Triggers>
@@ -275,10 +292,10 @@
                        TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
                        VerticalOptions="Center" HorizontalOptions="End" />
 
-                <!-- Star 2 -->
-                <Label Grid.Row="1" Grid.Column="0"
-                       Text="☆" FontSize="18"
-                       HorizontalOptions="Center" VerticalOptions="Center">
+                <!-- Heart 2 -->
+                 <Label Grid.Row="1" Grid.Column="0"
+                        Text="♡" FontSize="10"
+                        HorizontalOptions="Center" VerticalOptions="Center">
                   <Label.GestureRecognizers>
                     <TapGestureRecognizer
                         Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
@@ -286,11 +303,11 @@
                   </Label.GestureRecognizers>
                   <Label.Triggers>
                     <DataTrigger TargetType="Label" Binding="{Binding Team2IsFollowed}" Value="True">
-                      <Setter Property="Text" Value="★" />
-                      <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
+                      <Setter Property="Text" Value="♥" />
+                      <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
                     </DataTrigger>
                     <DataTrigger TargetType="Label" Binding="{Binding Team2IsFollowed}" Value="False">
-                      <Setter Property="Text" Value="☆" />
+                      <Setter Property="Text" Value="♡" />
                       <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
                     </DataTrigger>
                   </Label.Triggers>
@@ -320,7 +337,7 @@
         </CollectionView.ItemTemplate>
         <CollectionView.EmptyView>
           <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
-            <Label Text="No rivalries found" FontSize="16" HorizontalOptions="Center" />
+            <Label Text="No games followed yet" FontSize="16" HorizontalOptions="Center" />
           </VerticalStackLayout>
         </CollectionView.EmptyView>
       </CollectionView>

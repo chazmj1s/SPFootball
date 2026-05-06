@@ -25,6 +25,7 @@ public static class MauiProgram
         // Register HttpClient
         builder.Services.AddHttpClient();
         builder.Services.AddSingleton<FollowService>();
+        builder.Services.AddSingleton<PersonalGameService>();
         builder.Services.AddSingleton<SharedNavigationStateService>();
 
         // Register Services

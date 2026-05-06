@@ -8,11 +8,13 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 {
     public class FollowingViewModel : BaseViewModel
     {
-        private readonly GameDataApiService _apiService;
+        private readonly GameDataApiService  _apiService;
+        private readonly PersonalGameService _personalGameService;
 
         // ── Raw data ──────────────────────────────────────────────────────
-        private List<TeamInfo>    _allTeams     = [];
-        private List<RivalryInfo> _allRivalries = [];
+        private List<TeamInfo>    _allTeams      = [];
+        private List<RivalryInfo> _allRivalries  = [];
+        private List<RivalryInfo> _personalGames = [];
 
         // ── Sub-tab state ─────────────────────────────────────────────────
         private string _selectedView = "Teams";
@@ -26,12 +28,12 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                 _selectedView = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsTeamsView));
-                OnPropertyChanged(nameof(IsRivalriesView));
+                OnPropertyChanged(nameof(IsGamesView));
             }
         }
 
-        public bool IsTeamsView     => _selectedView == "Teams";
-        public bool IsRivalriesView => _selectedView == "Rivalries";
+        public bool IsTeamsView => _selectedView == "Teams";
+        public bool IsGamesView => _selectedView == "Games";
 
         // ── Shared state ──────────────────────────────────────────────────
         private bool   _isBusy;
@@ -53,8 +55,8 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
         }
 
         // ── Teams ─────────────────────────────────────────────────────────
-        public ObservableCollection<TeamInfo>  Teams            { get; } = new();
-        public ObservableCollection<string>    ConferenceFilters { get; } = new();
+        public ObservableCollection<TeamInfo> Teams             { get; } = new();
+        public ObservableCollection<string>   ConferenceFilters { get; } = new();
 
         private string _selectedConference = "All";
         public string SelectedConference
@@ -69,36 +71,50 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             }
         }
 
-        // ── Rivalries ─────────────────────────────────────────────────────
-        public ObservableCollection<RivalryInfo> Rivalries { get; } = new();
+        // ── Games ─────────────────────────────────────────────────────────
+        public ObservableCollection<RivalryInfo> Games { get; } = new();
 
-        public List<string> TierFilters { get; } =
-            ["All", "🔥 Epic", "⭐ National", "🏠 Regional", "• Meh"];
+        // TierFilters is an ObservableCollection so the Picker binds
+        // before we set SelectedTier, avoiding the blank-until-expand bug
+        public ObservableCollection<string> TierFilters { get; } = new();
 
-        private string _selectedTier = "All";
+        private string _selectedTier = "➕ Personal";
         public string SelectedTier
         {
             get => _selectedTier;
             set
             {
+                if (value == "── Rivalries ──") return;
                 if (_selectedTier == value) return;
                 _selectedTier = value;
                 OnPropertyChanged();
-                ApplyRivalryFilter();
+                ApplyGamesFilter();
             }
         }
 
         // ── Commands ──────────────────────────────────────────────────────
-        public ICommand LoadDataCommand   { get; }
-        public ICommand SelectViewCommand { get; }
+        public ICommand LoadDataCommand       { get; }
+        public ICommand SelectViewCommand     { get; }
+        public ICommand TogglePersonalCommand { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
         public FollowingViewModel(
             GameDataApiService apiService,
-            FollowService followService)
+            FollowService followService,
+            PersonalGameService personalGameService)
             : base(followService)
         {
-            _apiService = apiService;
+            _apiService          = apiService;
+            _personalGameService = personalGameService;
+
+            // Populate TierFilters here so the ObservableCollection
+            // is ready before any binding occurs
+            TierFilters.Add("➕ Personal");
+            TierFilters.Add("── Rivalries ──");
+            TierFilters.Add("🔥 Epic");
+            TierFilters.Add("⭐ National");
+            TierFilters.Add("🏠 Regional");
+            TierFilters.Add("• Meh");
 
             LoadDataCommand = new Microsoft.Maui.Controls.Command(
                 async () => await LoadDataAsync());
@@ -108,7 +124,19 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                 SelectedView = view;
             });
 
-            _followService.TeamFollowChanged += OnTeamFollowChanged;
+            TogglePersonalCommand = new Microsoft.Maui.Controls.Command<RivalryInfo>(rivalry =>
+            {
+                if (rivalry == null) return;
+                _personalGameService.Toggle(rivalry.Team1Id, rivalry.Team2Id);
+                rivalry.IsPersonalFollowed = _personalGameService.IsFollowed(
+                    rivalry.Team1Id, rivalry.Team2Id);
+
+                if (!rivalry.IsPersonalFollowed && _selectedTier == "➕ Personal")
+                    ApplyGamesFilter();
+            });
+
+            _followService.TeamFollowChanged       += OnTeamFollowChanged;
+            _personalGameService.GameFollowChanged += OnGameFollowChanged;
         }
 
         // ── Load ──────────────────────────────────────────────────────────
@@ -140,27 +168,32 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
                     _selectedConference = "All";
                     OnPropertyChanged(nameof(SelectedConference));
-
                     ApplyTeamFilter();
                 }
 
-                // ── Rivalries ─────────────────────────────────────────────
-                var rivalries = rivalriesTask.Result;
-                if (rivalries != null && rivalries.Count > 0)
+                // ── Named rivalries ───────────────────────────────────────
+                var rivalries   = rivalriesTask.Result ?? [];
+                var followedIds = _followService.GetFollowedIds();
+
+                foreach (var r in rivalries)
                 {
-                    var followedIds = _followService.GetFollowedIds();
-                    foreach (var r in rivalries)
-                    {
-                        r.Team1IsFollowed = followedIds.Contains(r.Team1Id);
-                        r.Team2IsFollowed = followedIds.Contains(r.Team2Id);
-                    }
-
-                    _allRivalries = [.. rivalries
-                        .OrderBy(r => TierSortOrder(r.RivalryTier))
-                        .ThenBy(r => r.RivalryName)];
-
-                    ApplyRivalryFilter();
+                    r.Team1IsFollowed    = followedIds.Contains(r.Team1Id);
+                    r.Team2IsFollowed    = followedIds.Contains(r.Team2Id);
+                    r.IsPersonalFollowed = _personalGameService.IsFollowed(r.Team1Id, r.Team2Id);
                 }
+
+                _allRivalries = [.. rivalries
+                    .OrderBy(r => TierSortOrder(r.RivalryTier))
+                    .ThenBy(r => r.RivalryName)];
+
+                // ── Personal games (non-rivalry matchups from Scores) ─────
+                await LoadPersonalGamesAsync(_allRivalries, followedIds);
+
+                // Set default tier AFTER data is ready so Picker shows correctly
+                _selectedTier = "➕ Personal";
+                OnPropertyChanged(nameof(SelectedTier));
+
+                ApplyGamesFilter();
 
                 StatusMessage = string.Empty;
                 HasLoaded = true;
@@ -173,6 +206,43 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             {
                 IsBusy = false;
             }
+        }
+
+        private async Task LoadPersonalGamesAsync(
+            List<RivalryInfo> namedRivalries,
+            HashSet<int> followedIds)
+        {
+            _personalGames.Clear();
+
+            var namedKeys = namedRivalries
+                .Select(r => PersonalGameService.Key(r.Team1Id, r.Team2Id))
+                .ToHashSet();
+
+            var personalKeys = _personalGameService.GetAll()
+                .Where(k => !namedKeys.Contains(k))
+                .ToList();
+
+            if (personalKeys.Count == 0) return;
+
+            var tasks = personalKeys.Select(async key =>
+            {
+                var (id1, id2) = PersonalGameService.ParseKey(key);
+                var info = await _apiService.GetMatchupHistoryAsync(id1, id2);
+                if (info != null)
+                {
+                    info.Team1IsFollowed    = followedIds.Contains(id1);
+                    info.Team2IsFollowed    = followedIds.Contains(id2);
+                    info.IsPersonalFollowed = true;
+                }
+                return info;
+            });
+
+            var results = await Task.WhenAll(tasks);
+
+            _personalGames = results
+                .Where(r => r != null)
+                .OrderBy(r => r!.Team1Name)
+                .ToList()!;
         }
 
         // ── Filters ───────────────────────────────────────────────────────
@@ -195,24 +265,35 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                 Teams.Add(t);
         }
 
-        private void ApplyRivalryFilter()
+        private void ApplyGamesFilter()
         {
-            var filtered = _allRivalries.AsEnumerable();
+            Games.Clear();
 
-            filtered = _selectedTier switch
+            IEnumerable<RivalryInfo> filtered;
+
+            if (_selectedTier == "➕ Personal")
             {
-                "🔥 Epic"     => filtered.Where(r => r.RivalryTier == "EPIC"),
-                "⭐ National" => filtered.Where(r => r.RivalryTier == "NATIONAL"),
-                "🏠 Regional" => filtered.Where(r => r.RivalryTier == "REGIONAL"),
-                "• Meh"       => filtered.Where(r => r.RivalryTier == "MEH"),
-                _             => filtered
-            };
+                var namedPersonal = _allRivalries.Where(r => r.IsPersonalFollowed);
+                filtered = namedPersonal.Concat(_personalGames)
+                    .OrderBy(r => r.RivalryName ?? $"{r.Team1Name} vs {r.Team2Name}");
+            }
+            else
+            {
+                filtered = _selectedTier switch
+                {
+                    "🔥 Epic"     => _allRivalries.Where(r => r.RivalryTier == "EPIC"),
+                    "⭐ National" => _allRivalries.Where(r => r.RivalryTier == "NATIONAL"),
+                    "🏠 Regional" => _allRivalries.Where(r => r.RivalryTier == "REGIONAL"),
+                    "• Meh"       => _allRivalries.Where(r => r.RivalryTier == "MEH"),
+                    _             => _allRivalries.AsEnumerable()
+                };
+            }
 
-            Rivalries.Clear();
             foreach (var r in filtered)
-                Rivalries.Add(r);
+                Games.Add(r);
         }
 
+        // ── Event handlers ────────────────────────────────────────────────
         private void OnTeamFollowChanged(int teamId, bool isFollowed)
         {
             var team = _allTeams.FirstOrDefault(t => t.TeamID == teamId);
@@ -222,12 +303,35 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                 ApplyTeamFilter();
             }
 
-            foreach (var r in _allRivalries)
+            foreach (var r in _allRivalries.Concat(_personalGames))
             {
                 if (r.Team1Id == teamId) r.Team1IsFollowed = isFollowed;
                 if (r.Team2Id == teamId) r.Team2IsFollowed = isFollowed;
             }
-            ApplyRivalryFilter();
+            ApplyGamesFilter();
+        }
+
+        private void OnGameFollowChanged(string key, bool isFollowed)
+        {
+            var rivalry = _allRivalries.FirstOrDefault(r =>
+                PersonalGameService.Key(r.Team1Id, r.Team2Id) == key);
+            if (rivalry != null)
+                rivalry.IsPersonalFollowed = isFollowed;
+
+            var personalMatch = _personalGames.FirstOrDefault(r =>
+                PersonalGameService.Key(r.Team1Id, r.Team2Id) == key);
+
+            if (isFollowed && rivalry == null && personalMatch == null)
+            {
+                _ = LoadDataAsync();
+                return;
+            }
+
+            if (!isFollowed && personalMatch != null)
+                _personalGames.Remove(personalMatch);
+
+            if (_selectedTier == "➕ Personal")
+                ApplyGamesFilter();
         }
 
         private static int TierSortOrder(string? tier) => tier switch

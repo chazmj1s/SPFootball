@@ -79,7 +79,6 @@ namespace NCAA_Power_Ratings.Mobile.Services
                 System.Diagnostics.Debug.WriteLine($"[API] Falling back to mock data");
                 System.Diagnostics.Debug.WriteLine($"[API] ========================================");
 
-                // Fall back to mock data if API is unavailable
                 return await GetMockPowerRankingsAsync(year ?? DateTime.Now.Year);
             }
             catch (Exception ex)
@@ -90,7 +89,6 @@ namespace NCAA_Power_Ratings.Mobile.Services
                 System.Diagnostics.Debug.WriteLine($"[API] Falling back to mock data");
                 System.Diagnostics.Debug.WriteLine($"[API] ========================================");
 
-                // Fall back to mock data on error
                 return await GetMockPowerRankingsAsync(year ?? DateTime.Now.Year);
             }
         }
@@ -138,8 +136,6 @@ namespace NCAA_Power_Ratings.Mobile.Services
         {
             try
             {
-                // This would call an endpoint like /api/gamedata/teamSchedule
-                // TODO: Implement this endpoint in your backend
                 var url = $"{_baseUrl}/teamSchedule?teamId={teamId}&year={year}";
                 var response = await _httpClient.GetStringAsync(url);
                 return response;
@@ -153,7 +149,6 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
         /// <summary>
         /// Gets all named rivalries with series metadata.
-        /// Add this method to GameDataApiService.cs
         /// </summary>
         public async Task<List<Models.RivalryInfo>?> GetNamedRivalriesAsync()
         {
@@ -165,6 +160,84 @@ namespace NCAA_Power_Ratings.Mobile.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[API] Error getting named rivalries: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets head-to-head history and series metadata for any two teams.
+        /// Maps to GET /api/productiongamedata/rivalryhistory?team1Id=X&team2Id=Y
+        /// Returns a RivalryInfo built from the response, or null on failure.
+        /// </summary>
+        public async Task<Models.RivalryInfo?> GetMatchupHistoryAsync(int team1Id, int team2Id)
+        {
+            try
+            {
+                var url = $"{_baseUrl}/rivalryhistory?team1Id={team1Id}&team2Id={team2Id}";
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[API] rivalryhistory returned {response.StatusCode} for {team1Id} vs {team2Id}");
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var r = JsonSerializer.Deserialize<JsonElement>(json, options);
+
+                // AvgMargin and UpsetRate may be null if no MatchupHistory record exists
+                decimal avgMargin  = 0m;
+                decimal upsetRate  = 0m;
+                decimal stDev      = 0m;
+
+                if (r.TryGetProperty("avgMargin", out var am) && am.ValueKind != JsonValueKind.Null)
+                    avgMargin = am.GetDecimal();
+                if (r.TryGetProperty("upsetRate", out var ur) && ur.ValueKind != JsonValueKind.Null)
+                    upsetRate = ur.GetDecimal();
+
+                int gamesPlayed = r.TryGetProperty("gamesPlayed", out var gp)
+                    ? gp.GetInt32() : 0;
+
+                // Derive first/last played from history array if present
+                int firstPlayed = 0, lastPlayed = 0;
+                if (r.TryGetProperty("history", out var hist) && hist.ValueKind == JsonValueKind.Array)
+                {
+                    var years = hist.EnumerateArray()
+                        .Select(h => h.TryGetProperty("year", out var y) ? y.GetInt32() : 0)
+                        .Where(y => y > 0)
+                        .ToList();
+                    if (years.Count > 0)
+                    {
+                        firstPlayed = years.Min();
+                        lastPlayed  = years.Max();
+                    }
+                }
+
+                return new Models.RivalryInfo
+                {
+                    Team1Id        = team1Id,
+                    Team1Name      = r.TryGetProperty("team1Name",      out var t1n) ? t1n.GetString() ?? string.Empty : string.Empty,
+                    Team1ShortName = r.TryGetProperty("team1ShortName", out var t1s) ? t1s.GetString() ?? string.Empty : string.Empty,
+                    Team2Id        = team2Id,
+                    Team2Name      = r.TryGetProperty("team2Name",      out var t2n) ? t2n.GetString() ?? string.Empty : string.Empty,
+                    Team2ShortName = r.TryGetProperty("team2ShortName", out var t2s) ? t2s.GetString() ?? string.Empty : string.Empty,
+                    RivalryName    = r.TryGetProperty("rivalryName",    out var rn)  && rn.ValueKind != JsonValueKind.Null
+                                         ? rn.GetString() : null,
+                    RivalryTier    = r.TryGetProperty("rivalryTier",    out var rt)  && rt.ValueKind != JsonValueKind.Null
+                                         ? rt.GetString() : "PERSONAL",
+                    GamesPlayed    = gamesPlayed,
+                    AvgMargin      = avgMargin,
+                    StDevMargin    = stDev,
+                    UpsetRate      = upsetRate,
+                    FirstPlayed    = firstPlayed,
+                    LastPlayed     = lastPlayed,
+                    IsPersonalFollowed = true
+                };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error getting matchup history {team1Id} vs {team2Id}: {ex.Message}");
                 return null;
             }
         }
@@ -189,33 +262,31 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
         /// <summary>
         /// Mock data for testing UI before backend endpoint is ready
-        /// TODO: Remove this once backend returns actual data
         /// </summary>
         private async Task<List<Models.TeamRanking>> GetMockPowerRankingsAsync(int year)
         {
-            await Task.Delay(500); // Simulate network delay
+            await Task.Delay(500);
 
             var conferences = new[] { "SEC", "Big Ten", "Big 12", "ACC", "Pac-12" };
             var teams = new List<Models.TeamRanking>();
-
-            var random = new Random(42); // Fixed seed for consistent mock data
+            var random = new Random(42);
 
             for (int i = 1; i <= 133; i++)
             {
                 teams.Add(new Models.TeamRanking
                 {
-                    TeamID = i,
-                    TeamName = $"Team {i}",
-                    Conference = conferences[i % conferences.Length],
+                    TeamID         = i,
+                    TeamName       = $"Team {i}",
+                    Conference     = conferences[i % conferences.Length],
                     ConferenceAbbr = conferences[i % conferences.Length],
-                    Division = "FBS",
-                    OverallRank = i,
-                    Ranking = (decimal)(100 - (i * 0.5) + random.NextDouble() * 5),
-                    Year = year,
-                    Wins = (byte)random.Next(0, 13),
-                    Losses = (byte)random.Next(0, 6),
-                    BaseSOS = (decimal)(random.NextDouble() * 10),
-                    CombinedSOS = (decimal)(random.NextDouble() * 15)
+                    Division       = "FBS",
+                    OverallRank    = i,
+                    Ranking        = (decimal)(100 - (i * 0.5) + random.NextDouble() * 5),
+                    Year           = year,
+                    Wins           = (byte)random.Next(0, 13),
+                    Losses         = (byte)random.Next(0, 6),
+                    BaseSOS        = (decimal)(random.NextDouble() * 10),
+                    CombinedSOS    = (decimal)(random.NextDouble() * 15)
                 });
             }
 
@@ -224,7 +295,6 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
         /// <summary>
         /// Gets projected conference standings for all FBS teams.
-        /// throughWeek simulates mid-season — games after this week are projected.
         /// </summary>
         public async Task<List<ProjectedTeamStanding>> GetProjectedStandingsAsync(
             int year,
@@ -245,25 +315,25 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
                 return raw?.Select(r => new ProjectedTeamStanding
                 {
-                    TeamName = r.GetProperty("teamName").GetString(),
-                    Conference = r.GetProperty("conference").GetString(),
-                    Division = r.TryGetProperty("division", out var div) && div.ValueKind != JsonValueKind.Null
-                                            ? div.GetString() : null,
-                    ActualWins = r.GetProperty("actualWins").GetInt32(),
-                    ActualLosses = r.GetProperty("actualLosses").GetInt32(),
-                    ProjectedWins = r.GetProperty("projectedWins").GetInt32(),
+                    TeamName        = r.GetProperty("teamName").GetString(),
+                    Conference      = r.GetProperty("conference").GetString(),
+                    Division        = r.TryGetProperty("division", out var div) && div.ValueKind != JsonValueKind.Null
+                                          ? div.GetString() : null,
+                    ActualWins      = r.GetProperty("actualWins").GetInt32(),
+                    ActualLosses    = r.GetProperty("actualLosses").GetInt32(),
+                    ProjectedWins   = r.GetProperty("projectedWins").GetInt32(),
                     ProjectedLosses = r.GetProperty("projectedLosses").GetInt32(),
                     ProjectedWinPct = r.GetProperty("projectedWinPct").GetDouble(),
-                    Games = r.GetProperty("games").EnumerateArray().Select(g => new ProjectedGame
+                    Games           = r.GetProperty("games").EnumerateArray().Select(g => new ProjectedGame
                     {
-                        Week = g.GetProperty("week").GetInt32(),
-                        Opponent = g.GetProperty("opponent").GetString(),
-                        Location = g.GetProperty("location").GetString(),
-                        Result = g.GetProperty("result").GetString(),
-                        Score = g.TryGetProperty("score", out var sc) && sc.ValueKind != JsonValueKind.Null ? sc.GetString() : null,
-                        ProjScore = g.TryGetProperty("projScore", out var ps) && ps.ValueKind != JsonValueKind.Null ? ps.GetString() : null,
-                        Confidence = g.TryGetProperty("confidence", out var cf) && cf.ValueKind != JsonValueKind.Null ? cf.GetString() : null,
-                        Type = g.GetProperty("type").GetString(),
+                        Week        = g.GetProperty("week").GetInt32(),
+                        Opponent    = g.GetProperty("opponent").GetString(),
+                        Location    = g.GetProperty("location").GetString(),
+                        Result      = g.GetProperty("result").GetString(),
+                        Score       = g.TryGetProperty("score",      out var sc) && sc.ValueKind != JsonValueKind.Null ? sc.GetString() : null,
+                        ProjScore   = g.TryGetProperty("projScore",  out var ps) && ps.ValueKind != JsonValueKind.Null ? ps.GetString() : null,
+                        Confidence  = g.TryGetProperty("confidence", out var cf) && cf.ValueKind != JsonValueKind.Null ? cf.GetString() : null,
+                        Type        = g.GetProperty("type").GetString(),
                         NeutralSite = g.GetProperty("neutralSite").GetBoolean()
                     }).ToList()
                 }).ToList();
@@ -277,7 +347,6 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
         /// <summary>
         /// Gets projected conference championship qualifiers for all FBS conferences.
-        /// throughWeek simulates mid-season — games after this week are projected.
         /// </summary>
         public async Task<List<ChampionshipMatchup>> GetProjectedChampionshipQualifiersAsync(
             int year,
@@ -298,29 +367,24 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
                 return raw?.Select(r => new ChampionshipMatchup
                 {
-                    Conference = r.GetProperty("conference").GetString(),
-                    Format = r.GetProperty("format").GetString(),
+                    Conference       = r.GetProperty("conference").GetString(),
+                    Format           = r.GetProperty("format").GetString(),
                     Qualifier1Method = r.GetProperty("qualifier1Method").GetString(),
                     Qualifier2Method = r.GetProperty("qualifier2Method").GetString(),
-                    SimulatedThrough = r.TryGetProperty("simulatedThrough", out var st)
-                                            ? st.GetString() : null,
-                    TiebreakerLog = r.GetProperty("tiebreakerLog")
-                                          .EnumerateArray()
-                                          .Select(l => l.GetString())
-                                          .ToList(),
-                    StubsApplied = r.GetProperty("stubsApplied")
-                                          .EnumerateArray()
-                                          .Select(l => l.GetString())
-                                          .ToList(),
-                    Qualifier1 = ParseQualifier(r.GetProperty("qualifier1")),
-                    Qualifier2 = ParseQualifier(r.GetProperty("qualifier2")),
-                    Contenders = r.GetProperty("contenders").EnumerateArray()
-                      .Select(c => new ChampionshipContender
-                      {
-                          TeamName = c.GetProperty("teamName").GetString(),
-                          ConferenceWins = c.GetProperty("conferenceWins").GetInt32(),
-                          ConferenceLosses = c.GetProperty("conferenceLosses").GetInt32()
-                      }).ToList()
+                    SimulatedThrough = r.TryGetProperty("simulatedThrough", out var st) ? st.GetString() : null,
+                    TiebreakerLog    = r.GetProperty("tiebreakerLog").EnumerateArray()
+                                           .Select(l => l.GetString()).ToList(),
+                    StubsApplied     = r.GetProperty("stubsApplied").EnumerateArray()
+                                           .Select(l => l.GetString()).ToList(),
+                    Qualifier1       = ParseQualifier(r.GetProperty("qualifier1")),
+                    Qualifier2       = ParseQualifier(r.GetProperty("qualifier2")),
+                    Contenders       = r.GetProperty("contenders").EnumerateArray()
+                                           .Select(c => new ChampionshipContender
+                                           {
+                                               TeamName         = c.GetProperty("teamName").GetString(),
+                                               ConferenceWins   = c.GetProperty("conferenceWins").GetInt32(),
+                                               ConferenceLosses = c.GetProperty("conferenceLosses").GetInt32()
+                                           }).ToList()
                 }).ToList();
             }
             catch (Exception ex)
@@ -332,12 +396,12 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
         private static ChampionshipQualifier ParseQualifier(JsonElement q) => new()
         {
-            TeamName = q.GetProperty("teamName").GetString(),
-            ConferenceWins = q.GetProperty("conferenceWins").GetInt32(),
+            TeamName         = q.GetProperty("teamName").GetString(),
+            ConferenceWins   = q.GetProperty("conferenceWins").GetInt32(),
             ConferenceLosses = q.GetProperty("conferenceLosses").GetInt32(),
-            OverallWins = q.GetProperty("overallWins").GetInt32(),
-            OverallLosses = q.GetProperty("overallLosses").GetInt32(),
-            Division = q.TryGetProperty("division", out var d) && d.ValueKind != JsonValueKind.Null
+            OverallWins      = q.GetProperty("overallWins").GetInt32(),
+            OverallLosses    = q.GetProperty("overallLosses").GetInt32(),
+            Division         = q.TryGetProperty("division", out var d) && d.ValueKind != JsonValueKind.Null
                                    ? d.GetString() : null
         };
     }

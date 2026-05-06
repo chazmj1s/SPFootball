@@ -48,7 +48,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
         public double? ProjWinnerScore { get; set; }
         public double? ProjLoserScore { get; set; }
         public double? ProjOU { get; set; }
-
+        
         // --- Actual display ---
         public string Score => $"{WPoints}-{LPoints}";
         public int ActualMargin => WPoints - LPoints;
@@ -166,6 +166,12 @@ namespace NCAA_Power_Ratings.Mobile.Models
         {
             get => _loserIsFollowed;
             set { _loserIsFollowed = value; OnPropertyChanged(); OnPropertyChanged(nameof(VisitorIsFollowed)); OnPropertyChanged(nameof(HomeIsFollowed)); }
+        }
+        private bool _isPersonalFollowed;
+        public bool IsPersonalFollowed
+        {
+            get => _isPersonalFollowed;
+            set { _isPersonalFollowed = value; OnPropertyChanged(); }
         }
 
         /// <summary>Follow state for visitor (top row).</summary>
