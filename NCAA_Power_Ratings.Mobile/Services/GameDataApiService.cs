@@ -39,7 +39,7 @@ namespace NCAA_Power_Ratings.Mobile.Services
 
                 var url = $"{_baseUrl}/powerrankings?year={currentYear}";
                 if (week.HasValue)
-                    url += $"&week={week.Value}";
+                    url += $"&throughWeek={week.Value}";
                 System.Diagnostics.Debug.WriteLine($"[API] Full URL: {url}");
 
                 var response = await _httpClient.GetAsync(url);

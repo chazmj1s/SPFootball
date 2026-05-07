@@ -378,36 +378,54 @@ namespace NCAA_Power_Ratings.Controllers
                 if (throughWeek.HasValue)
                 {
                     // ── Week-specific: query pre-computed WeeklyRankings ──────────
+                    // Use explicit join instead of Include to avoid EF Core N+1 against SQLite
 
-                    var weekly = await context.WeeklyRankings
-                        .Include(wr => wr.Team)
-                        .Where(wr => wr.Year == targetYear &&
-                                     wr.Week == throughWeek.Value &&
-                                     wr.Ranking.HasValue)
-                        .ToListAsync();
+                    var weekly = await (
+                        from wr in context.WeeklyRankings
+                        join t in context.Team on wr.TeamID equals t.TeamID
+                        where wr.Year == targetYear &&
+                              wr.Week == throughWeek.Value &&
+                              wr.Ranking.HasValue
+                        orderby wr.OverallRank
+                        select new
+                        {
+                            TeamID         = wr.TeamID,
+                            TeamName       = t.TeamName,
+                            Conference     = t.Conference,
+                            ConferenceAbbr = t.ConferenceAbbr,
+                            Division       = t.Division,
+                            wr.OverallRank,
+                            wr.TierRank,
+                            wr.Ranking,
+                            Year           = (int)wr.Year,
+                            wr.Wins,
+                            wr.Losses,
+                            wr.BaseSOS,
+                            wr.CombinedSOS
+                        }
+                    ).ToListAsync();
 
                     if (!weekly.Any())
                         return NotFound($"No weekly rankings found for year {targetYear} week {throughWeek}. " +
                                         $"Run POST /computeweekly?year={targetYear}&week={throughWeek} first.");
 
                     var result = weekly
-                        .OrderBy(wr => wr.OverallRank)
                         .Select(wr => new
                         {
-                            TeamID         = wr.TeamID,
-                            TeamName       = wr.Team!.TeamName,
-                            Conference     = wr.Team.Conference,
-                            ConferenceAbbr = wr.Team.ConferenceAbbr,
-                            Division       = wr.Team.Division,
-                            Tier           = GetConferenceTier(wr.Team.Conference, wr.Team.TeamName),
-                            OverallRank    = wr.OverallRank,
-                            TierRank       = wr.TierRank,
-                            Ranking        = wr.Ranking,
-                            Year           = (int)wr.Year,
-                            Wins           = wr.Wins,
-                            Losses         = wr.Losses,
-                            BaseSOS        = wr.BaseSOS,
-                            CombinedSOS    = wr.CombinedSOS
+                            wr.TeamID,
+                            wr.TeamName,
+                            wr.Conference,
+                            wr.ConferenceAbbr,
+                            wr.Division,
+                            Tier           = GetConferenceTier(wr.Conference, wr.TeamName),
+                            wr.OverallRank,
+                            wr.TierRank,
+                            wr.Ranking,
+                            wr.Year,
+                            wr.Wins,
+                            wr.Losses,
+                            wr.BaseSOS,
+                            wr.CombinedSOS
                         })
                         .ToList();
 
@@ -421,16 +439,31 @@ namespace NCAA_Power_Ratings.Controllers
                 {
                     // ── Final season: query TeamRecords (original behavior) ────────
 
-                    var teamRecords = await context.TeamRecords
-                        .Include(tr => tr.Team)
-                        .Where(tr => tr.Year == targetYear && tr.Ranking.HasValue)
-                        .ToListAsync();
+                    var teamRecords = await (
+                        from tr in context.TeamRecords
+                        join t in context.Team on tr.TeamID equals t.TeamID
+                        where tr.Year == targetYear && tr.Ranking.HasValue
+                        select new
+                        {
+                            tr.TeamID,
+                            t.TeamName,
+                            t.Conference,
+                            t.ConferenceAbbr,
+                            t.Division,
+                            tr.Ranking,
+                            tr.Year,
+                            tr.Wins,
+                            tr.Losses,
+                            tr.BaseSOS,
+                            tr.CombinedSOS
+                        }
+                    ).ToListAsync();
 
                     var teamsWithTiers = teamRecords
                         .Select(tr => new
                         {
                             TeamRecord = tr,
-                            Tier = GetConferenceTier(tr.Team?.Conference, tr.Team?.TeamName)
+                            Tier = GetConferenceTier(tr.Conference, tr.TeamName)
                         })
                         .OrderByDescending(t => t.TeamRecord.Ranking)
                         .ToList();
@@ -455,10 +488,10 @@ namespace NCAA_Power_Ratings.Controllers
                         .Select(t => new
                         {
                             TeamID         = t.TeamRecord.TeamID,
-                            TeamName       = t.TeamRecord.Team!.TeamName,
-                            Conference     = t.TeamRecord.Team.Conference,
-                            ConferenceAbbr = t.TeamRecord.Team.ConferenceAbbr,
-                            Division       = t.TeamRecord.Team.Division,
+                            TeamName       = t.TeamRecord.TeamName,
+                            Conference     = t.TeamRecord.Conference,
+                            ConferenceAbbr = t.TeamRecord.ConferenceAbbr,
+                            Division       = t.TeamRecord.Division,
                             Tier           = t.Tier,
                             OverallRank    = t.OverallRank,
                             TierRank       = tierRankLookup[t.TeamRecord.TeamID],

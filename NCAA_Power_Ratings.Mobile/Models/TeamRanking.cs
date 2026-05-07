@@ -39,20 +39,13 @@ namespace NCAA_Power_Ratings.Mobile.Models
             _ => Tier ?? "N/A"
         };
 
-        public string DisplayRanking => Ranking?.ToString("F4") ?? "N/A";
+        public string DisplayConferenceTier => $"{ConferenceAbbr} · {DisplayTierWithRank}";
         public string DisplaySOS => CombinedSOS?.ToString("F4") ?? "N/A";
 
         // Set by ViewModel after each sort change to drive the dynamic column
         public string ActiveSortValue { get; set; } = string.Empty;
 
-        public bool IsTop25
-        {
-            get
-            {
-                System.Diagnostics.Debug.WriteLine($"IsTop25 evaluated for {TeamName} (Rank={OverallRank})");
-                return OverallRank <= 25;
-            }
-        }
+        public bool IsTop25 { get; set; }
         public bool IsOddRow { get; set; }
 
         private bool _isFollowed;

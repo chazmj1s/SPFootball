@@ -52,7 +52,7 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             _navState.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
-                    e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
                     _ = LoadDataAsync();
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
                     ApplyFiltersAndSort();
@@ -98,12 +98,12 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
         public string GetActiveSortValue(TeamRanking t) => _currentSort switch
         {
-            RankingSort.PowerRating => t.DisplayRanking,
+            RankingSort.PowerRating => t.DisplayRank,
             RankingSort.SOS        => t.DisplaySOS,
             RankingSort.Record     => t.Record,
             RankingSort.TierRank   => t.DisplayTierWithRank,
             RankingSort.Rank       => t.DisplayRank,
-            _                      => t.DisplayRanking
+            _                      => t.DisplayRank
         };
 
         // ── Commands ──────────────────────────────────────────────────────
@@ -117,16 +117,25 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
         // ── Load ──────────────────────────────────────────────────────────
 
+        private CancellationTokenSource? _loadCts;
+
         public async Task LoadDataAsync()
         {
-            if (IsBusy) return;
+            _loadCts?.Cancel();
+            _loadCts = new CancellationTokenSource();
+            var token = _loadCts.Token;
+
             IsBusy = true;
             StatusMessage = "Loading rankings...";
             OnPropertyChanged(nameof(StatusMessage));
 
             try
             {
-                var teams = await _apiService.GetPowerRankingsAsync(_navState.SelectedYear, _navState.SelectedWeek);
+                var teams = await _apiService.GetPowerRankingsAsync(
+                    _navState.SelectedYear,
+                    _navState.SelectedWeek);
+
+                if (token.IsCancellationRequested) return;
 
                 if (teams != null)
                 {
@@ -134,10 +143,15 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
                     var followedIds = _followService.GetFollowedIds();
                     foreach (var t in _allTeams)
+                    {
                         t.IsFollowed = followedIds.Contains(t.TeamID);
+                        t.IsTop25    = t.OverallRank > 0 && t.OverallRank <= 25;
+                    }
 
                     ApplyFiltersAndSort();
-                    StatusMessage = $"{teams.Count} teams";
+                    StatusMessage = _navState.SelectedWeek > 0
+                        ? $"{teams.Count} teams · Wk {_navState.SelectedWeek}"
+                        : $"{teams.Count} teams · Final";
                 }
                 else
                 {
@@ -148,13 +162,17 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             }
             catch (Exception ex)
             {
+                if (token.IsCancellationRequested) return;
                 System.Diagnostics.Debug.WriteLine(ex.Message?.ToString());
                 StatusMessage = $"Error: {ex.Message}";
             }
             finally
             {
-                IsBusy = false;
-                OnPropertyChanged(nameof(StatusMessage));
+                if (!token.IsCancellationRequested)
+                {
+                    IsBusy = false;
+                    OnPropertyChanged(nameof(StatusMessage));
+                }
             }
         }
 
@@ -285,7 +303,10 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                 team.ActiveSortValue = GetActiveSortValue(team);
 
             for (int i = 0; i < result.Count; i++)
+            {
                 result[i].IsOddRow = i % 2 == 1;
+                result[i].IsTop25  = result[i].OverallRank > 0 && result[i].OverallRank <= 25;
+            }
 
             FilteredTeams = new ObservableCollection<TeamRanking>(result);
         }

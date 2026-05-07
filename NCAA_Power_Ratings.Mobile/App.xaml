@@ -17,6 +17,10 @@
             <converters:OddRowBackgroundConverter x:Key="OddRowBackgroundConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
             <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
+            <converters:FollowTeamGlyphConverter x:Key="FollowTeamGlyphConverter"/>
+            <converters:FollowTeamColorConverter x:Key="FollowTeamColorConverter"/>
+            <converters:FollowGameGlyphConverter x:Key="FollowGameGlyphConverter"/>
+            <converters:FollowGameColorConverter x:Key="FollowGameColorConverter"/>
 
             <!-- Follow Styles-->
             <x:Double x:Key="TeamIconSize">10</x:Double>
