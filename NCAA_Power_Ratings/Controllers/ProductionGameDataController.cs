@@ -515,9 +515,9 @@ namespace NCAA_Power_Ratings.Controllers
 
                 return Ok(new
                 {
-                    message     = $"Computed weekly rankings for {targetYear} week {week.Value}.",
-                    year        = targetYear,
-                    week        = week.Value
+                    message = $"Computed weekly rankings for {targetYear} week {week.Value}.",
+                    year    = targetYear,
+                    week    = week.Value
                 });
             }
             catch (Exception ex)
@@ -1321,20 +1321,26 @@ namespace NCAA_Power_Ratings.Controllers
             if (string.IsNullOrEmpty(conference))
                 return "Other";
 
-            // Power 4 conferences
-            var power4 = new[] { "SEC", "Big Ten", "Big 12", "ACC" };
+            // Power 4 conferences — match both abbreviations and full names
+            var power4 = new[]
+            {
+                "SEC", "Southeastern Conference",
+                "Big Ten", "Big Ten Conference",
+                "Big 12", "Big 12 Conference",
+                "ACC", "Atlantic Coast Conference"
+            };
             if (power4.Any(p4 => conference.Contains(p4, StringComparison.OrdinalIgnoreCase)))
                 return "P4";
 
-            // Group of 5 conferences
+            // Group of 5 conferences — match both abbreviations and full names
             var group5 = new[]
             {
-                "American Athletic", "American", "AAC",
-                "Mountain West",
-                "Sun Belt",
-                "Mid-American", "MAC",
+                "American Athletic", "American Athletic Conference", "AAC",
+                "Mountain West", "Mountain West Conference",
+                "Sun Belt", "Sun Belt Conference",
+                "Mid-American", "Mid-American Conference", "MAC",
                 "Conference USA", "C-USA",
-                "Pac-12"
+                "Pac-12", "Pac-12 Conference"
             };
             if (group5.Any(g5 => conference.Contains(g5, StringComparison.OrdinalIgnoreCase)))
                 return "G5";

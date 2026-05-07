@@ -370,16 +370,29 @@ namespace NCAA_Power_Ratings.Services
             if (!string.IsNullOrEmpty(teamName))
             {
                 if (teamName.Equals("Notre Dame",   StringComparison.OrdinalIgnoreCase)) return "P4";
-                if (teamName.Equals("Connecticut", StringComparison.OrdinalIgnoreCase)) return "G5";
+                if (teamName.Equals("Connecticut",  StringComparison.OrdinalIgnoreCase)) return "G5";
             }
 
             if (string.IsNullOrEmpty(conference)) return "Other";
 
-            var power4 = new[] { "SEC", "Big Ten", "Big 12", "ACC" };
+            var power4 = new[]
+            {
+                "SEC", "Southeastern Conference",
+                "Big Ten", "Big Ten Conference",
+                "Big 12", "Big 12 Conference",
+                "ACC", "Atlantic Coast Conference"
+            };
             if (power4.Any(p => conference.Contains(p, StringComparison.OrdinalIgnoreCase))) return "P4";
 
-            var group5 = new[] { "American Athletic", "American", "AAC", "Mountain West",
-                                  "Sun Belt", "Mid-American", "MAC", "Conference USA", "C-USA", "Pac-12" };
+            var group5 = new[]
+            {
+                "American Athletic", "American Athletic Conference", "AAC",
+                "Mountain West", "Mountain West Conference",
+                "Sun Belt", "Sun Belt Conference",
+                "Mid-American", "Mid-American Conference", "MAC",
+                "Conference USA", "C-USA",
+                "Pac-12", "Pac-12 Conference"
+            };
             if (group5.Any(g => conference.Contains(g, StringComparison.OrdinalIgnoreCase))) return "G5";
 
             if (conference.Contains("Independent", StringComparison.OrdinalIgnoreCase)) return "Independent";
