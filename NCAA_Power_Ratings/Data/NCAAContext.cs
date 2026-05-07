@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using NCAA_Power_Ratings.Models;
 
 namespace NCAA_Power_Ratings.Data
@@ -10,6 +10,7 @@ namespace NCAA_Power_Ratings.Data
         public DbSet<AvgScoreDelta> AvgScoreDeltas { get; set; }
         public DbSet<TeamRecord> TeamRecords { get; set; }
         public DbSet<MatchupHistory> MatchupHistories { get; set; }
+        public DbSet<WeeklyRanking> WeeklyRankings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -20,6 +21,11 @@ namespace NCAA_Power_Ratings.Data
             // Composite key for MatchupHistory
             modelBuilder.Entity<MatchupHistory>()
                 .HasKey(m => new { m.Team1Id, m.Team2Id });
+
+            // Unique index on WeeklyRanking: one row per team per year per week
+            modelBuilder.Entity<WeeklyRanking>()
+                .HasIndex(w => new { w.TeamID, w.Year, w.Week })
+                .IsUnique();
         }
     }
 }

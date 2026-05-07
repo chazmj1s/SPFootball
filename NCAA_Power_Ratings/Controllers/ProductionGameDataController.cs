@@ -16,10 +16,12 @@ namespace NCAA_Power_Ratings.Controllers
     IDbContextFactory<NCAAContext> contextFactory,
     ILogger<ProductionGameDataController> logger,
     GamePredictionService predictionService,
-    ProjectionCacheService projectionCache) : ControllerBase
+    ProjectionCacheService projectionCache,
+    WeeklyRankingsService weeklyRankingsService) : ControllerBase
     {
         private readonly GamePredictionService _predictionService = predictionService;
         private readonly ProjectionCacheService _projectionCache = projectionCache;
+        private readonly WeeklyRankingsService _weeklyRankingsService = weeklyRankingsService;
 
         /// <summary>
         /// Predicts the score for a single matchup between two teams.
@@ -357,93 +359,171 @@ namespace NCAA_Power_Ratings.Controllers
         }
 
         /// <summary>
-        /// Get power rankings for a specific year.
+        /// Get power rankings for a specific year, optionally through a specific week.
+        /// When throughWeek is provided, returns pre-computed WeeklyRankings snapshot.
+        /// When omitted, returns final season stats from TeamRecords.
         /// Example: GET /api/productiongamedata/powerrankings?year=2025
+        /// Example: GET /api/productiongamedata/powerrankings?year=2025&amp;throughWeek=10
         /// </summary>
         [HttpGet("powerrankings")]
-        public async Task<IActionResult> GetPowerRankings([FromQuery] int? year)
+        public async Task<IActionResult> GetPowerRankings(
+            [FromQuery] int? year,
+            [FromQuery] int? throughWeek)
         {
             try
             {
                 var targetYear = year ?? DateTime.Now.Year;
-
                 await using var context = await contextFactory.CreateDbContextAsync();
 
-                // Load data first, then order in memory (SQLite doesn't support ordering by decimal)
-                var teamRecords = await context.TeamRecords
-                    .Include(tr => tr.Team)
-                    .Where(tr => tr.Year == targetYear && tr.Ranking.HasValue)
-                    .ToListAsync();
-
-                // Add conference tier to each team
-                var teamsWithTiers = teamRecords
-                    .Select(tr => new
-                    {
-                        TeamRecord = tr,
-                        Tier = GetConferenceTier(tr.Team?.Conference, tr.Team?.TeamName)
-                    })
-                    .OrderByDescending(t => t.TeamRecord.Ranking)
-                    .ToList();
-
-                // Calculate overall rank (all teams)
-                var withOverallRank = teamsWithTiers
-                    .Select((t, index) => new
-                    {
-                        t.TeamRecord,
-                        t.Tier,
-                        OverallRank = index + 1
-                    })
-                    .ToList();
-
-                // Group by tier and calculate tier-specific ranks
-                var tierGroups = withOverallRank.GroupBy(t => t.Tier).ToList();
-
-                // Dictionary to hold tier ranks
-                var tierRankLookup = new Dictionary<int, int>(); // TeamID -> TierRank
-
-                foreach (var tierGroup in tierGroups)
+                if (throughWeek.HasValue)
                 {
-                    var tieredTeams = tierGroup
-                        .OrderByDescending(t => t.TeamRecord.Ranking)
-                        .Select((t, index) => new { t.TeamRecord.TeamID, TierRank = index + 1 })
+                    // ── Week-specific: query pre-computed WeeklyRankings ──────────
+
+                    var weekly = await context.WeeklyRankings
+                        .Include(wr => wr.Team)
+                        .Where(wr => wr.Year == targetYear &&
+                                     wr.Week == throughWeek.Value &&
+                                     wr.Ranking.HasValue)
+                        .ToListAsync();
+
+                    if (!weekly.Any())
+                        return NotFound($"No weekly rankings found for year {targetYear} week {throughWeek}. " +
+                                        $"Run POST /computeweekly?year={targetYear}&week={throughWeek} first.");
+
+                    var result = weekly
+                        .OrderBy(wr => wr.OverallRank)
+                        .Select(wr => new
+                        {
+                            TeamID         = wr.TeamID,
+                            TeamName       = wr.Team!.TeamName,
+                            Conference     = wr.Team.Conference,
+                            ConferenceAbbr = wr.Team.ConferenceAbbr,
+                            Division       = wr.Team.Division,
+                            Tier           = GetConferenceTier(wr.Team.Conference, wr.Team.TeamName),
+                            OverallRank    = wr.OverallRank,
+                            TierRank       = wr.TierRank,
+                            Ranking        = wr.Ranking,
+                            Year           = (int)wr.Year,
+                            Wins           = wr.Wins,
+                            Losses         = wr.Losses,
+                            BaseSOS        = wr.BaseSOS,
+                            CombinedSOS    = wr.CombinedSOS
+                        })
                         .ToList();
 
-                    foreach (var team in tieredTeams)
-                    {
-                        tierRankLookup[team.TeamID] = team.TierRank;
-                    }
+                    logger.LogInformation(
+                        "Returned {Count} weekly rankings for year {Year} week {Week}",
+                        result.Count, targetYear, throughWeek.Value);
+
+                    return Ok(result);
                 }
+                else
+                {
+                    // ── Final season: query TeamRecords (original behavior) ────────
 
-                // Build final rankings list
-                var rankings = withOverallRank
-                    .OrderByDescending(t => t.TeamRecord.Ranking)
-                    .Select(t => new
+                    var teamRecords = await context.TeamRecords
+                        .Include(tr => tr.Team)
+                        .Where(tr => tr.Year == targetYear && tr.Ranking.HasValue)
+                        .ToListAsync();
+
+                    var teamsWithTiers = teamRecords
+                        .Select(tr => new
+                        {
+                            TeamRecord = tr,
+                            Tier = GetConferenceTier(tr.Team?.Conference, tr.Team?.TeamName)
+                        })
+                        .OrderByDescending(t => t.TeamRecord.Ranking)
+                        .ToList();
+
+                    var withOverallRank = teamsWithTiers
+                        .Select((t, index) => new { t.TeamRecord, t.Tier, OverallRank = index + 1 })
+                        .ToList();
+
+                    var tierRankLookup = new Dictionary<int, int>();
+                    foreach (var tierGroup in withOverallRank.GroupBy(t => t.Tier))
                     {
-                        TeamID = t.TeamRecord.TeamID,
-                        TeamName = t.TeamRecord.Team!.TeamName,
-                        Conference = t.TeamRecord.Team.Conference,
-                        ConferenceAbbr = t.TeamRecord.Team.ConferenceAbbr,
-                        Division = t.TeamRecord.Team.Division,
-                        Tier = t.Tier,
-                        OverallRank = t.OverallRank,                        // Rank among ALL teams
-                        TierRank = tierRankLookup[t.TeamRecord.TeamID],    // Rank within tier (P4, G5, etc.)
-                        Ranking = t.TeamRecord.Ranking,
-                        Year = t.TeamRecord.Year,
-                        Wins = t.TeamRecord.Wins,
-                        Losses = t.TeamRecord.Losses,
-                        BaseSOS = t.TeamRecord.BaseSOS,
-                        CombinedSOS = t.TeamRecord.CombinedSOS
-                    })
-                    .ToList();
+                        var tieredTeams = tierGroup
+                            .OrderByDescending(t => t.TeamRecord.Ranking)
+                            .Select((t, index) => new { t.TeamRecord.TeamID, TierRank = index + 1 })
+                            .ToList();
+                        foreach (var team in tieredTeams)
+                            tierRankLookup[team.TeamID] = team.TierRank;
+                    }
 
-                logger.LogInformation("Found {Count} teams with power ratings for year {Year}", rankings.Count, targetYear);
+                    var rankings = withOverallRank
+                        .OrderByDescending(t => t.TeamRecord.Ranking)
+                        .Select(t => new
+                        {
+                            TeamID         = t.TeamRecord.TeamID,
+                            TeamName       = t.TeamRecord.Team!.TeamName,
+                            Conference     = t.TeamRecord.Team.Conference,
+                            ConferenceAbbr = t.TeamRecord.Team.ConferenceAbbr,
+                            Division       = t.TeamRecord.Team.Division,
+                            Tier           = t.Tier,
+                            OverallRank    = t.OverallRank,
+                            TierRank       = tierRankLookup[t.TeamRecord.TeamID],
+                            Ranking        = t.TeamRecord.Ranking,
+                            Year           = t.TeamRecord.Year,
+                            Wins           = t.TeamRecord.Wins,
+                            Losses         = t.TeamRecord.Losses,
+                            BaseSOS        = t.TeamRecord.BaseSOS,
+                            CombinedSOS    = t.TeamRecord.CombinedSOS
+                        })
+                        .ToList();
 
-                return Ok(rankings);
+                    logger.LogInformation(
+                        "Found {Count} teams with power ratings for year {Year}", rankings.Count, targetYear);
+
+                    return Ok(rankings);
+                }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error retrieving power rankings");
                 return StatusCode(500, "An error occurred while retrieving power rankings.");
+            }
+        }
+
+        /// <summary>
+        /// Computes and saves weekly rankings for a specific year and week.
+        /// Call this after each week's game results are finalized.
+        /// Use backfill=true to compute all played weeks for the year at once.
+        /// Example: POST /api/productiongamedata/computeweekly?year=2025&amp;week=10
+        /// Example: POST /api/productiongamedata/computeweekly?year=2025&amp;backfill=true
+        /// </summary>
+        [HttpPost("computeweekly")]
+        public async Task<IActionResult> ComputeWeeklyRankings(
+            [FromQuery] int? year,
+            [FromQuery] int? week,
+            [FromQuery] bool backfill = false,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+
+                if (backfill)
+                {
+                    await _weeklyRankingsService.BackfillYearAsync(targetYear, token);
+                    return Ok(new { message = $"Backfilled all weeks for {targetYear}." });
+                }
+
+                if (!week.HasValue)
+                    return BadRequest("Provide week=N or backfill=true.");
+
+                await _weeklyRankingsService.ComputeAndSaveAsync(targetYear, week.Value, token);
+
+                return Ok(new
+                {
+                    message     = $"Computed weekly rankings for {targetYear} week {week.Value}.",
+                    year        = targetYear,
+                    week        = week.Value
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing weekly rankings");
+                return StatusCode(500, "An error occurred computing weekly rankings.");
             }
         }
 

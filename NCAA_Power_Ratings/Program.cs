@@ -35,6 +35,7 @@ builder.Services.AddTransient<TeamMetricsService>();
 builder.Services.AddTransient<MatchupHistoryCalculator>();
 builder.Services.AddTransient<GamePredictionService>();
 builder.Services.AddSingleton<ProjectionCacheService>();
+builder.Services.AddScoped<WeeklyRankingsService>();
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
