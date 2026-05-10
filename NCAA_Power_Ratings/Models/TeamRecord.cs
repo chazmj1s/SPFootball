@@ -64,6 +64,15 @@ namespace NCAA_Power_Ratings.Models
         [Column("DefensiveRank")]
         public int DefensiveRank { get; set; }
 
+        [Column("SeedRating", TypeName = "decimal(10,4)")]
+        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20)
+
+        [Column("TrendRating", TypeName = "decimal(10,4)")]
+        public decimal? TrendRating { get; set; }     // 5-year weighted (40/25/15/12/8)
+
+        [Column("PedigreeRating", TypeName = "decimal(10,4)")]
+        public decimal? PedigreeRating { get; set; }  // 10-year linear decay
+
         [NotMapped]
         public int RegularSeasonGames => Year switch
         {

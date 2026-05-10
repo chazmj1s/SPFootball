@@ -234,9 +234,21 @@ namespace NCAA_Power_Ratings.Services
 
                 if (targetWeek == 0)
                 {
-                    // Initializing year - use projected wins based on 10-year history
-                    winsLookup = await CalculateProjectedWins(context, targetYear, token);
-                    lossesLookup = new Dictionary<int, int>(); // No losses at week 0
+                    // Read pre-computed SeedRating from TeamRecords.
+                    // RollingAverageService must run before SetSOS in the pipeline.
+                    // SeedRating is a win-percentage (0.0–1.0+); multiply by standard season
+                    // games to get a projected win count compatible with the SOS weight logic.
+                    var seedRecords = await context.TeamRecords
+                        .Where(tr => tr.Year == targetYear && tr.SeedRating != null)
+                        .ToListAsync(token);
+
+                    winsLookup = seedRecords.ToDictionary(
+                        tr => tr.TeamID,
+                        tr => (int)Math.Round((double)tr.SeedRating!.Value * tr.RegularSeasonGames));
+
+                    lossesLookup = seedRecords.ToDictionary(
+                        tr => tr.TeamID,
+                        tr => tr.RegularSeasonGames - (int)Math.Round((double)tr.SeedRating!.Value * tr.RegularSeasonGames));
                 }
                 else
                 {

@@ -17,11 +17,13 @@ namespace NCAA_Power_Ratings.Controllers
     ILogger<ProductionGameDataController> logger,
     GamePredictionService predictionService,
     ProjectionCacheService projectionCache,
-    WeeklyRankingsService weeklyRankingsService) : ControllerBase
+    WeeklyRankingsService weeklyRankingsService,
+    RollingAverageService rollingAverageService) : ControllerBase
     {
         private readonly GamePredictionService _predictionService = predictionService;
         private readonly ProjectionCacheService _projectionCache = projectionCache;
         private readonly WeeklyRankingsService _weeklyRankingsService = weeklyRankingsService;
+        private readonly RollingAverageService _rollingAverageService = rollingAverageService;
 
         #region Predictions
 
@@ -261,6 +263,158 @@ namespace NCAA_Power_Ratings.Controllers
             {
                 logger.LogError(ex, "Error querying team records");
                 return StatusCode(500, "An error occurred while querying team records.");
+            }
+        }
+
+        /// <summary>
+        /// Returns Seed/Trend/Pedigree ratings for all FBS teams in the given year.
+        /// Trend and Pedigree include their constituent history arrays.
+        /// Seed is a scalar only — internal pipeline value.
+        /// Example: GET /api/productiongamedata/rollingAverages?year=2025
+        /// </summary>
+        [HttpGet("rollingAverages")]
+        public async Task<IActionResult> GetRollingAverages(
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                await using var context = await contextFactory.CreateDbContextAsync(token);
+                var targetYear = year ?? DateTime.Now.Year;
+
+                var currentRecords = await context.TeamRecords
+                    .Where(tr => tr.Year == targetYear)
+                    .Include(tr => tr.Team)
+                    .Where(tr => tr.Team != null && tr.Team.Division == "FBS" &&
+                                 (tr.TrendRating != null || tr.PedigreeRating != null))
+                    .ToListAsync(token);
+
+                if (!currentRecords.Any())
+                    return NotFound($"No rolling average data found for {targetYear}.");
+
+                var historyStartYear = targetYear - 10;
+                var historicalRecords = await context.TeamRecords
+                    .Where(tr => tr.Year >= historyStartYear && tr.Year < targetYear)
+                    .ToListAsync(token);
+
+                var historyByTeam = historicalRecords
+                    .GroupBy(tr => tr.TeamID)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.OrderByDescending(r => r.Year).ToList());
+
+                var results = currentRecords
+                    .Select(r =>
+                    {
+                        historyByTeam.TryGetValue(r.TeamID, out var history);
+                        history ??= [];
+
+                        var avg = _rollingAverageService.Compute(r, history, useLiveSwap: false);
+
+                        return new
+                        {
+                            teamId = r.TeamID,
+                            teamName = r.Team?.TeamName,
+                            conference = r.Team?.ConferenceAbbr,
+                            seedRating = avg.SeedRating,
+                            trendRating = avg.TrendRating,
+                            trendHistory = avg.TrendHistory,
+                            pedigreeRating = avg.PedigreeRating,
+                            pedigreeHistory = avg.PedigreeHistory
+                        };
+                    })
+                    .OrderByDescending(r => r.trendRating)
+                    .ToList();
+
+                return Ok(new
+                {
+                    year = targetYear,
+                    teamCount = results.Count,
+                    rankings = results
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error fetching rolling averages for year={Year}", year);
+                return StatusCode(500, "An error occurred fetching rolling averages.");
+            }
+        }
+
+        /// <summary>
+        /// Returns Seed/Trend/Pedigree ratings for a single team across all years,
+        /// ordered chronologically. Designed for trend graphs (Idea 11).
+        /// Trend and Pedigree include their constituent history arrays per year.
+        /// Example: GET /api/productiongamedata/rollingAverages/team?teamId=123
+        /// Example: GET /api/productiongamedata/rollingAverages/team?teamId=123&startYear=2000
+        /// </summary>
+        [HttpGet("rollingAverages/team")]
+        public async Task<IActionResult> GetTeamRollingAverages(
+            [FromQuery] int teamId,
+            [FromQuery] int? startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                await using var context = await contextFactory.CreateDbContextAsync(token);
+
+                var team = await context.Team
+                    .FirstOrDefaultAsync(t => t.TeamID == teamId, token);
+
+                if (team == null)
+                    return NotFound($"Team {teamId} not found.");
+
+                // Load all years for this team (we need full history for per-year breakdowns)
+                var allRecords = await context.TeamRecords
+                    .Where(tr => tr.TeamID == teamId)
+                    .OrderBy(tr => tr.Year)
+                    .ToListAsync(token);
+
+                if (!allRecords.Any())
+                    return NotFound($"No records found for team {teamId}.");
+
+                // For each year compute using only the prior years as history
+                var history = allRecords
+                    .OrderByDescending(r => r.Year)
+                    .ToList();
+
+                var targetRecords = startYear.HasValue
+                    ? allRecords.Where(r => r.Year >= startYear.Value).ToList()
+                    : allRecords;
+
+                var results = targetRecords.Select(r =>
+                {
+                    var priorRecords = history
+                        .Where(h => h.Year < r.Year)
+                        .Take(10)
+                        .ToList();
+
+                    var avg = _rollingAverageService.Compute(r, priorRecords, useLiveSwap: false);
+
+                    return new
+                    {
+                        year = (int)r.Year,
+                        wins = (int)r.Wins,
+                        losses = (int)r.Losses,
+                        seedRating = avg.SeedRating,
+                        trendRating = avg.TrendRating,
+                        trendHistory = avg.TrendHistory,
+                        pedigreeRating = avg.PedigreeRating,
+                        pedigreeHistory = avg.PedigreeHistory
+                    };
+                }).ToList();
+
+                return Ok(new
+                {
+                    teamId = team.TeamID,
+                    teamName = team.TeamName,
+                    conference = team.ConferenceAbbr,
+                    history = results
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error fetching rolling averages for teamId={TeamId}", teamId);
+                return StatusCode(500, "An error occurred fetching team rolling averages.");
             }
         }
 

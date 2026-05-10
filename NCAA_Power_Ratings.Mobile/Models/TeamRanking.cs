@@ -35,7 +35,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
         public string Record => $"{Wins}-{Losses}";
 
         // Display helpers
-        public string DisplayRank => $"#{OverallRank}";
+        public string DisplayRank => $"{Ranking}";
         public string DisplayTierRank => $"#{TierRank}";
         public string DisplayTier => Tier ?? "N/A";
         public string DisplayTierWithRank => Tier switch

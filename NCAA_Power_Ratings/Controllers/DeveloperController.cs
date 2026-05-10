@@ -19,6 +19,7 @@ namespace NCAA_Power_Ratings.Controllers
     public class DeveloperController(
         IGameDataService gameDataService,
         TeamMetricsService teamMetrics,
+        RollingAverageService rollingAverageService,
         IDbContextFactory<NCAAContext> contextFactory,
         ScoreDeltaCalculator scoreDeltaCalculator,
         MatchupHistoryCalculator matchupHistoryCalculator,
@@ -28,6 +29,7 @@ namespace NCAA_Power_Ratings.Controllers
     {
         private readonly MetricsConfiguration _config = config.Value;
         private readonly WeeklyRankingsService _weeklyRankingsService = weeklyRankingsService;
+        private readonly RollingAverageService _rollingAverageService = rollingAverageService;
 
         #region Data Loading Endpoints
 
@@ -222,6 +224,94 @@ namespace NCAA_Power_Ratings.Controllers
                 return StatusCode(500, "An error occurred while listing available files.");
             }
         }
+
+        /// <summary>
+        /// Backfills SeedRating, TrendRating, and PedigreeRating for all teams
+        /// across every year from startYear to the current year.
+        /// Run once after deploying the new columns.
+        /// Example: POST /api/developer/backfillRollingAverages?startYear=1975
+        /// </summary>
+        [HttpPost("backfillRollingAverages")]
+        public async Task<IActionResult> BackfillRollingAverages(
+            [FromQuery] int? startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                await using var context = await contextFactory.CreateDbContextAsync(token);
+
+                // Find all distinct years that have TeamRecords
+                var yearsQuery = context.TeamRecords.Select(tr => (int)tr.Year).Distinct();
+
+                if (startYear.HasValue)
+                    yearsQuery = yearsQuery.Where(y => y >= startYear.Value);
+
+                var years = await yearsQuery.OrderBy(y => y).ToListAsync(token);
+
+                if (!years.Any())
+                    return NotFound("No TeamRecords found matching the criteria.");
+
+                logger.LogInformation(
+                    "Backfilling rolling averages for {Count} years...", years.Count);
+
+                int processed = 0;
+                foreach (var year in years)
+                {
+                    // Backfill always uses week null (preseason / no live swap)
+                    // so Seed is computed from prior seasons only for all historical years.
+                    await _rollingAverageService.ComputeAndPersistAsync(year, week: null, token);
+                    processed++;
+                    logger.LogInformation(
+                        "Rolling averages complete: {Year} ({Done}/{Total})",
+                        year, processed, years.Count);
+                }
+
+                return Ok(new
+                {
+                    message = "Backfill complete.",
+                    processed,
+                    startYear
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during rolling averages backfill");
+                return StatusCode(500, "An error occurred during backfill.");
+            }
+        }
+        /// <summary>
+        /// Recalculates rolling averages for a single year/week.
+        /// Useful for testing the live swap behaviour without running the full pipeline.
+        /// Example: POST /api/developer/calculateRollingAverages?year=2025&week=8
+        /// Example: POST /api/developer/calculateRollingAverages?year=2025         (preseason)
+        /// </summary>
+        [HttpPost("calculateRollingAverages")]
+        public async Task<IActionResult> CalculateRollingAverages(
+            [FromQuery] int? year,
+            [FromQuery] int? week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                await _rollingAverageService.ComputeAndPersistAsync(targetYear, week, token);
+
+                return Ok(new
+                {
+                    message = $"Rolling averages computed for {targetYear}" +
+                              (week.HasValue ? $" week {week.Value}" : " (preseason)"),
+                    year = targetYear,
+                    week,
+                    liveSwapActive = week.HasValue
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error calculating rolling averages: year={Year}, week={Week}", year, week);
+                return StatusCode(500, "An error occurred calculating rolling averages.");
+            }
+        }
+
 
         #endregion
 
@@ -936,9 +1026,11 @@ namespace NCAA_Power_Ratings.Controllers
         /// </summary>
         private async Task RecalculateMetricsAsync(int year, int? week)
         {
-            await teamMetrics.SetSOS(year, week);
-            await teamMetrics.CalculatePowerRatings(year);
-            await teamMetrics.CalculateRankings(year);
+            // Pipeline order is strict — each step reads what the previous wrote.
+            await _rollingAverageService.ComputeAndPersistAsync(year, week);  // Seed/Trend/Pedigree → TeamRecords
+            await teamMetrics.SetSOS(year, week);                             // reads SeedRating (week 0) or live wins (week 6+)
+            await teamMetrics.CalculatePowerRatings(year);                    // reads CombinedSOS
+            await teamMetrics.CalculateRankings(year);                        // reads PowerRating + CombinedSOS
         }
     }
 }

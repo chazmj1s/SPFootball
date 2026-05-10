@@ -8,7 +8,7 @@
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
 
-  <Grid RowDefinitions="Auto,Auto,*,24">
+  <Grid RowDefinitions="Auto,*,24">
 
         <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 1: Column headers                               -->
@@ -20,28 +20,28 @@
 
       <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
+                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="1" Text="" />
       <Label Grid.Column="2" Text="Team ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
+                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="3" Text="Rec ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
+                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="4" Text="Rating ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
+                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="5" Text="SOS ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
+                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
         </Label.GestureRecognizers>
       </Label>
 
@@ -50,11 +50,11 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 2: Rankings list                                -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <CollectionView Grid.Row="1"
+        <CollectionView Grid.Row="1"
                     ItemsSource="{Binding FilteredTeams}"
                     SelectionMode="None">
 
-      <CollectionView.ItemTemplate>
+            <CollectionView.ItemTemplate>
         <DataTemplate x:DataType="models:TeamRanking">
           <VerticalStackLayout Spacing="0">
 
@@ -218,7 +218,7 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 3: Status bar                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="3" HeightRequest="24"
+    <Grid Grid.Row="2" HeightRequest="24"
           BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
       <Label Text="{Binding StatusMessage}"
              Padding="8,0" FontSize="10" Opacity="0.7"
