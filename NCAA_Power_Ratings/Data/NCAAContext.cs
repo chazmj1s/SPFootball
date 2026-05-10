@@ -16,6 +16,10 @@ namespace NCAA_Power_Ratings.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<Game>()
+                .Property(g => g.Id)
+                .ValueGeneratedNever();
+
             modelBuilder.Entity<Game>().Ignore(e => e.Spread);
 
             // Composite key for MatchupHistory

@@ -6,7 +6,7 @@ namespace NCAA_Power_Ratings.Models
     [Table("Game")]
     public class Game
     {
-        [Key]
+       // [Key]
         [Column("Id")]
         public int Id { get; set; }
 
