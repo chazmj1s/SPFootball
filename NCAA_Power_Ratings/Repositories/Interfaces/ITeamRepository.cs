@@ -1,4 +1,4 @@
-﻿using NCAA_Power_Ratings.Models;
+using NCAA_Power_Ratings.Models;
 
 namespace NCAA_Power_Ratings.Repositories.Interfaces
 {

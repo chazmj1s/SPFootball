@@ -1,4 +1,4 @@
-﻿using NCAA_Power_Ratings.Models;
+using NCAA_Power_Ratings.Models;
 
 namespace NCAA_Power_Ratings.Repositories.Interfaces
 {
@@ -22,15 +22,20 @@ namespace NCAA_Power_Ratings.Repositories.Interfaces
             int week,
             CancellationToken token = default);
 
+        /// <summary>
+        /// Returns all played games from <paramref name="fromYear"/> onwards.
+        /// Used for league average score calculation across recent seasons.
+        /// </summary>
+        Task<List<Game>> GetPlayedGamesSinceYearAsync(
+            int fromYear,
+            CancellationToken token = default);
+
         Task<Game?> GetByIdAsync(
             int gameId,
             CancellationToken token = default);
 
         Task AddRangeAsync(
             IEnumerable<Game> games,
-            CancellationToken token = default);
-
-        Task SaveChangesAsync(
             CancellationToken token = default);
     }
 }

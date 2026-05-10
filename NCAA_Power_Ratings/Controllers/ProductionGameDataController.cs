@@ -3,7 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using NCAA_Power_Ratings.Data;
 using NCAA_Power_Ratings.Models;
 using NCAA_Power_Ratings.Services;
-using NCAA_Power_Ratings.TempModels;
+using NCAA_Power_Ratings.Contracts.Requests;
+using NCAA_Power_Ratings.Contracts.Responses;
 
 namespace NCAA_Power_Ratings.Controllers
 {
@@ -1827,14 +1828,5 @@ namespace NCAA_Power_Ratings.Controllers
             
             return null; // No division
         }
-    }
-
-    /// <summary>
-    /// Request model for batch matchup predictions.
-    /// </summary>
-    public class MatchupBatchRequest
-    {
-        public int Year { get; set; }
-        public List<NCAA_Power_Ratings.Services.MatchupRequest> Matchups { get; set; } = new();
     }
 }

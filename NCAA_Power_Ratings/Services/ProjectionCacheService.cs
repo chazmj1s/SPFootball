@@ -1,6 +1,8 @@
 using NCAA_Power_Ratings.Data;
-using NCAA_Power_Ratings.Models;
 using Microsoft.EntityFrameworkCore;
+using NCAA_Power_Ratings.Contracts.Requests;
+using NCAA_Power_Ratings.Contracts.Responses;
+
 
 namespace NCAA_Power_Ratings.Services
 {

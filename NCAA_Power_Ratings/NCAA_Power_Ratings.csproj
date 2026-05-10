@@ -277,11 +277,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Contracts\Responses\" />
-    <Folder Include="Contracts\Requests\" />
     <Folder Include="Migrations\" />
     <Folder Include="Application\" />
-    <Folder Include="Infrastructure\" />
     <Folder Include="SQL\" />
   </ItemGroup>
 
