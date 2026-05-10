@@ -18,9 +18,13 @@ namespace NCAA_Power_Ratings.Mobile.Services
             // TODO: Update this to your actual API URL when deployed
             // For local testing on Android emulator, use 10.0.2.2
             // For local testing on iOS simulator, use localhost
+#if DEBUG
             _baseUrl = DeviceInfo.Platform == DevicePlatform.Android
                 ? "http://10.0.2.2:5086/api/productiongamedata"
                 : "http://localhost:5086/api/productiongamedata";
+#else
+            _baseUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/productionGameData";
+#endif
         }
 
         /// <summary>
