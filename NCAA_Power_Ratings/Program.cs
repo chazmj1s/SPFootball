@@ -1,4 +1,3 @@
-using Microsoft.Build.Framework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -12,18 +11,33 @@ using NCAA_Power_Ratings.Utilities;
 
 
 var builder = WebApplication.CreateBuilder(args);
+var cs = builder.Configuration.GetConnectionString("DefaultConnection");
+Console.WriteLine($"CONNECTION: {cs}");
 
 // Add database context configuration
 // Program.cs - make options lifetime Singleton
-builder.Services.AddDbContext<NCAAContext>(
-options => options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
-                      .EnableSensitiveDataLogging(),
-    contextLifetime: ServiceLifetime.Scoped,
-    optionsLifetime: ServiceLifetime.Singleton);
+builder.Services.AddDbContext<NCAAContext>(options =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+    sqlOptions => sqlOptions.EnableRetryOnFailure(
+        maxRetryCount: 5,
+        maxRetryDelay: TimeSpan.FromSeconds(30),
+        errorNumbersToAdd: null));
+    if (builder.Environment.IsDevelopment())
+        options.EnableSensitiveDataLogging();
+}, contextLifetime: ServiceLifetime.Scoped,
+   optionsLifetime: ServiceLifetime.Singleton);
 
 builder.Services.AddDbContextFactory<NCAAContext>(options =>
-options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
-           .EnableSensitiveDataLogging());
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+    sqlOptions => sqlOptions.EnableRetryOnFailure(
+        maxRetryCount: 5,
+        maxRetryDelay: TimeSpan.FromSeconds(30),
+        errorNumbersToAdd: null));
+    if (builder.Environment.IsDevelopment())
+        options.EnableSensitiveDataLogging();
+});
 
 // Register HttpClient for dependency injection
 builder.Services.AddHttpClient();

@@ -1,0 +1,338 @@
+TeamName,Conference,Abbreviation
+Army,American Athletic Conference,AAC
+Charlotte,American Athletic Conference,AAC
+East Carolina,American Athletic Conference,AAC
+Florida Atlantic,American Athletic Conference,AAC
+Memphis,American Athletic Conference,AAC
+Navy,American Athletic Conference,AAC
+North Texas,American Athletic Conference,AAC
+Rice,American Athletic Conference,AAC
+South Florida,American Athletic Conference,AAC
+Temple,American Athletic Conference,AAC
+Tulane,American Athletic Conference,AAC
+Tulsa,American Athletic Conference,AAC
+UAB,American Athletic Conference,AAC
+UTSA,American Athletic Conference,AAC
+Wichita State,American Athletic Conference (non-football),AAC
+George Washington,Atlantic 10 Conference (non-football),A-10
+St. Joseph's (Pennsylvania),Atlantic 10 Conference (non-football),A-10
+Boston College,Atlantic Coast Conference,ACC
+California,Atlantic Coast Conference,ACC
+Clemson,Atlantic Coast Conference,ACC
+Duke,Atlantic Coast Conference,ACC
+Florida State,Atlantic Coast Conference,ACC
+Georgia Tech,Atlantic Coast Conference,ACC
+Louisville,Atlantic Coast Conference,ACC
+Miami (FL),Atlantic Coast Conference,ACC
+North Carolina,Atlantic Coast Conference,ACC
+North Carolina State,Atlantic Coast Conference,ACC
+Pitt,Atlantic Coast Conference,ACC
+SMU,Atlantic Coast Conference,ACC
+Stanford,Atlantic Coast Conference,ACC
+Syracuse,Atlantic Coast Conference,ACC
+Virginia,Atlantic Coast Conference,ACC
+Virginia Tech,Atlantic Coast Conference,ACC
+Wake Forest,Atlantic Coast Conference,ACC
+Arizona,Big 12 Conference,Big 12
+Arizona State,Big 12 Conference,Big 12
+Baylor,Big 12 Conference,Big 12
+BYU,Big 12 Conference,Big 12
+Cincinnati,Big 12 Conference,Big 12
+Colorado,Big 12 Conference,Big 12
+Houston,Big 12 Conference,Big 12
+Iowa State,Big 12 Conference,Big 12
+Kansas,Big 12 Conference,Big 12
+Kansas State,Big 12 Conference,Big 12
+Oklahoma State,Big 12 Conference,Big 12
+TCU,Big 12 Conference,Big 12
+Texas Tech,Big 12 Conference,Big 12
+UCF,Big 12 Conference,Big 12
+Utah,Big 12 Conference,Big 12
+West Virginia,Big 12 Conference,Big 12
+Xavier,Big East Conference (non-football),Big East
+Cal Poly,Big Sky Conference,Big Sky
+California-Davis,Big Sky Conference,Big Sky
+Eastern Washington,Big Sky Conference,Big Sky
+Idaho,Big Sky Conference,Big Sky
+Idaho State,Big Sky Conference,Big Sky
+Montana,Big Sky Conference,Big Sky
+Montana State,Big Sky Conference,Big Sky
+Northern Arizona,Big Sky Conference,Big Sky
+Northern Colorado,Big Sky Conference,Big Sky
+Portland State,Big Sky Conference,Big Sky
+Sacramento State,Big Sky Conference,Big Sky
+Weber State,Big Sky Conference,Big Sky
+Illinois,Big Ten Conference,Big Ten
+Indiana,Big Ten Conference,Big Ten
+Iowa,Big Ten Conference,Big Ten
+Maryland,Big Ten Conference,Big Ten
+Michigan,Big Ten Conference,Big Ten
+Michigan State,Big Ten Conference,Big Ten
+Minnesota,Big Ten Conference,Big Ten
+Nebraska,Big Ten Conference,Big Ten
+Northwestern,Big Ten Conference,Big Ten
+Ohio State,Big Ten Conference,Big Ten
+Oregon,Big Ten Conference,Big Ten
+Penn State,Big Ten Conference,Big Ten
+Purdue,Big Ten Conference,Big Ten
+Rutgers,Big Ten Conference,Big Ten
+UCLA,Big Ten Conference,Big Ten
+USC,Big Ten Conference,Big Ten
+Washington,Big Ten Conference,Big Ten
+Wisconsin,Big Ten Conference,Big Ten
+Cal State Fullerton,Big West Conference (non-football),Big West
+Cal State Northridge,Big West Conference (non-football),Big West
+California-Riverside,Big West Conference (non-football),Big West
+California-Santa Barbara,Big West Conference (non-football),Big West
+Long Beach State,Big West Conference (non-football),Big West
+Hofstra,CAA (non-football primary),CAA
+Northeastern,CAA (non-football),CAA
+Albany,CAA Football,CAA
+Bryant,CAA Football,CAA
+Campbell,CAA Football,CAA
+Elon,CAA Football,CAA
+Hampton,CAA Football,CAA
+Maine,CAA Football,CAA
+Monmouth,CAA Football,CAA
+New Hampshire,CAA Football,CAA
+North Carolina A&T,CAA Football,CAA
+Rhode Island,CAA Football,CAA
+Stony Brook,CAA Football,CAA
+Towson,CAA Football,CAA
+Delaware,Conference USA,C-USA
+Florida International,Conference USA,C-USA
+Jacksonville State,Conference USA,C-USA
+Kennesaw State,Conference USA,C-USA
+Liberty,Conference USA,C-USA
+Louisiana Tech,Conference USA,C-USA
+Middle Tennessee State,Conference USA,C-USA
+Missouri State,Conference USA,C-USA
+New Mexico State,Conference USA,C-USA
+Sam Houston,Conference USA,C-USA
+UTEP,Conference USA,C-USA
+Western Kentucky,Conference USA,C-USA
+Wisconsin-Milwaukee,Horizon League (non-football),Horizon
+Connecticut,Independent (football),IND
+Merrimack,Independent (football),IND
+Notre Dame,Independent (football),IND
+Sacred Heart,Independent (football),IND
+Brown,Ivy League,Ivy
+Columbia,Ivy League,Ivy
+Cornell,Ivy League,Ivy
+Dartmouth,Ivy League,Ivy
+Harvard,Ivy League,Ivy
+Penn,Ivy League,Ivy
+Princeton,Ivy League,Ivy
+Yale,Ivy League,Ivy
+Akron,Mid-American Conference,MAC
+Ball State,Mid-American Conference,MAC
+Bowling Green,Mid-American Conference,MAC
+Buffalo,Mid-American Conference,MAC
+Central Michigan,Mid-American Conference,MAC
+Eastern Michigan,Mid-American Conference,MAC
+Kent State,Mid-American Conference,MAC
+Massachusetts,Mid-American Conference,MAC
+Miami (OH),Mid-American Conference,MAC
+Northern Illinois,Mid-American Conference,MAC
+Ohio,Mid-American Conference,MAC
+Toledo,Mid-American Conference,MAC
+Western Michigan,Mid-American Conference,MAC
+Delaware State,Mid-Eastern Athletic Conference,MEAC
+Howard,Mid-Eastern Athletic Conference,MEAC
+Morgan State,Mid-Eastern Athletic Conference,MEAC
+Norfolk State,Mid-Eastern Athletic Conference,MEAC
+North Carolina Central,Mid-Eastern Athletic Conference,MEAC
+South Carolina State,Mid-Eastern Athletic Conference,MEAC
+Bradley,Missouri Valley Conference (non-football),MVC
+Illinois State,Missouri Valley Football Conference,MVFC
+Indiana State,Missouri Valley Football Conference,MVFC
+Murray State,Missouri Valley Football Conference,MVFC
+North Dakota,Missouri Valley Football Conference,MVFC
+North Dakota State,Missouri Valley Football Conference,MVFC
+Northern Iowa,Missouri Valley Football Conference,MVFC
+South Dakota,Missouri Valley Football Conference,MVFC
+South Dakota State,Missouri Valley Football Conference,MVFC
+Southern Illinois,Missouri Valley Football Conference,MVFC
+Youngstown State,Missouri Valley Football Conference,MVFC
+Air Force,Mountain West Conference,MW
+Boise State,Mountain West Conference,MW
+Colorado State,Mountain West Conference,MW
+Fresno State,Mountain West Conference,MW
+Hawaii,Mountain West Conference,MW
+Nevada,Mountain West Conference,MW
+Nevada-Las Vegas,Mountain West Conference,MW
+New Mexico,Mountain West Conference,MW
+San Diego State,Mountain West Conference,MW
+San Jose State,Mountain West Conference,MW
+Utah State,Mountain West Conference,MW
+Wyoming,Mountain West Conference,MW
+Howard Payne,Non-DI (ASC),N/A (D-III)
+Cal Poly-Pomona,Non-DI (CCAA),N/A (D-II)
+Cal State Los Angeles,Non-DI (CCAA),N/A (D-II)
+Humboldt State,Non-DI (CCAA),N/A (D-II)
+San Francisco State,Non-DI (CCAA),N/A (D-II)
+Sonoma State,Non-DI (CCAA),N/A (D-II)
+Gettysburg,Non-DI (Centennial),N/A (D-III)
+Virginia Union,Non-DI (CIAA),N/A (D-II)
+Northwestern Oklahoma State,Non-DI (GAC),N/A (NAIA)
+Grand Valley State,Non-DI (GLIAC),N/A (D-II)
+Northern Michigan,Non-DI (GLIAC),N/A (D-II)
+Wayne State,Non-DI (GLIAC),N/A (D-II)
+Missouri-Rolla,Non-DI (GLVC),N/A (D-II)
+Truman State,Non-DI (GLVC),N/A (D-II)
+Delta State,Non-DI (GSC),N/A (D-II)
+Mississippi College,Non-DI (GSC),N/A (D-II)
+Valdosta State,Non-DI (GSC),N/A (D-II)
+Camp Lejeune,Non-DI (historical),N/A
+Frederick,Non-DI (historical),N/A
+Hayward State,Non-DI (historical),N/A
+Parsons,Non-DI (historical),N/A
+Parsons (Iowa),Non-DI (historical),N/A
+Pensacola NAS,Non-DI (historical),N/A
+Quantico Marines,Non-DI (historical),N/A
+Savannah State,Non-DI (historical),N/A (D-II)
+U.S. International,Non-DI (historical),N/A
+West Texas State,Non-DI (historical),N/A (D-II)
+West Virginia Tech,Non-DI (historical),N/A
+Angelo State,Non-DI (Lone Star),N/A (D-II)
+Eastern New Mexico,Non-DI (Lone Star),N/A (D-II)
+Texas A&M-Commerce,Non-DI (Lone Star),N/A (D-II)
+Texas A&M-Kingsville,Non-DI (Lone Star),N/A (D-II)
+Western New Mexico,Non-DI (Lone Star),N/A (D-II)
+Central Missouri State,Non-DI (MIAA),N/A (D-II)
+Emporia State,Non-DI (MIAA),N/A (D-II)
+Fort Hays State,Non-DI (MIAA),N/A (D-II)
+Missouri Southern,Non-DI (MIAA),N/A (D-II)
+Ohio Wesleyan,Non-DI (NCAC),N/A (D-III)
+Wittenberg,Non-DI (NCAC),N/A (D-III)
+Tufts,Non-DI (NESCAC),N/A (D-III)
+Augustana (South Dakota),Non-DI (NSIC),N/A (D-II)
+Mankato State,Non-DI (NSIC),N/A (D-II)
+Moorhead State,Non-DI (NSIC),N/A (D-II)
+St. Cloud State,Non-DI (NSIC),N/A (D-II)
+Linfield,Non-DI (NWC),N/A (D-III)
+Guilford,Non-DI (ODAC),N/A (D-III)
+West Chester,Non-DI (PSAC),N/A (D-II)
+New Mexico Highlands,Non-DI (RMAC),N/A (D-II)
+Langston,Non-DI (SAC NAIA),N/A (NAIA)
+Carson-Newman,Non-DI (SAC),N/A (D-II)
+Lenoir-Rhyne,Non-DI (SAC),N/A (D-II)
+Mars Hill,Non-DI (SAC),N/A (D-II)
+Newberry,Non-DI (SAC),N/A (D-II)
+Texas Lutheran,Non-DI (SCAC),N/A (D-III)
+Trinity (Texas),Non-DI (SCAC),N/A (D-III)
+California Lutheran,Non-DI (SCIAC),N/A (D-III)
+Whittier,Non-DI (SCIAC),N/A (D-III)
+Central State,Non-DI (SIAC),N/A (D-II)
+Edward Waters,Non-DI (SIAC),N/A (D-II/NAIA)
+Tuskegee,Non-DI (SIAC),N/A (D-II)
+Tampa,Non-DI (SSC),N/A (D-II)
+Nebraska-Omaha,Non-DI (Summit non-football),Summit
+Minnesota-Morris,Non-DI (UMAC),N/A (D-III)
+Lincoln,Non-DI (various),N/A (D-II)
+Bishop,Non-DI (various/NAIA),N/A
+Central Connecticut State,Northeast Conference,NEC
+Duquesne,Northeast Conference,NEC
+LIU,Northeast Conference,NEC
+Robert Morris,Northeast Conference,NEC
+St. Francis (PA),Northeast Conference,NEC
+Wagner,Northeast Conference,NEC
+Charleston Southern,OVC-Big South Association,OVC-Big South
+Eastern Illinois,OVC-Big South Association,OVC-Big South
+Gardner-Webb,OVC-Big South Association,OVC-Big South
+Lindenwood,OVC-Big South Association,OVC-Big South
+Southeast Missouri State,OVC-Big South Association,OVC-Big South
+Tennessee State,OVC-Big South Association,OVC-Big South
+Tennessee Tech,OVC-Big South Association,OVC-Big South
+UT Martin,OVC-Big South Association,OVC-Big South
+Western Illinois,OVC-Big South Association,OVC-Big South
+Oregon State,Pac-12 Conference,Pac-12
+Washington State,Pac-12 Conference,Pac-12
+Bucknell,Patriot League,Patriot
+Colgate,Patriot League,Patriot
+Fordham,Patriot League,Patriot
+Holy Cross,Patriot League,Patriot
+Lafayette,Patriot League,Patriot
+Lehigh,Patriot League,Patriot
+Richmond,Patriot League,Patriot
+Villanova,Patriot League,Patriot
+William & Mary,Patriot League,Patriot
+Boston University,Patriot League (non-football),Patriot
+Davidson,Pioneer Football League,PFL
+Dayton,Pioneer Football League,PFL
+Drake,Pioneer Football League,PFL
+Morehead State,Pioneer Football League,PFL
+Presbyterian,Pioneer Football League,PFL
+San Diego,Pioneer Football League,PFL
+Valparaiso,Pioneer Football League,PFL
+Alabama,Southeastern Conference,SEC
+Arkansas,Southeastern Conference,SEC
+Auburn,Southeastern Conference,SEC
+Florida,Southeastern Conference,SEC
+Georgia,Southeastern Conference,SEC
+Kentucky,Southeastern Conference,SEC
+LSU,Southeastern Conference,SEC
+Mississippi State,Southeastern Conference,SEC
+Missouri,Southeastern Conference,SEC
+Oklahoma,Southeastern Conference,SEC
+Ole Miss,Southeastern Conference,SEC
+South Carolina,Southeastern Conference,SEC
+Tennessee,Southeastern Conference,SEC
+Texas,Southeastern Conference,SEC
+Texas A&M,Southeastern Conference,SEC
+Vanderbilt,Southeastern Conference,SEC
+Chattanooga,Southern Conference,SoCon
+Citadel,Southern Conference,SoCon
+East Tennessee State,Southern Conference,SoCon
+Furman,Southern Conference,SoCon
+Mercer,Southern Conference,SoCon
+Samford,Southern Conference,SoCon
+VMI,Southern Conference,SoCon
+Western Carolina,Southern Conference,SoCon
+Wofford,Southern Conference,SoCon
+Houston Christian,Southland Conference,Southland
+Incarnate Word,Southland Conference,Southland
+Lamar,Southland Conference,Southland
+McNeese State,Southland Conference,Southland
+Nicholls State,Southland Conference,Southland
+Northwestern State,Southland Conference,Southland
+Southeastern Louisiana,Southland Conference,Southland
+Stephen F. Austin,Southland Conference,Southland
+Alabama A&M,Southwestern Athletic Conference,SWAC
+Alabama State,Southwestern Athletic Conference,SWAC
+Alcorn State,Southwestern Athletic Conference,SWAC
+Arkansas-Pine Bluff,Southwestern Athletic Conference,SWAC
+Bethune-Cookman,Southwestern Athletic Conference,SWAC
+Florida A&M,Southwestern Athletic Conference,SWAC
+Grambling State,Southwestern Athletic Conference,SWAC
+Jackson State,Southwestern Athletic Conference,SWAC
+Mississippi Valley State,Southwestern Athletic Conference,SWAC
+Prairie View A&M,Southwestern Athletic Conference,SWAC
+Southern,Southwestern Athletic Conference,SWAC
+Texas Southern,Southwestern Athletic Conference,SWAC
+Appalachian State,Sun Belt Conference,Sun Belt
+Arkansas State,Sun Belt Conference,Sun Belt
+Coastal Carolina,Sun Belt Conference,Sun Belt
+Georgia Southern,Sun Belt Conference,Sun Belt
+Georgia State,Sun Belt Conference,Sun Belt
+James Madison,Sun Belt Conference,Sun Belt
+Louisiana,Sun Belt Conference,Sun Belt
+Louisiana-Monroe,Sun Belt Conference,Sun Belt
+Marshall,Sun Belt Conference,Sun Belt
+Old Dominion,Sun Belt Conference,Sun Belt
+South Alabama,Sun Belt Conference,Sun Belt
+Southern Mississippi,Sun Belt Conference,Sun Belt
+Texas State,Sun Belt Conference,Sun Belt
+Troy,Sun Belt Conference,Sun Belt
+Abilene Christian,United Athletic Conference,UAC
+Austin Peay,United Athletic Conference,UAC
+Central Arkansas,United Athletic Conference,UAC
+Eastern Kentucky,United Athletic Conference,UAC
+North Alabama,United Athletic Conference,UAC
+Southern Utah,United Athletic Conference,UAC
+Tarleton State,United Athletic Conference,UAC
+Utah Tech,United Athletic Conference,UAC
+Pacific,West Coast Conference (non-football),WCC
+Saint Mary's (CA),West Coast Conference (non-football),WCC
+Santa Clara,West Coast Conference (non-football),WCC
+Texas-Arlington,Western Athletic Conference (non-football),WAC

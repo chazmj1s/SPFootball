@@ -13,10 +13,15 @@ namespace NCAA_Power_Ratings.Data
         public NCAAContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<NCAAContext>();
-            
-            // Use SQLite for migrations
-            optionsBuilder.UseSqlite("Data Source=ncaa-rankings.db");
-            
+
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json")
+                .Build();
+
+            optionsBuilder.UseSqlServer(
+                configuration.GetConnectionString("DefaultConnection"));
+
             return new NCAAContext(optionsBuilder.Options);
         }
     }

@@ -23,7 +23,7 @@ namespace NCAA_Power_Ratings.Models
         [Column("Conference", TypeName = "varchar(50)")]
         public string? Conference { get; set; }
 
-        [Column("ConferenceAbbr", TypeName = "varchar(10)")]
+        [Column("ConferenceAbbr", TypeName = "varchar(15)")]
         public string? ConferenceAbbr { get; set; }
 
         [Column("ShortName", TypeName = "varchar(20)")]
