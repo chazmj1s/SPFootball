@@ -20,6 +20,9 @@ namespace NCAA_Power_Ratings.Repositories.Interfaces
 
         Task<List<WeeklyRanking>> GetWeeklyRankingsAsync(int year, int week, CancellationToken token = default);
         Task AddWeeklyRankingAsync(WeeklyRanking ranking, CancellationToken token = default);
+
         Task ClearAvgScoreDeltasAsync(CancellationToken token = default);
+        Task ClearMatchupHistoriesAsync(CancellationToken token = default);
+        Task AddMatchupHistoriesAsync(IEnumerable<MatchupHistory> histories, CancellationToken token = default);
     }
 }

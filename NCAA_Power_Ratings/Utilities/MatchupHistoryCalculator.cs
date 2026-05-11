@@ -1,7 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using NCAA_Power_Ratings.Data;
+using NCAA_Power_Ratings.Contracts;
 using NCAA_Power_Ratings.Models;
+using NCAA_Power_Ratings.Data;
 
 namespace NCAA_Power_Ratings.Utilities
 {
@@ -10,16 +10,16 @@ namespace NCAA_Power_Ratings.Utilities
     /// Used to identify high-variance rivalries by comparing actual matchup performance
     /// to expected performance from win-based AvgScoreDeltas.
     /// </summary>
-    public class MatchupHistoryCalculator(IDbContextFactory<NCAAContext> contextFactory, ILogger<MatchupHistoryCalculator> logger)
+    public class MatchupHistoryCalculator(IUnitOfWork _uow, ILogger<MatchupHistoryCalculator> _logger)
     {
         private class GameData
         {
-            public int Team1 { get; set; }
-            public int Team2 { get; set; }
-            public int Margin { get; set; }
-            public int Year { get; set; }
+            public int Team1    { get; set; }
+            public int Team2    { get; set; }
+            public int Margin   { get; set; }
+            public int Year     { get; set; }
             public int WinnerId { get; set; }
-            public int LoserId { get; set; }
+            public int LoserId  { get; set; }
         }
 
         /// <summary>
@@ -28,143 +28,123 @@ namespace NCAA_Power_Ratings.Utilities
         /// </summary>
         public async Task<int> CalculateAllMatchupHistories(CancellationToken cancellationToken = default)
         {
-            await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+            _logger.LogInformation("Starting matchup history calculation for all rivalry tiers");
 
-            logger.LogInformation("Starting matchup history calculation for all rivalry tiers");
-
-            // Get all rivalry metadata (Epic, National, State, and MEH tiers)
             var rivalryMetadata = RivalrySeedData.GetRivalries();
+            _logger.LogInformation("Found {Count} rivalries to process", rivalryMetadata.Count);
 
-            logger.LogInformation("Found {Count} rivalries to process", rivalryMetadata.Count);
-
-            // Get all games
-            var allGames = await context.Game
+            // Load all games, teams, and records into memory for efficient processing
+            var allGames = (await _uow.Games.GetPlayedGamesSinceYearAsync(1, cancellationToken))
                 .Select(g => new GameData
                 {
-                    Team1 = g.WinnerId < g.LoserId ? g.WinnerId : g.LoserId,
-                    Team2 = g.WinnerId < g.LoserId ? g.LoserId : g.WinnerId,
-                    Margin = g.WPoints - g.LPoints,
-                    Year = g.Year,
+                    Team1    = g.WinnerId < g.LoserId ? g.WinnerId : g.LoserId,
+                    Team2    = g.WinnerId < g.LoserId ? g.LoserId  : g.WinnerId,
+                    Margin   = g.WPoints - g.LPoints,
+                    Year     = g.Year,
                     WinnerId = g.WinnerId,
-                    LoserId = g.LoserId
+                    LoserId  = g.LoserId
                 })
-                .ToListAsync(cancellationToken);
+                .ToList();
 
-            // Get team name to ID mapping (include alias for matching)
-            var teamMapping = await context.Team
-                .Select(t => new { t.TeamID, t.TeamName, t.Alias })
-                .ToListAsync(cancellationToken);
+            var teamMapping = await _uow.Teams.GetAllAsync(cancellationToken);
+
+            // Pre-load win totals for upset rate calculation — eliminates N+1 query
+            var allRecords = await _uow.TeamRecords.GetHistoricalAsync(1, 9999, cancellationToken);
+            var winsLookup = allRecords
+                .GroupBy(r => (r.TeamID, (int)r.Year))
+                .ToDictionary(g => g.Key, g => (int)g.First().Wins);
 
             var matchupHistories = new List<MatchupHistory>();
 
-            // Process each rivalry
             foreach (var rivalry in rivalryMetadata)
             {
-                // Find team IDs for this rivalry (check both TeamName and Alias)
-                var team1Id = teamMapping.FirstOrDefault(t => 
+                // Find team IDs (check both TeamName and Alias)
+                var team1Id = teamMapping.FirstOrDefault(t =>
                     t.TeamName.Equals(rivalry.Team1Name, StringComparison.OrdinalIgnoreCase) ||
                     (t.Alias != null && t.Alias.Equals(rivalry.Team1Name, StringComparison.OrdinalIgnoreCase)))?.TeamID;
 
-                var team2Id = teamMapping.FirstOrDefault(t => 
+                var team2Id = teamMapping.FirstOrDefault(t =>
                     t.TeamName.Equals(rivalry.Team2Name, StringComparison.OrdinalIgnoreCase) ||
                     (t.Alias != null && t.Alias.Equals(rivalry.Team2Name, StringComparison.OrdinalIgnoreCase)))?.TeamID;
 
                 if (team1Id == null || team2Id == null)
                 {
-                    logger.LogWarning("Could not find team IDs for rivalry {RivalryName} ({Team1} vs {Team2})",
+                    _logger.LogWarning("Could not find team IDs for rivalry {RivalryName} ({Team1} vs {Team2})",
                         rivalry.RivalryName, rivalry.Team1Name, rivalry.Team2Name);
                     continue;
                 }
 
-                // Normalize team IDs so lower ID is always Team1
+                // Normalize so lower ID is always Team1
                 var normalizedTeam1 = Math.Min(team1Id.Value, team2Id.Value);
                 var normalizedTeam2 = Math.Max(team1Id.Value, team2Id.Value);
 
-                // Get games for this matchup
                 var games = allGames
                     .Where(g => g.Team1 == normalizedTeam1 && g.Team2 == normalizedTeam2)
                     .ToList();
 
                 if (games.Count == 0)
                 {
-                    logger.LogWarning("No games found for rivalry {RivalryName} ({Team1} vs {Team2})",
+                    _logger.LogWarning("No games found for rivalry {RivalryName} ({Team1} vs {Team2})",
                         rivalry.RivalryName, rivalry.Team1Name, rivalry.Team2Name);
                     continue;
                 }
 
                 var gameCount = games.Count;
 
-                // Calculate average margin (absolute value)
-                var margins = games.Select(g => Math.Abs(g.Margin)).ToList();
+                // Average margin and standard deviation
+                var margins   = games.Select(g => Math.Abs(g.Margin)).ToList();
                 var avgMargin = margins.Average();
+                var variance  = margins.Sum(m => Math.Pow(m - avgMargin, 2)) / gameCount;
+                var stDev     = Math.Sqrt(variance);
 
-                // Calculate standard deviation
-                var variance = margins.Sum(m => Math.Pow(m - avgMargin, 2)) / gameCount;
-                var stDev = Math.Sqrt(variance);
+                // Upset rate calculated in memory using pre-loaded wins lookup
+                var upsets = CalculateUpsetRate(games, winsLookup);
 
-                // Calculate upset rate (need to get win records for each game)
-                var upsets = await CalculateUpsetRate(context, games, cancellationToken);
-
-                var history = new MatchupHistory
+                matchupHistories.Add(new MatchupHistory
                 {
-                    Team1Id = normalizedTeam1,
-                    Team2Id = normalizedTeam2,
+                    Team1Id     = normalizedTeam1,
+                    Team2Id     = normalizedTeam2,
                     GamesPlayed = gameCount,
-                    AvgMargin = (decimal)avgMargin,
+                    AvgMargin   = (decimal)avgMargin,
                     StDevMargin = (decimal)stDev,
-                    UpsetRate = (decimal)upsets,
+                    UpsetRate   = (decimal)upsets,
                     FirstPlayed = games.Min(g => g.Year),
-                    LastPlayed = games.Max(g => g.Year),
+                    LastPlayed  = games.Max(g => g.Year),
                     RivalryName = rivalry.RivalryName,
                     RivalryTier = rivalry.Tier
-                };
-
-                matchupHistories.Add(history);
+                });
             }
 
-            // Clear existing data and insert new
-            await context.Database.ExecuteSqlRawAsync("DELETE FROM MatchupHistory", cancellationToken);
-            await context.MatchupHistories.AddRangeAsync(matchupHistories, cancellationToken);
-            var saved = await context.SaveChangesAsync(cancellationToken);
+            // Clear existing and insert new — same pattern as ClearAvgScoreDeltasAsync
+            await _uow.Lookups.ClearMatchupHistoriesAsync(cancellationToken);
+            await _uow.Lookups.AddMatchupHistoriesAsync(matchupHistories, cancellationToken);
+            var saved = await _uow.SaveChangesAsync(cancellationToken);
 
-            logger.LogInformation("Saved {Count} matchup histories to database", saved);
-
+            _logger.LogInformation("Saved {Count} matchup histories to database", matchupHistories.Count);
             return matchupHistories.Count;
         }
 
         /// <summary>
-        /// Calculates the upset rate for a set of games between two teams.
+        /// Calculates upset rate in memory using the pre-loaded wins lookup.
         /// Upset = team with fewer season wins won the game.
+        /// No per-game DB calls — eliminates the N+1 query from the original implementation.
         /// </summary>
-        private async Task<double> CalculateUpsetRate(
-            NCAAContext context,
+        private static double CalculateUpsetRate(
             List<GameData> games,
-            CancellationToken cancellationToken)
+            Dictionary<(int teamId, int year), int> winsLookup)
         {
             var upsetCount = 0;
-            var totalGames = games.Count;
 
             foreach (var game in games)
             {
-                // Get season records for both teams in that year
-                var winnerRecord = await context.TeamRecords
-                    .Where(tr => tr.TeamID == game.WinnerId && tr.Year == game.Year)
-                    .Select(tr => tr.Wins)
-                    .FirstOrDefaultAsync(cancellationToken);
+                winsLookup.TryGetValue((game.WinnerId, game.Year), out var winnerWins);
+                winsLookup.TryGetValue((game.LoserId,  game.Year), out var loserWins);
 
-                var loserRecord = await context.TeamRecords
-                    .Where(tr => tr.TeamID == game.LoserId && tr.Year == game.Year)
-                    .Select(tr => tr.Wins)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                // If loser had more wins, it's an upset
-                if (loserRecord > winnerRecord)
-                {
+                if (loserWins > winnerWins)
                     upsetCount++;
-                }
             }
 
-            return totalGames > 0 ? (double)upsetCount / totalGames : 0.0;
+            return games.Count > 0 ? (double)upsetCount / games.Count : 0.0;
         }
     }
 }

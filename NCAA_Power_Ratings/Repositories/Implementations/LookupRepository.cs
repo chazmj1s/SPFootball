@@ -34,6 +34,13 @@ namespace NCAA_Power_Ratings.Repositories.Implementations
             => await _context.WeeklyRankings.AddAsync(ranking, token);
 
         public Task ClearAvgScoreDeltasAsync(CancellationToken token = default)
-    => _context.Database.ExecuteSqlRawAsync("DELETE FROM AvgScoreDeltas", token);
+            => _context.Database.ExecuteSqlRawAsync("DELETE FROM AvgScoreDeltas", token);
+
+        public Task ClearMatchupHistoriesAsync(CancellationToken token = default)
+            => _context.Database.ExecuteSqlRawAsync("DELETE FROM MatchupHistory", token);
+
+        public Task AddMatchupHistoriesAsync(
+            IEnumerable<MatchupHistory> histories, CancellationToken token = default)
+            => _context.MatchupHistories.AddRangeAsync(histories, token);
     }
 }

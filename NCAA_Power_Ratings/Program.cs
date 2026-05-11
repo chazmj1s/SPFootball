@@ -31,9 +31,9 @@ builder.Services.AddDbContext<NCAAContext>(options =>
 // Register HttpClient for dependency injection
 builder.Services.AddHttpClient();
 
-builder.Services.AddTransient<RecordProcessor>();
-builder.Services.AddTransient<ScoreDeltaCalculator>();
-builder.Services.AddTransient<MatchupHistoryCalculator>();
+builder.Services.AddScoped<RecordProcessor>();
+builder.Services.AddScoped<ScoreDeltaCalculator>();
+builder.Services.AddScoped<MatchupHistoryCalculator>();
 
 builder.Services.AddScoped<TeamMetricsService>();
 builder.Services.AddScoped<IGameDataService, GameDataService>();
