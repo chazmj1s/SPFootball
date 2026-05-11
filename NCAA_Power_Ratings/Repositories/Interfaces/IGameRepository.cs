@@ -37,5 +37,8 @@ namespace NCAA_Power_Ratings.Repositories.Interfaces
         Task AddRangeAsync(
             IEnumerable<Game> games,
             CancellationToken token = default);
+
+        Task<List<int>> GetPlayedWeeksByYearAsync(int year, CancellationToken token = default);
+
     }
 }

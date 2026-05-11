@@ -45,5 +45,13 @@ namespace NCAA_Power_Ratings.Repositories.Implementations
         public async Task AddRangeAsync(IEnumerable<Game> games, CancellationToken token = default)
             => await _context.Game.AddRangeAsync(games, token);
         // SaveChanges is called through IUnitOfWork.SaveChangesAsync — not here.
+
+        public Task<List<int>> GetPlayedWeeksByYearAsync(int year, CancellationToken token = default)
+            => _context.Game
+                .Where(g => g.Year == year && (g.WPoints > 0 || g.LPoints > 0))
+                .Select(g => g.Week)
+                .Distinct()
+                .OrderBy(w => w)
+                .ToListAsync(token);
     }
 }

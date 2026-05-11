@@ -26,6 +26,15 @@ namespace NCAA_Power_Ratings.Repositories.Interfaces
             int year,
             CancellationToken token = default);
 
+        /// <summary>
+        /// Returns records from <paramref name="fromYear"/> up to but not including
+        /// <paramref name="toYearExclusive"/>. Used for rolling average history windows.
+        /// </summary>
+        Task<List<TeamRecord>> GetHistoricalAsync(
+            int fromYear,
+            int toYearExclusive,
+            CancellationToken token = default);
+
         Task<List<TeamRecord>> QueryAsync(
             int? wins = null,
             int? losses = null,

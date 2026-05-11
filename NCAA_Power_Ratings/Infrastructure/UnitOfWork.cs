@@ -17,6 +17,9 @@ namespace NCAA_Power_Ratings.Infrastructure
         public ITeamRecordRepository TeamRecords { get; }
         public IGameRepository       Games       { get; }
         public ILookupRepository     Lookups     { get; }
+        
+        // <Summary>Context</Summary>
+        public NCAAContext Context => _context;
 
         public UnitOfWork(NCAAContext context)
         {

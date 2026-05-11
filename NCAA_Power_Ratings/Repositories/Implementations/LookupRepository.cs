@@ -21,5 +21,8 @@ namespace NCAA_Power_Ratings.Repositories.Implementations
             => _context.WeeklyRankings
                 .Where(wr => wr.Year == year && wr.Week == week)
                 .ToListAsync(token);
+
+        public async Task AddWeeklyRankingAsync(WeeklyRanking ranking, CancellationToken token = default)
+            => await _context.WeeklyRankings.AddAsync(ranking, token);
     }
 }

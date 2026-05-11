@@ -67,5 +67,11 @@ namespace NCAA_Power_Ratings.Repositories.Implementations
                 .Take(limit)
                 .ToListAsync(token);
         }
+
+        public Task<List<TeamRecord>> GetHistoricalAsync(
+    int fromYear, int toYearExclusive, CancellationToken token = default)
+    => _context.TeamRecords
+        .Where(tr => tr.Year >= fromYear && tr.Year < toYearExclusive)
+        .ToListAsync(token);
     }
 }

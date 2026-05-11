@@ -41,16 +41,19 @@ builder.Services.AddDbContextFactory<NCAAContext>(options =>
 // Register HttpClient for dependency injection
 builder.Services.AddHttpClient();
 
-builder.Services.AddScoped<IGameDataService, GameDataService>();
 builder.Services.AddTransient<RecordProcessor>();
 builder.Services.AddTransient<ScoreDeltaCalculator>();
-builder.Services.AddTransient<TeamMetricsService>();
 builder.Services.AddTransient<MatchupHistoryCalculator>();
-builder.Services.AddTransient<GamePredictionService>();
-builder.Services.AddSingleton<ProjectionCacheService>();
+
+builder.Services.AddScoped<TeamMetricsService>();
+builder.Services.AddScoped<IGameDataService, GameDataService>();
+builder.Services.AddScoped<GamePredictionService>();
+builder.Services.AddScoped<ProjectionCacheService>();
 builder.Services.AddScoped<WeeklyRankingsService>();
 builder.Services.AddScoped<RollingAverageService>();
+builder.Services.AddScoped<ProductionGameDataService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<DeveloperService>();
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();

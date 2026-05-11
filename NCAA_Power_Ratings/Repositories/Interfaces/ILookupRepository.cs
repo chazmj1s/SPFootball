@@ -3,17 +3,15 @@ using NCAA_Power_Ratings.Models;
 namespace NCAA_Power_Ratings.Repositories.Interfaces
 {
     /// <summary>
-    /// Read-only access to reference/lookup tables that are loaded in bulk
-    /// and shared across multiple services in the same operation.
-    ///
-    /// AvgScoreDeltas and MatchupHistories are never mutated during a
-    /// prediction or metrics pass — they belong here rather than on the
-    /// write-capable repositories.
+    /// Access to reference/lookup tables shared across multiple services.
+    /// AvgScoreDeltas and MatchupHistories are read-only during pipeline runs.
+    /// WeeklyRankings supports both read and upsert.
     /// </summary>
     public interface ILookupRepository
     {
         Task<List<AvgScoreDelta>>  GetAvgScoreDeltasAsync(CancellationToken token = default);
         Task<List<MatchupHistory>> GetMatchupHistoriesAsync(CancellationToken token = default);
         Task<List<WeeklyRanking>>  GetWeeklyRankingsAsync(int year, int week, CancellationToken token = default);
+        Task                       AddWeeklyRankingAsync(WeeklyRanking ranking, CancellationToken token = default);
     }
 }

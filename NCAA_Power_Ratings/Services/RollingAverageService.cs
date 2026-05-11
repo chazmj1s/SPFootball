@@ -1,7 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NCAA_Power_Ratings.Configuration;
-using NCAA_Power_Ratings.Data;
+using NCAA_Power_Ratings.Contracts;
 using NCAA_Power_Ratings.Models;
 
 namespace NCAA_Power_Ratings.Services
@@ -27,7 +26,7 @@ namespace NCAA_Power_Ratings.Services
     /// </summary>
     public class RollingAverageService
     {
-        private readonly IDbContextFactory<NCAAContext> _contextFactory;
+        private readonly IUnitOfWork          _uow;
         private readonly MetricsConfiguration _config;
 
         private static readonly double[] SeedWeights  = [0.50, 0.30, 0.20];
@@ -36,14 +35,14 @@ namespace NCAA_Power_Ratings.Services
         private const double ExtraWinBump = 0.25;
 
         public RollingAverageService(
-            IDbContextFactory<NCAAContext> contextFactory,
+            IUnitOfWork uow,
             IOptions<MetricsConfiguration> config)
         {
-            _contextFactory = contextFactory;
-            _config         = config.Value;
+            _uow    = uow;
+            _config = config.Value;
         }
 
-        // ── Public records ────────────────────────────────────────────────────────
+        // ── Public record ─────────────────────────────────────────────────────────
 
         /// <summary>
         /// Full result for one team/year — blended scalars plus constituent history arrays.
@@ -51,9 +50,9 @@ namespace NCAA_Power_Ratings.Services
         /// trendHistory and pedigreeHistory are normalized win percentages, most-recent first.
         /// </summary>
         public record RollingAverages(
-            decimal          SeedRating,
-            decimal          TrendRating,
-            decimal          PedigreeRating,
+            decimal                SeedRating,
+            decimal                TrendRating,
+            decimal                PedigreeRating,
             IReadOnlyList<decimal> TrendHistory,
             IReadOnlyList<decimal> PedigreeHistory);
 
@@ -68,17 +67,10 @@ namespace NCAA_Power_Ratings.Services
             int? week = null,
             CancellationToken token = default)
         {
-            await using var context = await _contextFactory.CreateDbContextAsync(token);
+            var currentYearRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(year, token);
 
-            var currentYearRecords = await context.TeamRecords
-                .Where(tr => tr.Year == year)
-                .Include(tr => tr.Team)
-                .ToListAsync(token);
-
-            var historyStartYear = year - 10;
-            var historicalRecords = await context.TeamRecords
-                .Where(tr => tr.Year >= historyStartYear && tr.Year < year)
-                .ToListAsync(token);
+            var historicalRecords  = await _uow.TeamRecords.GetHistoricalAsync(
+                fromYear: year - 10, toYearExclusive: year, token);
 
             var historyByTeam = historicalRecords
                 .GroupBy(tr => tr.TeamID)
@@ -109,7 +101,7 @@ namespace NCAA_Power_Ratings.Services
                 // TrendHistory and PedigreeHistory are not persisted — API only
             }
 
-            await context.SaveChangesAsync(token);
+            await _uow.SaveChangesAsync(token);
         }
 
         /// <summary>
@@ -127,19 +119,17 @@ namespace NCAA_Power_Ratings.Services
             var pedigree = ComputePedigree(history);
 
             return new RollingAverages(
-                SeedRating:     seed.Rating,
-                TrendRating:    trend.Rating,
-                PedigreeRating: pedigree.Rating,
-                TrendHistory:   trend.History,
+                SeedRating:      seed.Rating,
+                TrendRating:     trend.Rating,
+                PedigreeRating:  pedigree.Rating,
+                TrendHistory:    trend.History,
                 PedigreeHistory: pedigree.History);
         }
 
         // ── Tier computations ─────────────────────────────────────────────────────
 
         private static (decimal Rating, IReadOnlyList<decimal> History) ComputeSeed(
-            TeamRecord current,
-            List<TeamRecord> history,
-            bool useLiveSwap)
+            TeamRecord current, List<TeamRecord> history, bool useLiveSwap)
         {
             List<double> values;
 
@@ -153,13 +143,11 @@ namespace NCAA_Power_Ratings.Services
                 values = history.Take(3).Select(NormalizeWinPct).ToList();
             }
 
-            // Seed has no user-facing history — return empty list
             return (ApplyWeights(values, SeedWeights), []);
         }
 
         private static (decimal Rating, IReadOnlyList<decimal> History) ComputeWeighted(
-            List<TeamRecord> history,
-            double[] weights)
+            List<TeamRecord> history, double[] weights)
         {
             var records = history.Take(weights.Length).ToList();
             var values  = records.Select(NormalizeWinPct).ToList();
@@ -173,10 +161,9 @@ namespace NCAA_Power_Ratings.Services
             List<TeamRecord> history)
         {
             var records = history.Take(10).ToList();
-            int n = records.Count;
+            int n       = records.Count;
 
-            if (n == 0)
-                return (0m, []);
+            if (n == 0) return (0m, []);
 
             long   weightSum = (long)n * (n + 1) / 2;
             double total     = 0.0;

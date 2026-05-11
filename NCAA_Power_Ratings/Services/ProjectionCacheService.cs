@@ -1,8 +1,6 @@
-using NCAA_Power_Ratings.Data;
-using Microsoft.EntityFrameworkCore;
+using NCAA_Power_Ratings.Contracts;
 using NCAA_Power_Ratings.Contracts.Requests;
 using NCAA_Power_Ratings.Contracts.Responses;
-
 
 namespace NCAA_Power_Ratings.Services
 {
@@ -17,29 +15,27 @@ namespace NCAA_Power_Ratings.Services
     /// </summary>
     public class ProjectionCacheService
     {
-        private readonly IDbContextFactory<NCAAContext> _contextFactory;
-        private readonly GamePredictionService          _predictionService;
+        private readonly IUnitOfWork _uow;
+        private readonly GamePredictionService _predictionService;
 
         private readonly SemaphoreSlim _lock = new(1, 1);
-        private int?                              _cachedYear;
-        private Dictionary<int, GamePrediction>   _cache = new();
+        private int? _cachedYear;
+        private Dictionary<int, GamePrediction> _cache = new();
 
         public ProjectionCacheService(
-            IDbContextFactory<NCAAContext> contextFactory,
+            IUnitOfWork uow,
             GamePredictionService predictionService)
         {
-            _contextFactory    = contextFactory;
+            _uow = uow;
             _predictionService = predictionService;
         }
 
         /// <summary>
         /// Returns the projection for a single game.
-        /// If the full-season cache for this year doesn't exist yet, builds it.
+        /// Builds the full-season cache if it doesn't exist yet.
         /// </summary>
         public async Task<GamePrediction?> GetProjection(
-            int year,
-            int gameId,
-            CancellationToken token = default)
+            int year, int gameId, CancellationToken token = default)
         {
             await EnsureCacheAsync(year, token);
             _cache.TryGetValue(gameId, out var pred);
@@ -47,11 +43,10 @@ namespace NCAA_Power_Ratings.Services
         }
 
         /// <summary>
-        /// Returns projections for all conference games in the season.
+        /// Returns projections for all games in the season.
         /// </summary>
         public async Task<Dictionary<int, GamePrediction>> GetAllProjections(
-            int year,
-            CancellationToken token = default)
+            int year, CancellationToken token = default)
         {
             await EnsureCacheAsync(year, token);
             return _cache;
@@ -62,7 +57,7 @@ namespace NCAA_Power_Ratings.Services
         /// </summary>
         public void Invalidate() => _cachedYear = null;
 
-        // ── Private ──────────────────────────────────────────────────────
+        // ── Private ───────────────────────────────────────────────────────────────
 
         private async Task EnsureCacheAsync(int year, CancellationToken token)
         {
@@ -74,25 +69,21 @@ namespace NCAA_Power_Ratings.Services
                 // Double-check inside lock
                 if (_cachedYear == year && _cache.Count > 0) return;
 
-                await using var context = await _contextFactory.CreateDbContextAsync(token);
+                var teams = await _uow.Teams.GetTeamDictionaryAsync(token);
+                var allGames = await _uow.Games.GetByYearAsync(year, token);
 
-                var teams = await context.Team.ToDictionaryAsync(t => t.TeamID, token);
-
-                // Load all regular season games
-                var allGames = await context.Game
-                    .Where(g => g.Year == year && g.Week < 16)
-                    .ToListAsync(token);
+                // Filter to regular season only
+                var regularSeasonGames = allGames.Where(g => g.Week < 16).ToList();
 
                 // Build matchup requests for ALL games (played and unplayed)
-                // This ensures projections exist for every game regardless of score
-                var matchupRequests = allGames
+                var matchupRequests = regularSeasonGames
                     .Where(g => teams.ContainsKey(g.WinnerId) && teams.ContainsKey(g.LoserId))
                     .Select(g => new MatchupRequest
                     {
-                        TeamName     = teams[g.WinnerId].TeamName,
+                        TeamName = teams[g.WinnerId].TeamName,
                         OpponentName = teams[g.LoserId].TeamName,
-                        Location     = g.Location,
-                        Week         = g.Week
+                        Location = g.Location,
+                        Week = g.Week
                     })
                     .ToList();
 
@@ -102,20 +93,20 @@ namespace NCAA_Power_Ratings.Services
                 // Key predictions by GameId using team name matching
                 var newCache = new Dictionary<int, GamePrediction>();
 
-                foreach (var g in allGames)
+                foreach (var g in regularSeasonGames)
                 {
                     if (!teams.TryGetValue(g.WinnerId, out var wTeam)) continue;
-                    if (!teams.TryGetValue(g.LoserId,  out var lTeam)) continue;
+                    if (!teams.TryGetValue(g.LoserId, out var lTeam)) continue;
 
                     var pred = predictions.FirstOrDefault(p =>
-                        p.TeamName     == wTeam.TeamName &&
+                        p.TeamName == wTeam.TeamName &&
                         p.OpponentName == lTeam.TeamName);
 
                     if (pred != null)
                         newCache[g.Id] = pred;
                 }
 
-                _cache      = newCache;
+                _cache = newCache;
                 _cachedYear = year;
             }
             finally
