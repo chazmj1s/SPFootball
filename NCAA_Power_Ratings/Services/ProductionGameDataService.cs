@@ -18,15 +18,6 @@ namespace NCAA_Power_Ratings.Services
         IReadOnlyList<object> YearsWithData,
         IReadOnlyList<object> YearStats);
 
-    public record TeamRecordsQueryResult(int Count, object Filters, IReadOnlyList<object> Results);
-    public record RollingAveragesResult(int Year, int TeamCount, IReadOnlyList<object> Rankings);
-    public record TeamRollingAveragesResult(int TeamId, string TeamName, string? Conference, IReadOnlyList<object> History);
-    public record RivalriesResult(int TotalMatchups, int TotalInDatabase, object Filters, IReadOnlyList<object> Rivalries);
-    public record PowerRankingsResult(bool IsWeekly, IReadOnlyList<object> Rankings);
-    public record ScheduleResult(IReadOnlyList<object> Games);
-    public record TeamsResult(IReadOnlyList<object> Teams);
-    public record NamedRivalriesResult(IReadOnlyList<object> Rivalries);
-    public record TeamHistoryResult(int TeamId, string TeamName, string ShortName, string? ConferenceAbbr, IReadOnlyList<object> History);
     public record RivalryHistoryResult(
         int Team1Id, string Team1Name, string Team1ShortName,
         int Team2Id, string Team2Name, string Team2ShortName,
