@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:SaturdayPulse.Models"
+             x:Class="SaturdayPulse.Views.TeamsPage"
+             x:Name="ThisPage">
+    
+    <ContentPage.Resources>
+    <Style TargetType="Label" x:Key="HeaderLabel">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontAttributes" Value="Bold" />
+      <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
+      <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+    <Style TargetType="Label" x:Key="CellLabel">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+    <Style TargetType="Label" x:Key="SubLabel">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="TextColor" Value="{AppThemeBinding Light=#666666, Dark=#999999}" />
+      <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+  </ContentPage.Resources>
+
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- Compact filter bar: conference picker inline -->
+    <Grid Grid.Row="0"
+          ColumnDefinitions="Auto,*"
+          Padding="10,6,10,4"
+          ColumnSpacing="8"
+          VerticalOptions="Center">
+
+      <Label Grid.Column="0"
+             Text="Conference"
+             Style="{StaticResource HeaderLabel}"
+             VerticalOptions="Center" />
+
+      <Picker Grid.Column="1"
+              ItemsSource="{Binding ConferenceFilters}"
+              SelectedItem="{Binding SelectedConference}"
+              FontSize="13"
+              HeightRequest="32"
+              VerticalOptions="Center" />
+    </Grid>
+
+    <!-- Column headers -->
+    <Grid Grid.Row="1"
+          ColumnDefinitions="28,*,60"
+          Padding="10,4,10,4"
+          BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#2A2A2A}">
+      <Label Grid.Column="0" Text="" />
+      <Label Grid.Column="1" Text="Team" Style="{StaticResource HeaderLabel}" />
+      <Label Grid.Column="2" Text="Conf" Style="{StaticResource HeaderLabel}" HorizontalOptions="Center" />
+    </Grid>
+
+    <!-- Loading indicator -->
+    <ActivityIndicator Grid.Row="2"
+                       IsRunning="{Binding IsLoading}"
+                       IsVisible="{Binding IsLoading}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center" />
+
+    <!-- Status message (empty state / error) -->
+    <Label Grid.Row="2"
+           Text="{Binding StatusMessage}"
+           IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmptyConverter}}"
+           HorizontalOptions="Center"
+           VerticalOptions="Center"
+           FontSize="14"
+           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+
+    <!-- Team list -->
+    <CollectionView Grid.Row="2"
+                    ItemsSource="{Binding Teams}"
+                    IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
+      <CollectionView.ItemTemplate>
+        <DataTemplate x:DataType="models:TeamInfo">
+          <Grid ColumnDefinitions="28,*,60"
+                Padding="10,7,10,7">
+
+            <!-- Star: left of team name, tappable, gold if followed -->
+            <Label Grid.Column="0"
+                   Text="☆"
+                   FontSize="18"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center">
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                    CommandParameter="{Binding .}" />
+              </Label.GestureRecognizers>
+              <Label.Triggers>
+                <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="True">
+                  <Setter Property="Text" Value="★" />
+                  <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC8800, Dark=#FFCC44}" />
+                </DataTrigger>
+                <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="False">
+                  <Setter Property="Text" Value="☆" />
+                  <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                </DataTrigger>
+              </Label.Triggers>
+            </Label>
+
+            <!-- Team name + tier -->
+            <StackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+              <Label Text="{Binding TeamName}" Style="{StaticResource CellLabel}" />
+              <Label Text="{Binding Tier}" Style="{StaticResource SubLabel}" />
+            </StackLayout>
+
+            <!-- Conference abbreviation -->
+            <Label Grid.Column="2"
+                   Text="{Binding ConferenceAbbr}"
+                   Style="{StaticResource SubLabel}"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+
+          </Grid>
+        </DataTemplate>
+      </CollectionView.ItemTemplate>
+    </CollectionView>
+
+  </Grid>
+</ContentPage>

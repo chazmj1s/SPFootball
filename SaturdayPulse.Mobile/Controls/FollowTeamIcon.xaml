@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<controls:FollowIcon
+    x:Class="SaturdayPulse.Controls.FollowTeamIcon"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:SaturdayPulse.Controls"
+
+    IsFollowed="{Binding IsFollowed, Source={RelativeSource Self}}"
+
+    GlyphOn="♥"
+    GlyphOff="♡"
+
+    ColorOn="#FF6666"
+    ColorOff="#666666"
+
+    IconSize="{StaticResource TeamIconSize}" />
