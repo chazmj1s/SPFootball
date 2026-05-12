@@ -212,10 +212,9 @@ namespace NCAA_Power_Ratings.Services
                 results);
         }
 
-        public async Task<PowerRankingsResult> GetPowerRankingsAsync(
-            int? year, int? throughWeek, CancellationToken token = default)
+        public async Task<PowerRankingsResult> GetPowerRankingsAsync(int? year, int? throughWeek, CancellationToken token = default)
         {
-            var targetYear = year ?? DateTime.Now.Year;
+           var targetYear = year ?? DateTime.Now.Year;
 
             if (throughWeek.HasValue)
             {
@@ -248,24 +247,50 @@ namespace NCAA_Power_Ratings.Services
                         historyByTeam.TryGetValue(wr.TeamID, out var history);
                         history ??= [];
 
-                        return (object)new
+                        return new PowerRankingRowResponse
                         {
-                            wr.TeamID, TeamName = t?.TeamName, Conference = t?.Conference,
-                            ConferenceAbbr = t?.ConferenceAbbr, Division = t?.Division,
+                            TeamID = wr.TeamID,
+                            TeamName = t?.TeamName,
+                            Conference = t?.Conference,
+                            ConferenceAbbr = t?.ConferenceAbbr,
+                            Division = t?.Division,
+
                             Tier = RatingCalculator.GetConferenceTier(t?.Conference, t?.TeamName),
-                            wr.OverallRank, wr.TierRank, wr.Ranking, wr.PowerRating, Year = (int)wr.Year,
-                            wr.Wins, wr.Losses, wr.BaseSOS, wr.CombinedSOS,
-                            wr.AvgPointsScored, wr.AvgPointsAllowed,
-                            wr.OffensiveZScore, wr.DefensiveZScore, wr.OffensiveRank, wr.DefensiveRank,
-                            TrendRating = currentRecord?.TrendRating,
-                            PedigreeRating = currentRecord?.PedigreeRating,
-                            SeedRating = currentRecord?.SeedRating,
+
+                            OverallRank = wr.OverallRank,
+                            TierRank = wr.TierRank,
+
+                            Ranking = (double?)wr.Ranking,
+                            PowerRating = (double?)wr.PowerRating,
+
+                            Year = (int)wr.Year,
+
+                            Wins = wr.Wins,
+                            Losses = wr.Losses,
+
+                            BaseSOS = (double?)wr.BaseSOS,
+                            CombinedSOS = (double?)wr.CombinedSOS,
+
+                            AvgPointsScored = (double?)wr.AvgPointsScored,
+                            AvgPointsAllowed = (double?)wr.AvgPointsAllowed,
+
+                            OffensiveZScore = (double?)wr.OffensiveZScore,
+                            DefensiveZScore = (double?)wr.DefensiveZScore,
+
+                            OffensiveRank = wr.OffensiveRank,
+                            DefensiveRank = wr.DefensiveRank,
+
+                            TrendRating = (double?)(currentRecord?.TrendRating),
+                            PedigreeRating = (double?)currentRecord?.PedigreeRating,
+                            SeedRating = (double?)currentRecord?.SeedRating,
+
                             TrendHistory = history
-                                .Select(h => (double)(h.TrendRating ?? 0m))
-                                .ToList(),
+                                 .Select(h => (double)(h.TrendRating ?? 0m))
+                                 .ToList(),
+
                             PedigreeHistory = history
-                                .Select(h => (double)(h.PedigreeRating ?? 0m))
-                                .ToList()
+                                 .Select(h => (double)(h.PedigreeRating ?? 0m))
+                                 .ToList()
                         };
                     })
                     .ToList();
@@ -300,7 +325,7 @@ namespace NCAA_Power_Ratings.Services
 
                 var rankings = withOverallRank
                     .OrderByDescending(t => t.TeamRecord.Ranking)
-                    .Select(t => (object)new
+                    .Select(t => new PowerRankingRowResponse
                     {
                         TeamID         = t.TeamRecord.TeamID,
                         TeamName       = t.TeamRecord.Team?.TeamName,
@@ -310,12 +335,12 @@ namespace NCAA_Power_Ratings.Services
                         Tier           = t.Tier,
                         OverallRank    = t.OverallRank,
                         TierRank       = tierRankLookup[t.TeamRecord.TeamID],
-                        Ranking        = t.TeamRecord.Ranking,
+                        Ranking        = (double?)t.TeamRecord.Ranking,
                         Year           = t.TeamRecord.Year,
                         Wins           = t.TeamRecord.Wins,
                         Losses         = t.TeamRecord.Losses,
-                        BaseSOS        = t.TeamRecord.BaseSOS,
-                        CombinedSOS    = t.TeamRecord.CombinedSOS
+                        BaseSOS        = (double?)t.TeamRecord.BaseSOS,
+                        CombinedSOS    = (double?)t.TeamRecord.CombinedSOS
                     }).ToList();
 
                 return new PowerRankingsResult(false, rankings);

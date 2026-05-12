@@ -1,8 +1,10 @@
+using Syncfusion.Licensing;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace NCAA_Power_Ratings.Mobile.Models
 {
+    [Preserve(AllMembers = true)]
     public class TeamInfo : INotifyPropertyChanged
     {
         public int TeamID { get; set; }

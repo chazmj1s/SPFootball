@@ -1,3 +1,4 @@
+using Syncfusion.Licensing;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -6,6 +7,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
 {
     // ── Projected game detail ─────────────────────────────────────────────
 
+    [Preserve(AllMembers = true)]
     public class ProjectedGame
     {
         public int    Week        { get; set; }

@@ -1,8 +1,10 @@
+using Syncfusion.Licensing;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace NCAA_Power_Ratings.Mobile.Models
 {
+    [Preserve(AllMembers = true)]
     public class GameResult : INotifyPropertyChanged
     {
         public int Id { get; set; }
