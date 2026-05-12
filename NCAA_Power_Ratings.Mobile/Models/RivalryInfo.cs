@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using Syncfusion.Licensing;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace NCAA_Power_Ratings.Mobile.Models
@@ -7,6 +8,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
     /// Represents a named rivalry between two teams, including series metadata.
     /// Maps to the /api/productiongamedata/rivalries/named endpoint response.
     /// </summary>
+    [Preserve(AllMembers = true)]
     public class RivalryInfo : INotifyPropertyChanged
     {
         public int Team1Id { get; set; }

@@ -1,9 +1,11 @@
+using Syncfusion.Licensing;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace NCAA_Power_Ratings.Mobile.Models;
 
+[Preserve(AllMembers = true)]
 public class TeamRanking : INotifyPropertyChanged
 {
     // =========================================================
@@ -52,8 +54,33 @@ public class TeamRanking : INotifyPropertyChanged
     // Raw History Data
     // =========================================================
 
-    public List<double>? TrendHistory { get; set; }
-    public List<double>? PedigreeHistory { get; set; }
+    private List<double>? _trendHistory;
+
+    public List<double>? TrendHistory
+    {
+        get => _trendHistory;
+        set
+        {
+            if (SetProperty(ref _trendHistory, value))
+            {
+                OnPropertyChanged(nameof(HasTrendData));
+            }
+        }
+    }
+
+    private List<double>? _pedigreeHistory;
+
+    public List<double>? PedigreeHistory
+    {
+        get => _pedigreeHistory;
+        set
+        {
+            if (SetProperty(ref _pedigreeHistory, value))
+            {
+                OnPropertyChanged(nameof(HasTrendData));
+            }
+        }
+    }
 
     // =========================================================
     // Display Helpers
@@ -156,6 +183,9 @@ public class TeamRanking : INotifyPropertyChanged
                 return;
 
             OnPropertyChanged(nameof(TrendExpandIcon));
+            
+            // Crucial: Notify that HasTrendData has changed
+            OnPropertyChanged(nameof(HasTrendData));
 
             if (_isTrendExpanded)
                 EnsureChartDataLoaded();

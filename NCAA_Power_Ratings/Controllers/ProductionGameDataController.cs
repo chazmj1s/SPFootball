@@ -267,6 +267,7 @@ namespace NCAA_Power_Ratings.Controllers
             {
                 var result = await gameDataService.GetPowerRankingsAsync(year, throughWeek, token);
 
+
                 logger.LogInformation(
                     "Returned {Count} {Type} rankings for year {Year}{Week}",
                     result.Rankings.Count,

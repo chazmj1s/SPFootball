@@ -5,12 +5,15 @@
 // Response JSON maps directly to these classes via GetFromJsonAsync<TeamTrendData>.
 // ═══════════════════════════════════════════════════════════════════════════
 
+using Syncfusion.Licensing;
+
 namespace NCAA_Power_Ratings.Mobile.Models
 {
     /// <summary>
     /// Top-level response from /rollingAverages/team.
     /// One TeamTrendData per team; History has one entry per season.
     /// </summary>
+    [Preserve(AllMembers = true)]
     public class TeamTrendData
     {
         public int TeamId { get; set; }
@@ -24,6 +27,7 @@ namespace NCAA_Power_Ratings.Mobile.Models
     /// TrendHistory and PedigreeHistory are per-game rolling arrays
     /// that feed directly into the Syncfusion SplineAreaSeries charts.
     /// </summary>
+    [Preserve(AllMembers = true)]
     public class TeamYearHistory
     {
         public int Year { get; set; }

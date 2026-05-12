@@ -2,6 +2,7 @@ using Microsoft.Maui.Devices;
 using NCAA_Power_Ratings.Mobile.Models;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Windows.Services.Maps;
 
 namespace NCAA_Power_Ratings.Mobile.Services
 {
@@ -24,26 +25,27 @@ namespace NCAA_Power_Ratings.Mobile.Services
                 ? "http://10.0.2.2:5086/api/productiongamedata"
                 : "http://localhost:5086/api/productiongamedata";
 #else
-                _baseUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/productionGameData";
+            _baseUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/productionGameData";
+            //_baseUrl = "https://localhost:7010/api/productionGameData";
 #endif
         }
 
         /// <summary>
         /// Gets power rankings for a specific year
         /// </summary>
-        public async Task<List<Models.TeamRanking>?> GetPowerRankingsAsync(int? year = null, int? week = null)
+        public async Task<List<Models.TeamRanking>?> GetPowerRankingsAsync(int? year = null, int? throughWeek = null)
         {
             try
             {
                 var currentYear = year ?? DateTime.Now.Year;
 
                 System.Diagnostics.Debug.WriteLine($"[API] ========================================");
-                System.Diagnostics.Debug.WriteLine($"[API] Fetching power rankings for year {currentYear}, week {week?.ToString() ?? "all"}");
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching power rankings for year {currentYear}, week {throughWeek?.ToString() ?? "all"}");
                 System.Diagnostics.Debug.WriteLine($"[API] Base URL: {_baseUrl}");
 
                 var url = $"{_baseUrl}/powerrankings?year={currentYear}";
-                if (week.HasValue)
-                    url += $"&throughWeek={week.Value}";
+                if (throughWeek.HasValue)
+                    url += $"&throughWeek={throughWeek}";
                 System.Diagnostics.Debug.WriteLine($"[API] Full URL: {url}");
 
                 var response = await _httpClient.GetAsync(url);
@@ -60,10 +62,8 @@ namespace NCAA_Power_Ratings.Mobile.Services
                 System.Diagnostics.Debug.WriteLine($"[API] Response length: {jsonContent.Length} characters");
                 System.Diagnostics.Debug.WriteLine($"[API] First 500 chars: {(jsonContent.Length > 500 ? jsonContent.Substring(0, 500) : jsonContent)}");
 
-                var rankings = await response.Content.ReadFromJsonAsync<List<Models.TeamRanking>>();
-
-                System.Diagnostics.Debug.WriteLine($"[API] Successfully deserialized {rankings?.Count ?? 0} rankings");
-
+                var rankings = JsonSerializer.Deserialize<List<TeamRanking>>(jsonContent, new JsonSerializerOptions {PropertyNameCaseInsensitive = true});
+                
                 if (rankings != null && rankings.Count > 0)
                 {
                     System.Diagnostics.Debug.WriteLine($"[API] First team: {rankings[0].TeamName} - Rank: {rankings[0].OverallRank} ({rankings[0].Tier} #{rankings[0].TierRank}) - Power: {rankings[0].Ranking}");

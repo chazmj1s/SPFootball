@@ -1,38 +1,40 @@
-﻿namespace NCAA_Power_Ratings.ModelViews
+﻿public class PowerRankingRowResponse
 {
-    public class PowerRankingRowResponse
-    {
-        int TeamID { get; set; }
-        string TeamName { get; set; }
-        string? Conference { get; set; }
-        string? ConferenceAbbr { get; set; }
-        string? Division { get; set; }
-        string? Tier { get; set; }
+    public int TeamID { get; set; }
 
-        int OverallRank { get; set; }
-        int TierRank { get; set; }
+    public string? TeamName { get; set; }
+    public string? Conference { get; set; }
+    public string? ConferenceAbbr { get; set; }
+    public string? Division { get; set; }
+    public string? Tier { get; set; }
 
-        decimal? Ranking { get; set; }
+    public int? OverallRank { get; set; }
+    public int? TierRank { get; set; }
 
-        int Year { get; set; }
-        int Wins { get; set; }
-        int Losses { get; set; }
+    public double? Ranking { get; set; }
+    public double? PowerRating { get; set; }
 
-        decimal? BaseSOS { get; set; }
-        decimal? CombinedSOS { get; set; }
+    public int Year { get; set; }
 
-        decimal AvgPointsScored { get; set; }
-        decimal AvgPointsAllowed { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
 
-        int OffensiveRank { get; set; }
-        int DefensiveRank { get; set; }
+    public double? BaseSOS { get; set; }
+    public double? CombinedSOS { get; set; }
 
-        double TrendRating { get; set; }
-        double PedigreeRating { get; set; }
-        double SeedRating { get; set; }
+    public double? AvgPointsScored { get; set; }
+    public double? AvgPointsAllowed { get; set; }
 
-        IReadOnlyList<double>? TrendHistory { get; set; }
-        IReadOnlyList<double>? PedigreeHistory { get; set; }
-    }
+    public double? OffensiveZScore { get; set; }
+    public double? DefensiveZScore { get; set; }
 
+    public int? OffensiveRank { get; set; }
+    public int? DefensiveRank { get; set; }
+
+    public double? TrendRating { get; set; }
+    public double? PedigreeRating { get; set; }
+    public double? SeedRating { get; set; }
+
+    public List<double>? TrendHistory { get; set; }
+    public List<double>? PedigreeHistory { get; set; }
 }

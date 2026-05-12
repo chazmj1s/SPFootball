@@ -160,69 +160,69 @@
             <!-- Trend / Pedigree expanded panel                               -->
             <!-- Mirrors the IsStatsExpanded panel structure exactly           -->
             <!-- ══════════════════════════════════════════════════════════════ -->
-            <Border
+                        <Border
                     IsVisible="{Binding IsTrendExpanded}"
                     StrokeThickness="1"
                     Stroke="{AppThemeBinding Light=#D8D8D8, Dark=#3A3A3A}"
                     BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#202020}"
                     Margin="4,0,4,6">
 
-                <VerticalStackLayout Spacing="0">
+                            <VerticalStackLayout Spacing="0">
 
                                 <!-- Header -->
-                    <Grid ColumnDefinitions="*,Auto,Auto"
+                                <Grid ColumnDefinitions="*,Auto,Auto"
                             Padding="12,8,12,2">
 
-                        <Label Grid.Column="0"
+                                    <Label Grid.Column="0"
                            Text="Trend / Pedigree History"
                            FontSize="10"
                            FontAttributes="Bold"
                            TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
 
-                        <Label Grid.Column="1"
+                                    <Label Grid.Column="1"
                            Text="{Binding Record}"
                            FontSize="9"
                            Opacity="0.6"
                            Margin="0,0,10,0" />
 
-                        <VerticalStackLayout Grid.Column="2"
+                                    <VerticalStackLayout Grid.Column="2"
                                  Spacing="0">
 
-                            <Label Text="{Binding TrendRating, StringFormat='Trend {0:F4}'}"
+                                        <Label Text="{Binding TrendRating, StringFormat='Trend {0:F4}'}"
                                FontSize="9"
                                FontAttributes="Bold"
                                HorizontalTextAlignment="End"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
 
-                            <Label Text="{Binding PedigreeRating, StringFormat='Pedigree {0:F4}'}"
+                                        <Label Text="{Binding PedigreeRating, StringFormat='Pedigree {0:F4}'}"
                                 FontSize="9"
                                 FontAttributes="Bold"
                                 HorizontalTextAlignment="End"
                                 TextColor="{AppThemeBinding Light=#3D7AB5, Dark=#5FA8E8}" />
 
-                        </VerticalStackLayout>
-                    </Grid>
+                                    </VerticalStackLayout>
+                                </Grid>
 
-                    <!-- Chart -->
-                    <chart:SfCartesianChart HeightRequest="160"
+                                <!-- Chart -->
+                                <chart:SfCartesianChart HeightRequest="160"
                             Margin="8,0,8,8">
 
-                        <chart:SfCartesianChart.XAxes>
-                            <chart:CategoryAxis
+                                    <chart:SfCartesianChart.XAxes>
+                                        <chart:CategoryAxis
                                 ShowMajorGridLines="False"
                                 LabelPlacement="BetweenTicks" />
-                            </chart:SfCartesianChart.XAxes>
+                                    </chart:SfCartesianChart.XAxes>
 
-                        <chart:SfCartesianChart.YAxes>
-                            <chart:NumericalAxis
+                                    <chart:SfCartesianChart.YAxes>
+                                        <chart:NumericalAxis
                                 Minimum="0"
                                 Maximum="1.2"
                                 Interval="0.2"
                                 ShowMajorGridLines="True" />
-                            </chart:SfCartesianChart.YAxes>
+                                    </chart:SfCartesianChart.YAxes>
 
-                    <!-- Trend -->
-                    <chart:SplineSeries
+                                    <!-- Trend -->
+                                    <chart:SplineSeries
                         ItemsSource="{Binding TrendPoints}"
                         XBindingPath="Index"
                         YBindingPath="Value"
@@ -231,8 +231,8 @@
                         StrokeWidth="3.5"
                         EnableTooltip="True" />
 
-                    <!-- Pedigree -->
-                    <chart:SplineSeries
+                                    <!-- Pedigree -->
+                                    <chart:SplineSeries
                         ItemsSource="{Binding PedigreePoints}"
                         XBindingPath="Index"
                         YBindingPath="Value"
@@ -242,15 +242,15 @@
                         EnableTooltip="True" />
 
                                     <chart:SfCartesianChart.Legend>
-                        <chart:ChartLegend Placement="Bottom" />
-                    </chart:SfCartesianChart.Legend>
+                                        <chart:ChartLegend Placement="Bottom" />
+                                    </chart:SfCartesianChart.Legend>
 
-                </chart:SfCartesianChart>
+                                </chart:SfCartesianChart>
 
-                </VerticalStackLayout>
+                            </VerticalStackLayout>
 
-            </Border>
-            
+                        </Border>
+
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- Offense / Defense expanded panel (unchanged)                  -->
             <!-- ══════════════════════════════════════════════════════════════ -->
