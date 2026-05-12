@@ -4,14 +4,15 @@
              xmlns:models="clr-namespace:NCAA_Power_Ratings.Mobile.Models"
              xmlns:controls="clr-namespace:NCAA_Power_Ratings.Mobile.Controls"
              xmlns:converters="clr-namespace:NCAA_Power_Ratings.Mobile.Converters"
+             xmlns:chart="clr-namespace:Syncfusion.Maui.Charts;assembly=Syncfusion.Maui.Charts"
              x:Class="NCAA_Power_Ratings.Mobile.Views.PowerRankingsPage"
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
 
   <Grid RowDefinitions="Auto,*,24">
 
-        <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 1: Column headers                               -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ROW 0: Column headers                               -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="0"
           Padding="4,3"
@@ -20,41 +21,41 @@
 
       <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
+          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="1" Text="" />
       <Label Grid.Column="2" Text="Team ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
+          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="3" Text="Rec ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
+          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="4" Text="Rating ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
+          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
         </Label.GestureRecognizers>
       </Label>
       <Label Grid.Column="5" Text="SOS ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
+          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
         </Label.GestureRecognizers>
       </Label>
 
     </Grid>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 2: Rankings list                                -->
+    <!-- ROW 1: Rankings list                                -->
     <!-- ═══════════════════════════════════════════════════ -->
-        <CollectionView Grid.Row="1"
+    <CollectionView Grid.Row="1"
                     ItemsSource="{Binding FilteredTeams}"
                     SelectionMode="None">
 
-            <CollectionView.ItemTemplate>
+      <CollectionView.ItemTemplate>
         <DataTemplate x:DataType="models:TeamRanking">
           <VerticalStackLayout Spacing="0">
 
@@ -107,12 +108,34 @@
 
             </Grid>
 
-            <!-- ── Offense / Defense expand toggle ── -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- Toggle bar: "Trend / Pedigree" (left)  |  "Offense / Defense" (right) -->
+            <!-- Exact same pattern as the existing Offense/Defense toggle     -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <Grid ColumnDefinitions="*,*"
                   Padding="4,2,8,2"
                   BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
-              <!-- only visible when data is available -->
+              <!-- LEFT: Trend / Pedigree -->
+              <Label Grid.Column="0"
+                     IsVisible="{Binding HasTrendData}"
+                     FontSize="10" HorizontalOptions="Start"
+                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                <Label.FormattedText>
+                  <FormattedString>
+                    <Span Text="Trend / Pedigree" />
+                    <Span Text="  " />
+                    <Span Text="{Binding TrendExpandIcon}" FontSize="8" />
+                  </FormattedString>
+                </Label.FormattedText>
+                <Label.GestureRecognizers>
+                  <TapGestureRecognizer
+                      Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleTrendExpandCommand}"
+                      CommandParameter="{Binding .}" />
+                </Label.GestureRecognizers>
+              </Label>
+
+              <!-- RIGHT: Offense / Defense (unchanged) -->
               <Label Grid.Column="1"
                      IsVisible="{Binding HasOffenseDefenseData}"
                      FontSize="10" HorizontalOptions="End"
@@ -133,67 +156,153 @@
 
             </Grid>
 
-            <!-- ── Expanded stats panel ── -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- Trend / Pedigree expanded panel                               -->
+            <!-- Mirrors the IsStatsExpanded panel structure exactly           -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <Border
+                    IsVisible="{Binding IsTrendExpanded}"
+                    StrokeThickness="1"
+                    Stroke="{AppThemeBinding Light=#D8D8D8, Dark=#3A3A3A}"
+                    BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#202020}"
+                    Margin="4,0,4,6">
+
+                <VerticalStackLayout Spacing="0">
+
+                                <!-- Header -->
+                    <Grid ColumnDefinitions="*,Auto,Auto"
+                            Padding="12,8,12,2">
+
+                        <Label Grid.Column="0"
+                           Text="Trend / Pedigree History"
+                           FontSize="10"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+
+                        <Label Grid.Column="1"
+                           Text="{Binding Record}"
+                           FontSize="9"
+                           Opacity="0.6"
+                           Margin="0,0,10,0" />
+
+                        <VerticalStackLayout Grid.Column="2"
+                                 Spacing="0">
+
+                            <Label Text="{Binding TrendRating, StringFormat='Trend {0:F4}'}"
+                               FontSize="9"
+                               FontAttributes="Bold"
+                               HorizontalTextAlignment="End"
+                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+
+                            <Label Text="{Binding PedigreeRating, StringFormat='Pedigree {0:F4}'}"
+                                FontSize="9"
+                                FontAttributes="Bold"
+                                HorizontalTextAlignment="End"
+                                TextColor="{AppThemeBinding Light=#3D7AB5, Dark=#5FA8E8}" />
+
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <!-- Chart -->
+                    <chart:SfCartesianChart HeightRequest="160"
+                            Margin="8,0,8,8">
+
+                        <chart:SfCartesianChart.XAxes>
+                            <chart:CategoryAxis
+                                ShowMajorGridLines="False"
+                                LabelPlacement="BetweenTicks" />
+                            </chart:SfCartesianChart.XAxes>
+
+                        <chart:SfCartesianChart.YAxes>
+                            <chart:NumericalAxis
+                                Minimum="0"
+                                Maximum="1.2"
+                                Interval="0.2"
+                                ShowMajorGridLines="True" />
+                            </chart:SfCartesianChart.YAxes>
+
+                    <!-- Trend -->
+                    <chart:SplineSeries
+                        ItemsSource="{Binding TrendPoints}"
+                        XBindingPath="Index"
+                        YBindingPath="Value"
+                        Label="Trend"
+                        Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                        StrokeWidth="3.5"
+                        EnableTooltip="True" />
+
+                    <!-- Pedigree -->
+                    <chart:SplineSeries
+                        ItemsSource="{Binding PedigreePoints}"
+                        XBindingPath="Index"
+                        YBindingPath="Value"
+                        Label="Pedigree"
+                        Fill="{AppThemeBinding Light=#C89B3C, Dark=#FFD166}"
+                        StrokeWidth="2.5"
+                        EnableTooltip="True" />
+
+                                    <chart:SfCartesianChart.Legend>
+                        <chart:ChartLegend Placement="Bottom" />
+                    </chart:SfCartesianChart.Legend>
+
+                </chart:SfCartesianChart>
+
+                </VerticalStackLayout>
+
+            </Border>
+            
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- Offense / Defense expanded panel (unchanged)                  -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <VerticalStackLayout IsVisible="{Binding IsStatsExpanded}"
                                  Spacing="0"
                                  BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
 
               <!-- Offense row -->
-              <Grid ColumnDefinitions="*,*,*"
-                    Padding="8,6,8,4" ColumnSpacing="4">
-
+              <Grid ColumnDefinitions="*,*,*" Padding="8,6,8,4" ColumnSpacing="4">
                 <VerticalStackLayout Grid.Column="0" Spacing="1">
                   <Label Text="Offensive Rank" FontSize="9" Opacity="0.6" />
                   <Label Text="{Binding OffensiveRankDisplay}"
                          FontSize="10" FontAttributes="Bold"
                          TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                 </VerticalStackLayout>
-
                 <VerticalStackLayout Grid.Column="1" Spacing="1">
                   <Label Text="Avg. Points Scored" FontSize="9" Opacity="0.6" />
                   <Label Text="{Binding AvgPointsScored, StringFormat='{0:F1}'}"
                          FontSize="10" FontAttributes="Bold"
                          TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
                 </VerticalStackLayout>
-
                 <VerticalStackLayout Grid.Column="2" Spacing="1">
                   <Label Text="Offensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
                   <Label Text="{Binding OffensiveZScore, StringFormat='{0:F4}'}"
                          FontSize="10" FontAttributes="Bold"
                          TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
                 </VerticalStackLayout>
-
               </Grid>
 
-              <!-- Divider between rows -->
               <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
                        Color="{AppThemeBinding Light=Black, Dark=White}" />
 
               <!-- Defense row -->
-              <Grid ColumnDefinitions="*,*,*"
-                    Padding="8,4,8,6" ColumnSpacing="4">
-
+              <Grid ColumnDefinitions="*,*,*" Padding="8,4,8,6" ColumnSpacing="4">
                 <VerticalStackLayout Grid.Column="0" Spacing="1">
                   <Label Text="Defensive Rank" FontSize="9" Opacity="0.6" />
                   <Label Text="{Binding DefensiveRankDisplay}"
                          FontSize="10" FontAttributes="Bold"
                          TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                 </VerticalStackLayout>
-
                 <VerticalStackLayout Grid.Column="1" Spacing="1">
                   <Label Text="Avg. Points Allowed" FontSize="9" Opacity="0.6" />
                   <Label Text="{Binding AvgPointsAllowed, StringFormat='{0:F1}'}"
                          FontSize="10" FontAttributes="Bold"
                          TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
                 </VerticalStackLayout>
-
                 <VerticalStackLayout Grid.Column="2" Spacing="1">
                   <Label Text="Defensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
                   <Label Text="{Binding DefensiveZScore, StringFormat='{0:F4}'}"
                          FontSize="10" FontAttributes="Bold"
                          TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
                 </VerticalStackLayout>
-
               </Grid>
 
             </VerticalStackLayout>
@@ -216,7 +325,7 @@
     </CollectionView>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 3: Status bar                                   -->
+    <!-- ROW 2: Status bar                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="2" HeightRequest="24"
           BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">

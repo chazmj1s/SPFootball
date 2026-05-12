@@ -225,7 +225,18 @@ namespace NCAA_Power_Ratings.Services
                     throw new KeyNotFoundException(
                         $"No weekly rankings found for year {targetYear} week {throughWeek}.");
 
+                //Team data
                 var teamDict = await _uow.Teams.GetTeamDictionaryAsync(token);
+
+                //Rolling Averages
+                var currentRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
+                var currentRecordLookup = currentRecords.ToDictionary(r => r.TeamID);
+                var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(targetYear - 10, targetYear, token);
+                var historyByTeam = historicalRecords
+                    .GroupBy(tr => tr.TeamID)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.OrderBy(r => r.Year).ToList());
 
                 var result = weekly
                     .Where(wr => wr.Ranking.HasValue)
@@ -233,17 +244,32 @@ namespace NCAA_Power_Ratings.Services
                     .Select(wr =>
                     {
                         teamDict.TryGetValue(wr.TeamID, out var t);
+                        currentRecordLookup.TryGetValue(wr.TeamID, out var currentRecord);
+                        historyByTeam.TryGetValue(wr.TeamID, out var history);
+                        history ??= [];
+
                         return (object)new
                         {
                             wr.TeamID, TeamName = t?.TeamName, Conference = t?.Conference,
                             ConferenceAbbr = t?.ConferenceAbbr, Division = t?.Division,
                             Tier = RatingCalculator.GetConferenceTier(t?.Conference, t?.TeamName),
-                            wr.OverallRank, wr.TierRank, wr.Ranking, wr.PowerRating,
-                            Year = (int)wr.Year, wr.Wins, wr.Losses, wr.BaseSOS, wr.CombinedSOS,
+                            wr.OverallRank, wr.TierRank, wr.Ranking, wr.PowerRating, Year = (int)wr.Year,
+                            wr.Wins, wr.Losses, wr.BaseSOS, wr.CombinedSOS,
                             wr.AvgPointsScored, wr.AvgPointsAllowed,
-                            wr.OffensiveZScore, wr.DefensiveZScore, wr.OffensiveRank, wr.DefensiveRank
+                            wr.OffensiveZScore, wr.DefensiveZScore, wr.OffensiveRank, wr.DefensiveRank,
+                            TrendRating = currentRecord?.TrendRating,
+                            PedigreeRating = currentRecord?.PedigreeRating,
+                            SeedRating = currentRecord?.SeedRating,
+                            TrendHistory = history
+                                .Select(h => (double)(h.TrendRating ?? 0m))
+                                .ToList(),
+                            PedigreeHistory = history
+                                .Select(h => (double)(h.PedigreeRating ?? 0m))
+                                .ToList()
                         };
-                    }).ToList();
+                    })
+                    .ToList();
+
 
                 return new PowerRankingsResult(true, result);
             }

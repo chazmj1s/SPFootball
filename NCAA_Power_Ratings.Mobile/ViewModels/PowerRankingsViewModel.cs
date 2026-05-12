@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Windows.Input;
 using NCAA_Power_Ratings.Mobile.Helpers;
 using NCAA_Power_Ratings.Mobile.Models;
@@ -9,15 +8,15 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 {
     public class PowerRankingsViewModel : BaseViewModel
     {
-        private readonly GameDataApiService    _apiService;
+        private readonly GameDataApiService _apiService;
         private readonly SharedNavigationStateService _navState;
         private List<TeamRanking> _allTeams = new();
         private ObservableCollection<TeamRanking> _filteredTeams = new();
-        private bool          _isBusy;
-        private RankingFilter _currentFilter   = RankingFilter.All;
-        private RankingSort   _currentSort     = RankingSort.PowerRating;
-        private bool          _isSortAscending = false;
-        private string        _selectedFilterDisplay = "All";
+        private bool _isBusy;
+        private RankingFilter _currentFilter = RankingFilter.All;
+        private RankingSort _currentSort = RankingSort.PowerRating;
+        private bool _isSortAscending = false;
+        private string _selectedFilterDisplay = "All";
 
         public PowerRankingsViewModel(
             GameDataApiService apiService,
@@ -26,18 +25,17 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             : base(followService)
         {
             _apiService = apiService;
-            _navState   = navState;
+            _navState = navState;
 
-            LoadDataCommand   = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-            RefreshCommand    = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-            ApplyFilterCommand = new Microsoft.Maui.Controls.Command<string>(ApplyFilter);
-            ApplySortCommand   = new Microsoft.Maui.Controls.Command<RankingSort>(ApplySort);
-            SortColumnCommand  = new Microsoft.Maui.Controls.Command<string>(SortByColumn);
+            LoadDataCommand  = new Command(async () => await LoadDataAsync());
+            RefreshCommand   = new Command(async () => await LoadDataAsync());
+            ApplyFilterCommand  = new Command<string>(ApplyFilter);
+            ApplySortCommand    = new Command<RankingSort>(ApplySort);
+            SortColumnCommand   = new Command<string>(SortByColumn);
 
-            SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
+            SelectFilterCommand = new Command(async () =>
             {
                 var options = new List<string> { "All", "Top 25", "── Tier ──", "P4", "G5", "Independent" };
-
                 var result = await Shell.Current.DisplayActionSheet(
                     "Filter", "Cancel", null, options.ToArray());
 
@@ -48,17 +46,50 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                 }
             });
 
-            ToggleStatsExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            // ── Offense / Defense expand (unchanged) ──────────────────────
+            ToggleStatsExpandCommand = new Command<TeamRanking>(t =>
             {
                 if (t == null) return;
                 t.IsStatsExpanded = !t.IsStatsExpanded;
+            });
+
+            // ── Trend / Pedigree expand ───────────────────────────────────
+            // /powerrankings does NOT include trendHistory in its payload,
+            // so we fetch on demand from /rollingAverages/team the first time
+            // the user taps the toggle for a given team.
+            // LoadChartPoints() fires automatically inside IsTrendExpanded setter.
+
+            ToggleTrendExpandCommand = new Command<TeamRanking>(async t =>
+            {
+                if (t == null) return;
+
+                // First open and no data yet — fetch from rollingAverages/team
+                if (!t.IsTrendExpanded && t.TrendHistory == null)
+                {
+                    var data = await _apiService.GetTeamRollingAveragesAsync(
+                        t.TeamID, _navState.SelectedYear);
+
+                    if (data?.History?.Count > 0)
+                    {
+                        // Most recent season is last in the history list
+                        var h = data.History[^1];
+                        t.TrendRating     = h.TrendRating;
+                        t.PedigreeRating  = h.PedigreeRating;
+                        t.SeedRating      = h.SeedRating;
+                        t.TrendHistory    = h.TrendHistory;
+                        t.PedigreeHistory = h.PedigreeHistory;
+                    }
+                }
+
+                // Toggle — LoadChartPoints() fires on first expand via setter
+                t.IsTrendExpanded = !t.IsTrendExpanded;
             });
 
             // React to shared nav changes
             _navState.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
-                e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                    e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
                     _ = LoadDataAsync();
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
                     ApplyFiltersAndSort();
@@ -90,7 +121,7 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
         }
 
         public string StatusMessage { get; private set; } = "Loading...";
-        public bool   HasLoaded    { get; private set; }
+        public bool HasLoaded { get; private set; }
 
         public string ActiveSortLabel => _currentSort switch
         {
@@ -114,14 +145,14 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
         // ── Commands ──────────────────────────────────────────────────────
 
-        public ICommand LoadDataCommand      { get; }
-        public ICommand RefreshCommand       { get; }
-        public ICommand ApplyFilterCommand   { get; }
-        public ICommand ApplySortCommand     { get; }
-        public ICommand SortColumnCommand    { get; }
-        public ICommand SelectFilterCommand  { get; }
+        public ICommand LoadDataCommand          { get; }
+        public ICommand RefreshCommand           { get; }
+        public ICommand ApplyFilterCommand       { get; }
+        public ICommand ApplySortCommand         { get; }
+        public ICommand SortColumnCommand        { get; }
+        public ICommand SelectFilterCommand      { get; }
         public ICommand ToggleStatsExpandCommand { get; }
-
+        public ICommand ToggleTrendExpandCommand { get; }   // replaces ShowTrendPedigreeCommand
 
         // ── Load ──────────────────────────────────────────────────────────
 
@@ -154,6 +185,8 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                     {
                         t.IsFollowed = followedIds.Contains(t.TeamID);
                         t.IsTop25    = t.OverallRank > 0 && t.OverallRank <= 25;
+                        // trendHistory is NOT in the /powerrankings payload —
+                        // fetched on demand via /rollingAverages/team when user taps the row.
                     }
 
                     ApplyFiltersAndSort();
@@ -188,27 +221,14 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
 
         public void ApplyFilter(string filterType)
         {
-            switch (filterType)
+            _currentFilter = filterType switch
             {
-                case "All":
-                    _currentFilter = RankingFilter.All;
-                    break;
-                case "Top25":
-                    _currentFilter = RankingFilter.Top25;
-                    break;
-                case "P4":
-                    _currentFilter = RankingFilter.P4;
-                    break;
-                case "G5":
-                    _currentFilter = RankingFilter.G5;
-                    break;
-                case "Independent":
-                    _currentFilter = RankingFilter.Independent;
-                    break;
-                default:
-                    _currentFilter = RankingFilter.All;
-                    break;
-            }
+                "Top25"       => RankingFilter.Top25,
+                "P4"          => RankingFilter.P4,
+                "G5"          => RankingFilter.G5,
+                "Independent" => RankingFilter.Independent,
+                _             => RankingFilter.All
+            };
             ApplyFiltersAndSort();
         }
 
@@ -255,7 +275,6 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
         {
             var filtered = _allTeams.AsEnumerable();
 
-            // Conference filter from shared nav state
             var conf = _navState.SelectedConference;
             if (conf != "All")
             {
@@ -267,7 +286,6 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
                         t.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase)));
             }
 
-            // Additional filter (All/Top25/P4/G5/Independent)
             filtered = _currentFilter switch
             {
                 RankingFilter.Top25       => filtered.Where(t => t.IsTop25),
@@ -307,11 +325,9 @@ namespace NCAA_Power_Ratings.Mobile.ViewModels
             };
 
             var result = sorted.ToList();
-            foreach (var team in result)
-                team.ActiveSortValue = GetActiveSortValue(team);
-
             for (int i = 0; i < result.Count; i++)
             {
+                result[i].ActiveSortValue = GetActiveSortValue(result[i]);
                 result[i].IsOddRow = i % 2 == 1;
                 result[i].IsTop25  = result[i].OverallRank > 0 && result[i].OverallRank <= 25;
             }

@@ -100,6 +100,39 @@ namespace NCAA_Power_Ratings.Mobile.Services
         }
 
         /// <summary>
+        /// Fetches Seed / Trend / Pedigree rating history for a single team.
+        /// Called lazily when the user first taps "Trend / Pedigree ▼" on a row.
+        ///
+        /// Maps to: GET /api/productiongamedata/rollingAverages/team?teamId=X&amp;startYear=Y
+        /// </summary>
+        public async Task<TeamTrendData?> GetTeamRollingAveragesAsync(int teamId, int? startYear = null)
+        {
+            try
+            {
+                var url = $"{_baseUrl}/rollingAverages/team?teamId={teamId}";
+                if (startYear.HasValue)
+                    url += $"&startYear={startYear.Value}";
+
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching rolling averages: {url}");
+
+                var data = await _httpClient.GetFromJsonAsync<TeamTrendData>(url);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Rolling averages for teamId={teamId}: " +
+                    $"{data?.History?.Count ?? 0} season(s) returned");
+
+                return data;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Error fetching rolling averages for teamId={teamId}: {ex.Message}");
+                return null;
+            }
+        }
+
+
+        /// <summary>
         /// Gets all FBS teams with id, name, conference, and tier.
         /// </summary>
         public async Task<List<Models.TeamInfo>?> GetTeamsAsync()

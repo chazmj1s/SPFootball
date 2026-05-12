@@ -74,6 +74,12 @@ namespace NCAA_Power_Ratings.Models
         public decimal? PedigreeRating { get; set; }  // 10-year linear decay
 
         [NotMapped]
+        public List<double>? TrendHistory { get; set; }
+
+        [NotMapped]
+        public List<double>? PedigreeHistory { get; set; }
+
+        [NotMapped]
         public int RegularSeasonGames => Year switch
         {
             >= 2006 => 12,
