@@ -23,8 +23,6 @@
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-    <PublishTrimmed>false</PublishTrimmed>
-    <RunAOTCompilation>false</RunAOTCompilation>
 
 		<!-- Display name -->
 		<ApplicationTitle>NCAA_Power_Ratings.Mobile</ApplicationTitle>
