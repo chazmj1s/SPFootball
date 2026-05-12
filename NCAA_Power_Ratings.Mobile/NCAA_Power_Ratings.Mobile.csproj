@@ -47,7 +47,7 @@
   
   <ItemGroup>
     <!-- App Icon -->
-    <MauiIcon Include="Resources\AppIcon\saturdaypulse.png" Color="#0D0D1A" />
+    <MauiIcon Include="Resources\AppIcon\appicon.png" Color="#0D0D1A" />
     <!-- Splash Screen -->
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
 
