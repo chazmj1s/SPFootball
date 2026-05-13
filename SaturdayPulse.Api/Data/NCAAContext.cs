@@ -11,6 +11,7 @@ namespace SaturdayPulse.Data
         public DbSet<TeamRecord> TeamRecords { get; set; }
         public DbSet<MatchupHistory> MatchupHistories { get; set; }
         public DbSet<WeeklyRanking> WeeklyRankings { get; set; }
+        public DbSet<TeamConferenceHistory> TeamConferenceHistory { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -30,6 +31,16 @@ namespace SaturdayPulse.Data
             modelBuilder.Entity<WeeklyRanking>()
                 .HasIndex(w => new { w.TeamID, w.Year, w.Week })
                 .IsUnique();
+
+            modelBuilder.Entity<TeamConferenceHistory>(entity =>
+            {
+                entity.HasIndex(e => new { e.TeamID, e.StartYear })
+                      .IsUnique()
+                      .HasDatabaseName("IX_TeamConferenceHistory_TeamID_StartYear");
+
+                entity.HasIndex(e => new { e.TeamID, e.EndYear })
+                      .HasDatabaseName("IX_TeamConferenceHistory_TeamID_EndYear");
+            });
         }
     }
 }

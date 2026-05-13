@@ -1,4 +1,5 @@
-﻿using SaturdayPulse.Models;
+﻿using SaturdayPulse.Api.Contracts.Responses;
+using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Interfaces
 {
@@ -11,5 +12,7 @@ namespace SaturdayPulse.Interfaces
         public Task UpdateTeamRecordsAsync(int? targetYear = null, CancellationToken token = default);
         public Task<int> ProcessSingleFileAsync(string filePath, CancellationToken token = default);
         public Task<int> UpdateGameDataFromFileAsync(string filePath, int year, int week, CancellationToken token = default);
+        Task<List<CfbdTeamDto>> PreviewCfbdTeamsAsync(int? year = null, CancellationToken token = default);
+        Task<List<CfbdGameDto>> PreviewCfbdGamesAsync(int year, int? week = null, CancellationToken token = default);
     }
 }

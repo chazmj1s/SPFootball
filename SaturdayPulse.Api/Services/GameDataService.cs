@@ -1,4 +1,5 @@
 using HtmlAgilityPack;
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Extensions;
 using SaturdayPulse.Interfaces;
@@ -18,22 +19,23 @@ namespace SaturdayPulse.Services
         IConfiguration _configuration,
         IHttpClientFactory _httpClientFactory) : IGameDataService
     {
+        // Resolved once and reused — named client carries the bearer token
+        private HttpClient CfbdClient => _httpClientFactory.CreateClient("cfbd");
+
         public async Task<List<Game>> ExtractGameDataHistoryAsync(int? year)
         {
             var gameDataList = new List<Game>();
-            var httpClient   = _httpClientFactory.CreateClient();
-            var tasks        = new List<Task<List<Game>>>();
-            var currentYear  = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
-            var getYear      = year ?? currentYear;
+            var tasks = new List<Task<List<Game>>>();
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+            var getYear = year ?? currentYear;
 
-            // Load team name→id dictionary once for all parallel scrape tasks
             var teamsByName = await _uow.Teams.GetTeamDictionaryByNameAsync();
-            var teams = teamsByName.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.TeamID);
+            var teamsById = (await _uow.Teams.GetTeamDictionaryAsync())
+                                  .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             while (getYear <= currentYear)
             {
-                string url = $"https://www.sports-reference.com/cfb/years/{getYear}-schedule.html";
-                tasks.Add(ExtractGameDataForSingleYearAsync(httpClient, url, teams, getYear));
+                tasks.Add(FetchGameDataForYearAsync(CfbdClient, getYear, teamsByName, teamsById));
                 getYear++;
             }
 
@@ -119,26 +121,25 @@ namespace SaturdayPulse.Services
         public async Task<int> UpdateGameDataForYearAndWeekAsync(int year, int week, CancellationToken token = default)
         {
             List<Game> scrapedGames;
-            bool usedLocalFile  = false;
+            bool usedLocalFile = false;
             string? actualFileUsed = null;
 
             var teamsByName = await _uow.Teams.GetTeamDictionaryByNameAsync(token);
-            var teams = teamsByName.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.TeamID);
+            var teamsById = (await _uow.Teams.GetTeamDictionaryAsync(token))
+                                  .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             try
             {
-                using var httpClient = new HttpClient();
-                string url = $"https://www.sports-reference.com/cfb/years/{year}-schedule.html";
-                scrapedGames = await ExtractGameDataForSingleYearAsync(httpClient, url, teams, year);
-                Console.WriteLine($"Successfully scraped data from web for year {year}");
+                scrapedGames = await FetchGameDataForYearAsync(CfbdClient, year, teamsByName, teamsById);
+                Console.WriteLine($"Successfully fetched {scrapedGames.Count} games from CFBD for year {year}");
             }
             catch (HttpRequestException ex)
             {
-                Console.WriteLine($"Web scraping failed: {ex.Message}");
+                Console.WriteLine($"CFBD API fetch failed: {ex.Message}");
 
-                var dataDirectory    = _configuration.GetValue<string>("CustomSettings:FilePath", "NCAA Raw Game Data");
+                var dataDirectory = _configuration.GetValue<string>("CustomSettings:FilePath", "NCAA Raw Game Data");
                 var requestedFilePath = Path.Combine(dataDirectory, $"{year}.txt");
-                string? fileToUse   = null;
+                string? fileToUse = null;
 
                 if (File.Exists(requestedFilePath))
                 {
@@ -164,19 +165,19 @@ namespace SaturdayPulse.Services
                             if (recordInfo.Fields.Length >= 9)
                                 scrapedGames.Add(recordInfo.Fields.ToGame(recordInfo.FileName, allTeams));
                         }
-                        usedLocalFile  = true;
+                        usedLocalFile = true;
                         actualFileUsed = Path.GetFileName(fileToUse);
                     }
                     catch (Exception fileEx)
                     {
                         throw new InvalidOperationException(
-                            $"Web scraping failed and local file read failed. Web error: {ex.Message}, File error: {fileEx.Message}", ex);
+                            $"CFBD fetch failed and local file read failed. API error: {ex.Message}, File error: {fileEx.Message}", ex);
                     }
                 }
                 else
                 {
                     throw new InvalidOperationException(
-                        $"Web scraping failed and no local data files found. Error: {ex.Message}", ex);
+                        $"CFBD fetch failed and no local data files found. Error: {ex.Message}", ex);
                 }
             }
             catch (Exception ex) when (ex is not InvalidOperationException)
@@ -220,7 +221,7 @@ namespace SaturdayPulse.Services
 
                 await _uow.SaveChangesAsync(token);
 
-                var source = usedLocalFile ? $"local file ({actualFileUsed})" : "web scraping";
+                var source = usedLocalFile ? $"local file ({actualFileUsed})" : "CFBD API";
                 Console.WriteLine($"Processed {year}-W{week} from {source}: added {added}, updated {updated}");
                 return added + updated;
             }
@@ -231,6 +232,79 @@ namespace SaturdayPulse.Services
             }
         }
 
+
+        /// <summary>
+        /// Fetches a full season's games from CFBD and maps them to the internal Game model.
+        /// teamsById is used as a fallback when name matching fails.
+        /// </summary>
+        private static async Task<List<Game>> FetchGameDataForYearAsync(
+            HttpClient httpClient,
+            int year,
+            Dictionary<string, SaturdayPulse.Models.Team> teamsByName,
+            Dictionary<int, SaturdayPulse.Models.Team> teamsById)
+        {
+            var gameDataList = new List<Game>();
+
+            try
+            {
+                var url = $"/games?year={year}&classification=fbs&seasonType=regular";
+                var response = await httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                var apiGames = await response.Content
+                    .ReadFromJsonAsync<List<CfbdGameDto>>()
+                    ?? [];
+
+                foreach (var g in apiGames)
+                {
+                    // Skip unplayed games
+                    if (!g.Completed || g.HomePoints is null || g.AwayPoints is null)
+                        continue;
+
+                    bool homeWon = g.HomePoints >= g.AwayPoints;
+                    var winnerName = homeWon ? g.HomeTeam : g.AwayTeam;
+                    var loserName = homeWon ? g.AwayTeam : g.HomeTeam;
+                    int winnerPoints = homeWon ? g.HomePoints.Value : g.AwayPoints.Value;
+                    int loserPoints = homeWon ? g.AwayPoints.Value : g.HomePoints.Value;
+                    int winnerCfbdId = homeWon ? g.HomeId : g.AwayId;
+                    int loserCfbdId = homeWon ? g.AwayId : g.HomeId;
+
+                    // Name match first, CFBD id fallback
+                    var winnerId = teamsByName.TryGetValue(winnerName, out var wt) ? wt.TeamID
+                                 : teamsById.TryGetValue(winnerCfbdId, out var wt2) ? wt2.TeamID
+                                 : -1;
+
+                    var loserId = teamsByName.TryGetValue(loserName, out var lt) ? lt.TeamID
+                                 : teamsById.TryGetValue(loserCfbdId, out var lt2) ? lt2.TeamID
+                                 : -1;
+
+                    // 'W' = winner at home, 'L' = winner away, 'N' = neutral
+                    char location = g.NeutralSite ? 'N' : homeWon ? 'W' : 'L';
+
+                    gameDataList.Add(new Game
+                    {
+                        Year = year,
+                        Week = g.Week,
+                        WinnerId = winnerId,
+                        WinnerName = winnerName,
+                        WPoints = winnerPoints,
+                        Location = location,
+                        LoserId = loserId,
+                        LoserName = loserName,
+                        LPoints = loserPoints
+                    });
+                }
+
+                Console.WriteLine($"CFBD: fetched {apiGames.Count} games, mapped {gameDataList.Count} completed for {year}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching CFBD data for year {year}: {ex.Message}");
+                throw;
+            }
+
+            return gameDataList;
+        }
         private static void UpdateGameProperties(Game dbGame, Game game)
         {
             dbGame.WPoints = game.WPoints;
@@ -442,6 +516,25 @@ namespace SaturdayPulse.Services
                 Console.WriteLine($"Error getting team schedule for team {teamId}, year {year}: {ex.Message}");
                 throw;
             }
+        }
+
+        public async Task<List<CfbdTeamDto>> PreviewCfbdTeamsAsync(int? year = null, CancellationToken token = default)
+        {
+            var targetYear = year ?? DateTime.Now.Year;
+            var response = await CfbdClient.GetAsync($"/teams/fbs?year={targetYear}", token);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<CfbdTeamDto>>(cancellationToken: token) ?? [];
+        }
+
+        public async Task<List<CfbdGameDto>> PreviewCfbdGamesAsync(int year, int? week = null, CancellationToken token = default)
+        {
+            var url = $"/games?year={year}&classification=fbs&seasonType=regular";
+            if (week.HasValue)
+                url += $"&week={week.Value}";
+
+            var response = await CfbdClient.GetAsync(url, token);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<CfbdGameDto>>(cancellationToken: token) ?? [];
         }
 
         Task<int> IGameDataService.LoadTeamDataFromFile()

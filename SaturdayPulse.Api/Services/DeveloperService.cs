@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Configuration;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Responses;
@@ -144,6 +145,13 @@ namespace SaturdayPulse.Services
                 year           = targetYear, week, liveSwapActive = week.HasValue
             };
         }
+
+        // CFBd
+        public Task<List<CfbdTeamDto>> PreviewCfbdTeamsAsync(int? year, CancellationToken token)
+    => _gameDataService.PreviewCfbdTeamsAsync(year, token);
+
+        public Task<List<CfbdGameDto>> PreviewCfbdGamesAsync(int year, int? week, CancellationToken token)
+            => _gameDataService.PreviewCfbdGamesAsync(year, week, token);
 
         // ── Team records and metrics ──────────────────────────────────────────────
 

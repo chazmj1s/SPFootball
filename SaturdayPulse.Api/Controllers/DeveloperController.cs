@@ -210,6 +210,61 @@ namespace SaturdayPulse.Controllers
         }
 
         #endregion
+        #region Cfbd 
+        /// <summary>
+        /// Previews team data from CFBD without writing to the database.
+        /// Example: GET /api/developer/previewCfbdTeams?year=2026
+        /// </summary>
+        [HttpGet("previewCfbdTeams")]
+        public async Task<IActionResult> PreviewCfbdTeams(
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.PreviewCfbdTeamsAsync(year, token);
+                return Ok(new
+                {
+                    year = year ?? DateTime.Now.Year,
+                    teamCount = result.Count,
+                    teams = result
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error previewing CFBD teams for year={Year}", year);
+                return StatusCode(500, "An error occurred while previewing teams.");
+            }
+        }
+
+        /// <summary>
+        /// Previews game data from CFBD without writing to the database.
+        /// Example: GET /api/developer/previewCfbdGames?year=2026&week=1
+        /// </summary>
+        [HttpGet("previewCfbdGames")]
+        public async Task<IActionResult> PreviewCfbdGames(
+            [FromQuery] int year,
+            [FromQuery] int? week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.PreviewCfbdGamesAsync(year, week, token);
+                return Ok(new
+                {
+                    year,
+                    week,
+                    gameCount = result.Count,
+                    games = result
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error previewing CFBD games for year={Year}, week={Week}", year, week);
+                return StatusCode(500, "An error occurred while previewing games.");
+            }
+        }
+        #endregion
 
         #region Team Records and Metrics
 

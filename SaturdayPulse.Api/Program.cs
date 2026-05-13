@@ -10,6 +10,7 @@ using SaturdayPulse.Infrastructure;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 using SaturdayPulse.Utilities;
+using System.Net.Http.Headers;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +30,23 @@ builder.Services.AddDbContext<NCAAContext>(options =>
    optionsLifetime: ServiceLifetime.Singleton);
 
 // Register HttpClient for dependency injection
-builder.Services.AddHttpClient();
+// CFBD API settings
+builder.Services.Configure<CfbdApiSettings>(
+    builder.Configuration.GetSection("CfbdApi"));
+
+builder.Services.AddHttpClient("cfbd", (sp, client) =>
+{
+    var settings = sp.GetRequiredService<IOptions<CfbdApiSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+    client.DefaultRequestHeaders.Authorization =
+        new AuthenticationHeaderValue("Bearer", settings.BearerToken);
+    client.DefaultRequestHeaders.Accept.Add(
+        new MediaTypeWithQualityHeaderValue("application/json"));
+});
+
+var testSettings = builder.Configuration.GetSection("CfbdApi").Get<CfbdApiSettings>();
+Console.WriteLine($"DEBUG CfbdApi — BaseUrl: '{testSettings?.BaseUrl}' BearerToken empty: {string.IsNullOrEmpty(testSettings?.BearerToken)}");
+
 
 builder.Services.AddScoped<RecordProcessor>();
 builder.Services.AddScoped<ScoreDeltaCalculator>();
