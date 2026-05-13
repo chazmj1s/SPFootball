@@ -11,22 +11,11 @@ namespace SaturdayPulse.Services
     public class GameDataApiService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _baseUrl;
 
         public GameDataApiService(HttpClient httpClient)
         {
             _httpClient = httpClient;
 
-            // Configure base URL based on platform for local testing
-            // TODO: Update this to your deployed API URL
-#if DEBUG
-            _baseUrl = DeviceInfo.Platform == DevicePlatform.Android
-                ? "http://10.0.2.2:5086/api/productiongamedata"
-                : "http://localhost:5086/api/productiongamedata";
-#else
-            _baseUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/productionGameData";
-            //_baseUrl = "https://localhost:7010/api/productionGameData";
-#endif
         }
 
         /// <summary>
@@ -40,9 +29,8 @@ namespace SaturdayPulse.Services
 
                 System.Diagnostics.Debug.WriteLine($"[API] ========================================");
                 System.Diagnostics.Debug.WriteLine($"[API] Fetching power rankings for year {currentYear}, week {throughWeek?.ToString() ?? "all"}");
-                System.Diagnostics.Debug.WriteLine($"[API] Base URL: {_baseUrl}");
 
-                var url = $"{_baseUrl}/powerrankings?year={currentYear}";
+                var url = $"powerrankings?year={currentYear}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
                 System.Diagnostics.Debug.WriteLine($"[API] Full URL: {url}");
@@ -61,8 +49,8 @@ namespace SaturdayPulse.Services
                 System.Diagnostics.Debug.WriteLine($"[API] Response length: {jsonContent.Length} characters");
                 System.Diagnostics.Debug.WriteLine($"[API] First 500 chars: {(jsonContent.Length > 500 ? jsonContent.Substring(0, 500) : jsonContent)}");
 
-                var rankings = JsonSerializer.Deserialize<List<TeamRanking>>(jsonContent, new JsonSerializerOptions {PropertyNameCaseInsensitive = true});
-                
+                var rankings = JsonSerializer.Deserialize<List<TeamRanking>>(jsonContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
                 if (rankings != null && rankings.Count > 0)
                 {
                     System.Diagnostics.Debug.WriteLine($"[API] First team: {rankings[0].TeamName} - Rank: {rankings[0].OverallRank} ({rankings[0].Tier} #{rankings[0].TierRank}) - Power: {rankings[0].Ranking}");
@@ -78,23 +66,15 @@ namespace SaturdayPulse.Services
             }
             catch (HttpRequestException httpEx)
             {
-                System.Diagnostics.Debug.WriteLine($"[API] ========================================");
+                System.Diagnostics.Debug.WriteLine($"[API] ERROR: {httpEx.GetType().Name}: {httpEx.Message}");
                 System.Diagnostics.Debug.WriteLine($"[API] HTTP ERROR: {httpEx.Message}");
-                System.Diagnostics.Debug.WriteLine($"[API] Is the backend API running at {_baseUrl}?");
-                System.Diagnostics.Debug.WriteLine($"[API] Falling back to mock data");
-                System.Diagnostics.Debug.WriteLine($"[API] ========================================");
-
-                return await GetMockPowerRankingsAsync(year ?? DateTime.Now.Year);
+                return null;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[API] ========================================");
                 System.Diagnostics.Debug.WriteLine($"[API] ERROR: {ex.GetType().Name}: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"[API] Stack: {ex.StackTrace}");
-                System.Diagnostics.Debug.WriteLine($"[API] Falling back to mock data");
-                System.Diagnostics.Debug.WriteLine($"[API] ========================================");
-
-                return await GetMockPowerRankingsAsync(year ?? DateTime.Now.Year);
+                return null;
             }
         }
 
@@ -108,7 +88,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/rollingAverages/team?teamId={teamId}";
+                var url = $"rollingAverages/team?teamId={teamId}";
                 if (startYear.HasValue)
                     url += $"&startYear={startYear.Value}";
 
@@ -138,7 +118,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/teams";
+                var url = $"teams";
                 return await _httpClient.GetFromJsonAsync<List<Models.TeamInfo>>(url);
             }
             catch (Exception ex)
@@ -156,7 +136,7 @@ namespace SaturdayPulse.Services
             try
             {
                 var currentYear = year ?? DateTime.Now.Year;
-                var url = $"{_baseUrl}/schedule?year={currentYear}";
+                var url = $"schedule?year={currentYear}";
                 var schedule = await _httpClient.GetFromJsonAsync<List<Models.GameResult>>(url);
                 return schedule;
             }
@@ -174,7 +154,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/teamSchedule?teamId={teamId}&year={year}";
+                var url = $"teamSchedule?teamId={teamId}&year={year}";
                 var response = await _httpClient.GetStringAsync(url);
                 return response;
             }
@@ -192,7 +172,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/rivalries/named";
+                var url = $"rivalries/named";
                 return await _httpClient.GetFromJsonAsync<List<Models.RivalryInfo>>(url);
             }
             catch (Exception ex)
@@ -211,7 +191,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/rivalryhistory?team1Id={team1Id}&team2Id={team2Id}";
+                var url = $"rivalryhistory?team1Id={team1Id}&team2Id={team2Id}";
                 var response = await _httpClient.GetAsync(url);
 
                 if (!response.IsSuccessStatusCode)
@@ -287,7 +267,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/updateWeekGames?year={year}&week={week}";
+                var url = $"updateWeekGames?year={year}&week={week}";
                 var response = await _httpClient.PostAsync(url, null);
                 return response.IsSuccessStatusCode;
             }
@@ -299,39 +279,6 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
-        /// Mock data for testing UI before backend endpoint is ready
-        /// </summary>
-        private async Task<List<Models.TeamRanking>> GetMockPowerRankingsAsync(int year)
-        {
-            await Task.Delay(500);
-
-            var conferences = new[] { "SEC", "Big Ten", "Big 12", "ACC", "Pac-12" };
-            var teams = new List<Models.TeamRanking>();
-            var random = new Random(42);
-
-            for (int i = 1; i <= 133; i++)
-            {
-                teams.Add(new Models.TeamRanking
-                {
-                    TeamID         = i,
-                    TeamName       = $"Team {i}",
-                    Conference     = conferences[i % conferences.Length],
-                    ConferenceAbbr = conferences[i % conferences.Length],
-                    Division       = "FBS",
-                    OverallRank    = i,
-                    Ranking        = (decimal)(100 - (i * 0.5) + random.NextDouble() * 5),
-                    Year           = year,
-                    Wins           = (byte)random.Next(0, 13),
-                    Losses         = (byte)random.Next(0, 6),
-                    BaseSOS        = (decimal)(random.NextDouble() * 10),
-                    CombinedSOS    = (decimal)(random.NextDouble() * 15)
-                });
-            }
-
-            return teams;
-        }
-
-        /// <summary>
         /// Gets projected conference standings for all FBS teams.
         /// </summary>
         public async Task<List<ProjectedTeamStanding>> GetProjectedStandingsAsync(
@@ -340,7 +287,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/projected-standings?year={year}";
+                var url = $"projected-standings?year={year}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
 
@@ -392,7 +339,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/projected-championship-qualifiers?year={year}";
+                var url = $"projected-championship-qualifiers?year={year}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
 

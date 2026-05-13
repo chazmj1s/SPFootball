@@ -10,21 +10,10 @@ namespace SaturdayPulse.Services
     public class PredictionApiService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _baseUrl;
 
         public PredictionApiService(HttpClient httpClient)
         {
             _httpClient = httpClient;
-            // TODO: Update this to your actual API URL when deployed
-            // For local testing on Android emulator, use 10.0.2.2
-            // For local testing on iOS simulator, use localhost
-#if DEBUG
-            _baseUrl = DeviceInfo.Platform == DevicePlatform.Android
-                ? "http://10.0.2.2:5086/api/productiongamedata"
-                : "http://localhost:5086/api/productiongamedata";
-#else
-            _baseUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/productionGameData";
-#endif
         }
 
         /// <summary>
@@ -39,7 +28,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/predictMatchup?year={year}&teamName={Uri.EscapeDataString(teamName)}&opponentName={Uri.EscapeDataString(opponentName)}&location={location}&week={week}";
+                var url = $"predictMatchup?year={year}&teamName={Uri.EscapeDataString(teamName)}&opponentName={Uri.EscapeDataString(opponentName)}&location={location}&week={week}";
                 var response = await _httpClient.GetFromJsonAsync<GamePredictionResponse>(url);
                 return response;
             }
@@ -57,7 +46,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/rivalries";
+                var url = $"rivalries";
                 var queryParams = new List<string>();
 
                 if (!string.IsNullOrEmpty(tier))
@@ -89,7 +78,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"{_baseUrl}/queryTeamRecords?limit={limit}";
+                var url = $"queryTeamRecords?limit={limit}";
 
                 if (startYear.HasValue)
                     url += $"&startYear={startYear}";

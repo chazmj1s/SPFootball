@@ -194,8 +194,16 @@ namespace SaturdayPulse.ViewModels
                         ? $"{teams.Count} teams · Wk {_navState.SelectedWeek}"
                         : $"{teams.Count} teams · Final";
                 }
+                else if (!teams.Any())
+                {
+                    _allTeams.Clear();
+                    ApplyFiltersAndSort();
+                    StatusMessage = "No rankings available";
+                }
                 else
                 {
+                    _allTeams.Clear();
+                    ApplyFiltersAndSort();
                     StatusMessage = "Failed to load rankings";
                 }
 
