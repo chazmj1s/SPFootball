@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls.Hosting;
 using Microsoft.Maui.Hosting;
+using SaturdayPulse.Mobile.Services;
 using SaturdayPulse.Services;
 using SaturdayPulse.ViewModels;
 using SaturdayPulse.Views;
@@ -35,18 +36,20 @@ public static class MauiProgram
         builder.Services.AddSingleton<SharedNavigationStateService>();
 
         // Register Services
-        builder.Services.AddSingleton<GameDataApiService>(sp =>
+        builder.Services.AddHttpClient<GameDataApiService>(client =>
         {
-            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-            var httpClient = httpClientFactory.CreateClient();
-            return new GameDataApiService(httpClient);
+            client.BaseAddress = new Uri(ApiConfiguration.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(30);
+
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
 
-        builder.Services.AddSingleton<PredictionApiService>(sp =>
+        builder.Services.AddHttpClient<PredictionApiService>(client =>
         {
-            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-            var httpClient = httpClientFactory.CreateClient();
-            return new PredictionApiService(httpClient);
+            client.BaseAddress = new Uri(ApiConfiguration.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(15);
+
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
 
         // Register ViewModels
