@@ -9,9 +9,8 @@ namespace SaturdayPulse.Views
         private readonly MainViewModel               _vm;
         private readonly SchedulePage                _schedulePage;
         private readonly PowerRankingsPage           _rankingsPage;
-        private readonly FollowingPage               _followingPage;
+        private readonly SettingsPage               _SettingsPage;
         private readonly ProjectionsPage             _projectionsPage;
-        private readonly ConfigPage                  _configPage;
         private readonly SharedNavigationStateService _navState;
 
         public MainPage(
@@ -19,9 +18,8 @@ namespace SaturdayPulse.Views
             MainViewModel mainViewModel,
             SchedulePage schedulePage,
             PowerRankingsPage rankingsPage,
-            FollowingPage followingPage,
-            ProjectionsPage projectionsPage,
-            ConfigPage configPage)
+            SettingsPage SettingsPage,
+            ProjectionsPage projectionsPage)
         {
             InitializeComponent();
 
@@ -29,24 +27,22 @@ namespace SaturdayPulse.Views
             _vm              = mainViewModel;
             _schedulePage    = schedulePage;
             _rankingsPage    = rankingsPage;
-            _followingPage   = followingPage;
+            _SettingsPage   = SettingsPage;
             _projectionsPage = projectionsPage;
-            _configPage      = configPage;
 
             BindingContext = _vm;
 
             // Build tab items
             _vm.TabItems.Clear();
-            var labels = new[] { "Scores", "Rankings", "Following", "Projections", "Config" };
+            var labels = new[] { "Scores", "Rankings", "Projections", "Settings" };
             for (int i = 0; i < labels.Length; i++)
                 _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == 0 });
 
             // Add pages to AbsoluteLayout — each fills the entire host
             AddPageToHost(_schedulePage);
             AddPageToHost(_rankingsPage);
-            AddPageToHost(_followingPage);
             AddPageToHost(_projectionsPage);
-            AddPageToHost(_configPage);
+            AddPageToHost(_SettingsPage);
 
             // Sync tab underline + page visibility on index change
             _vm.PropertyChanged += (s, e) =>
@@ -111,10 +107,10 @@ namespace SaturdayPulse.Views
                         await svm.LoadDataAsync(); break;
                     case 1 when _rankingsPage.BindingContext is PowerRankingsViewModel rvm && !rvm.HasLoaded:
                         await rvm.LoadDataAsync(); break;
-                    case 2 when _followingPage.BindingContext is FollowingViewModel fvm && !fvm.HasLoaded:
-                        await fvm.LoadDataAsync(); break;
-                    case 3 when _projectionsPage.BindingContext is ProjectionsViewModel pvm && !pvm.HasLoaded:
+                    case 2 when _projectionsPage.BindingContext is ProjectionsViewModel pvm && !pvm.HasLoaded:
                         await pvm.LoadDataAsync(); break;
+                    case 3 when _SettingsPage.BindingContext is SettingsViewModel fvm && !fvm.HasLoaded:
+                        await fvm.LoadDataAsync(); break;
                 }
             });
         }

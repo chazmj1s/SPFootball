@@ -1,0 +1,450 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:SaturdayPulse.Models"
+             x:Class="SaturdayPulse.Views.SettingsPage"
+             x:Name="ThisPage"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto,*,24">
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 0: Page title                                   -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Label Grid.Row="0"
+           Text="Settings"
+           FontSize="20" FontAttributes="Bold"
+           Padding="12,10"
+           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 1: Accordion sections                          -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="0">
+
+                <!-- ─────────────────────────────────────────────── -->
+                <!-- SECTION: Following                              -->
+                <!-- ─────────────────────────────────────────────── -->
+
+                <!-- Section header -->
+                <Grid ColumnDefinitions="*,24"
+                      Padding="12,10"
+                      BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleSectionCommand}"
+                                  CommandParameter="Following" />
+                    </Grid.GestureRecognizers>
+                    <Label Grid.Column="0"
+                 Text="Following"
+                 FontSize="15" FontAttributes="Bold"
+                 TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                 VerticalOptions="Center" />
+                    <Label Grid.Column="1"
+                 FontSize="14" FontAttributes="Bold"
+                 HorizontalOptions="Center" VerticalOptions="Center"
+                 TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label"
+                           Binding="{Binding IsFollowingExpanded}" Value="True">
+                                <Setter Property="Text" Value="▲" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label"
+                           Binding="{Binding IsFollowingExpanded}" Value="False">
+                                <Setter Property="Text" Value="▼" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                </Grid>
+
+                <!-- Section body -->
+                <Grid RowDefinitions="Auto,Auto"
+                    IsVisible="{Binding IsFollowingExpanded}">
+
+                    <!-- Teams | Games toggle -->
+                    <Grid Grid.Row="0"
+                ColumnDefinitions="*,*"
+                BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}"
+                Padding="8,4">
+
+                        <Border Grid.Column="0"
+                    Margin="0,0,4,0" Padding="0,6"
+                    StrokeShape="RoundRectangle 6" StrokeThickness="0">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsTeamsView}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsTeamsView}" Value="False">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#E0E0E0, Dark=#333333}" />
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <Label Text="Teams" FontSize="13" FontAttributes="Bold" HorizontalOptions="Center">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="True">
+                                        <Setter Property="TextColor" Value="White" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="False">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Teams" />
+                            </Border.GestureRecognizers>
+                        </Border>
+
+                        <Border Grid.Column="1"
+                    Margin="4,0,0,0" Padding="0,6"
+                    StrokeShape="RoundRectangle 6" StrokeThickness="0">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsGamesView}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsGamesView}" Value="False">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#E0E0E0, Dark=#333333}" />
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <Label Text="Games" FontSize="13" FontAttributes="Bold" HorizontalOptions="Center">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="True">
+                                        <Setter Property="TextColor" Value="White" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="False">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
+                            </Border.GestureRecognizers>
+                        </Border>
+
+                    </Grid>
+
+                    <!-- Content area -->
+                    <ActivityIndicator Grid.Row="1"
+                             IsRunning="{Binding IsLoading}"
+                             IsVisible="{Binding IsLoading}"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center" />
+
+                    <!-- TEAMS VIEW -->
+                    <Grid Grid.Row="1"
+                RowDefinitions="Auto,Auto,Auto"
+                IsVisible="{Binding IsTeamsView}">
+
+                        <Grid Grid.Row="0"
+                  ColumnDefinitions="Auto,*"
+                  Padding="10,6,10,4" ColumnSpacing="8">
+                            <Label Grid.Column="0" Text="Conference"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     VerticalOptions="Center" />
+                            <Picker Grid.Column="1"
+                      ItemsSource="{Binding ConferenceFilters}"
+                      SelectedItem="{Binding SelectedConference}"
+                      FontSize="13" HeightRequest="32"
+                      VerticalOptions="Center" />
+                        </Grid>
+
+                        <Grid Grid.Row="1"
+                  ColumnDefinitions="28,*,60"
+                  Padding="10,4,10,4"
+                  BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#2A2A2A}">
+                            <Label Grid.Column="0" Text="" />
+                            <Label Grid.Column="1" Text="Team"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     VerticalOptions="Center" />
+                            <Label Grid.Column="2" Text="Conf"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Grid>
+
+                        <CollectionView Grid.Row="2" ItemsSource="{Binding Teams}">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:TeamInfo">
+                                    <Grid ColumnDefinitions="28,*,60" Padding="10,7,10,7">
+                                        <Label Grid.Column="0" Text="♡" FontSize="10"
+                           HorizontalOptions="Center" VerticalOptions="Center">
+                                            <Label.GestureRecognizers>
+                                                <TapGestureRecognizer
+                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                            CommandParameter="{Binding .}" />
+                                            </Label.GestureRecognizers>
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="True">
+                                                    <Setter Property="Text" Value="♥" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="False">
+                                                    <Setter Property="Text" Value="♡" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+                                        <StackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                            <Label Text="{Binding TeamName}" FontSize="13" VerticalOptions="Center" />
+                                            <Label Text="{Binding Tier}" FontSize="11"
+                             TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                             VerticalOptions="Center" />
+                                        </StackLayout>
+                                        <Label Grid.Column="2" Text="{Binding ConferenceAbbr}" FontSize="11"
+                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                            <CollectionView.EmptyView>
+                                <Label Text="No teams found" FontSize="14"
+                       HorizontalOptions="Center" VerticalOptions="Center" />
+                            </CollectionView.EmptyView>
+                        </CollectionView>
+
+                    </Grid>
+
+                    <!-- GAMES VIEW -->
+                    <Grid Grid.Row="1"
+                RowDefinitions="Auto,Auto,Auto"
+                IsVisible="{Binding IsGamesView}">
+
+                        <Grid Grid.Row="0"
+                  ColumnDefinitions="Auto,*"
+                  Padding="10,6,10,4" ColumnSpacing="8">
+                            <Label Grid.Column="0" Text="Tier"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     VerticalOptions="Center" />
+                            <Picker Grid.Column="1"
+                      ItemsSource="{Binding TierFilters}"
+                      SelectedItem="{Binding SelectedTier}"
+                      FontSize="13" HeightRequest="32"
+                      VerticalOptions="Center" />
+                        </Grid>
+
+                        <Grid Grid.Row="1"
+                  ColumnDefinitions="28,*,110,90,32"
+                  Padding="10,4,10,4"
+                  BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#2A2A2A}">
+                            <Label Grid.Column="0" Text="" />
+                            <Label Grid.Column="1" Text="Team"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     VerticalOptions="Center" />
+                            <Label Grid.Column="2" Text="Series"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     VerticalOptions="Center" />
+                            <Label Grid.Column="3" Text="Stats"
+                     FontSize="11" FontAttributes="Bold"
+                     TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
+                     HorizontalOptions="End" VerticalOptions="Center" />
+                            <Label Grid.Column="4" Text="" />
+                        </Grid>
+
+                        <CollectionView Grid.Row="2" ItemsSource="{Binding Games}">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:RivalryInfo">
+                                    <VerticalStackLayout Spacing="0">
+                                        <Grid ColumnDefinitions="*,Auto,32" Padding="10,5,10,2">
+                                            <Label Grid.Column="0" Text="{Binding RivalryName}"
+                             FontSize="12" FontAttributes="Bold"
+                             VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                            <Label Grid.Column="1" Text="{Binding TierBadge}"
+                             FontSize="16" VerticalOptions="Center" HorizontalOptions="End" />
+                                            <Label Grid.Column="2" FontSize="10"
+                             HorizontalOptions="Center" VerticalOptions="Center">
+                                                <Label.Triggers>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding IsPersonalFollowed}" Value="True">
+                                                        <Setter Property="Text" Value="♥" />
+                                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#333333, Dark=#CCCCCC}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding IsPersonalFollowed}" Value="False">
+                                                        <Setter Property="Text" Value="♡" />
+                                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                                                    </DataTrigger>
+                                                </Label.Triggers>
+                                                <Label.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                              Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
+                              CommandParameter="{Binding .}" />
+                                                </Label.GestureRecognizers>
+                                            </Label>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="28,*,110,90"
+                          RowDefinitions="Auto,Auto"
+                          Padding="10,2,10,5">
+                                            <Label Grid.Row="0" Grid.Column="0" Text="♡" FontSize="10"
+                             HorizontalOptions="Center" VerticalOptions="Center">
+                                                <Label.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                              Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                              CommandParameter="{Binding Team1Id}" />
+                                                </Label.GestureRecognizers>
+                                                <Label.Triggers>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding Team1IsFollowed}" Value="True">
+                                                        <Setter Property="Text" Value="♥" />
+                                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding Team1IsFollowed}" Value="False">
+                                                        <Setter Property="Text" Value="♡" />
+                                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                                                    </DataTrigger>
+                                                </Label.Triggers>
+                                            </Label>
+                                            <Label Grid.Row="0" Grid.Column="1" Text="{Binding Team1Name}"
+                             FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                            <Label Grid.Row="0" Grid.Column="2" Text="{Binding DisplaySeries}"
+                             FontSize="9" TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                             VerticalOptions="Center" />
+                                            <Label Grid.Row="0" Grid.Column="3" Text="{Binding DisplayAvgMargin}"
+                             FontSize="9" TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                             VerticalOptions="Center" HorizontalOptions="End" />
+                                            <Label Grid.Row="1" Grid.Column="0" Text="♡" FontSize="10"
+                             HorizontalOptions="Center" VerticalOptions="Center">
+                                                <Label.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                              Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                              CommandParameter="{Binding Team2Id}" />
+                                                </Label.GestureRecognizers>
+                                                <Label.Triggers>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding Team2IsFollowed}" Value="True">
+                                                        <Setter Property="Text" Value="♥" />
+                                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#CC3333, Dark=#FF6666}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding Team2IsFollowed}" Value="False">
+                                                        <Setter Property="Text" Value="♡" />
+                                                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                                                    </DataTrigger>
+                                                </Label.Triggers>
+                                            </Label>
+                                            <Label Grid.Row="1" Grid.Column="1" Text="{Binding Team2Name}"
+                             FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                            <Label Grid.Row="1" Grid.Column="2" Text="{Binding DisplayUpsetRate}"
+                             FontSize="9" TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                             VerticalOptions="Center" />
+                                            <Label Grid.Row="1" Grid.Column="3" Text="{Binding DisplayAvgSwing}"
+                             FontSize="9" TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                             VerticalOptions="Center" HorizontalOptions="End" />
+                                        </Grid>
+                                        <BoxView HeightRequest="1" Opacity="0.12"
+                             Color="{AppThemeBinding Light=Black, Dark=White}" />
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                            <CollectionView.EmptyView>
+                                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
+                                    <Label Text="No games followed yet" FontSize="16" HorizontalOptions="Center" />
+                                </VerticalStackLayout>
+                            </CollectionView.EmptyView>
+                        </CollectionView>
+
+                    </Grid>
+
+                </Grid>
+
+                <!-- Divider -->
+                <BoxView HeightRequest="1" Opacity="0.1"
+         Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                <!-- SECTION: User Configuration -->
+                <Grid ColumnDefinitions="*,24"
+      Padding="12,10"
+      BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleSectionCommand}"
+                          CommandParameter="UserConfig" />
+                    </Grid.GestureRecognizers>
+                    <Label Grid.Column="0"
+         Text="User Configuration"
+         FontSize="15" FontAttributes="Bold"
+         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+         VerticalOptions="Center" />
+                    <Label Grid.Column="1"
+         FontSize="14" FontAttributes="Bold"
+         HorizontalOptions="Center" VerticalOptions="Center"
+         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsUserConfigExpanded}" Value="True">
+                                <Setter Property="Text" Value="▲" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsUserConfigExpanded}" Value="False">
+                                <Setter Property="Text" Value="▼" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                </Grid>
+
+                <VerticalStackLayout IsVisible="{Binding IsUserConfigExpanded}"
+                     Padding="16,12">
+                    <Label Text="Coming soon..."
+         FontSize="13" FontAttributes="Italic"
+         TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
+                </VerticalStackLayout>
+
+                <!-- Divider -->
+                <BoxView HeightRequest="1" Opacity="0.1"
+         Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                <!-- SECTION: More Cool Stuff -->
+                <Grid ColumnDefinitions="*,24"
+      Padding="12,10"
+      BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleSectionCommand}"
+                          CommandParameter="MoreCoolStuff" />
+                    </Grid.GestureRecognizers>
+                    <Label Grid.Column="0"
+         Text="More Cool Stuff"
+         FontSize="15" FontAttributes="Bold"
+         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+         VerticalOptions="Center" />
+                    <Label Grid.Column="1"
+         FontSize="14" FontAttributes="Bold"
+         HorizontalOptions="Center" VerticalOptions="Center"
+         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsMoreCoolStuffExpanded}" Value="True">
+                                <Setter Property="Text" Value="▲" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsMoreCoolStuffExpanded}" Value="False">
+                                <Setter Property="Text" Value="▼" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                </Grid>
+
+                <VerticalStackLayout IsVisible="{Binding IsMoreCoolStuffExpanded}"
+                     Padding="16,12">
+                    <Label Text="Coming soon..."
+         FontSize="13" FontAttributes="Italic"
+         TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
+                </VerticalStackLayout>
+
+                <!-- ─────────────────────────────────────────────── -->
+                <!-- FUTURE SECTIONS GO HERE                         -->
+                <!-- Copy the header+body pattern above              -->
+                <!-- ─────────────────────────────────────────────── -->
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 2: Status bar                                   -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Grid Grid.Row="2" HeightRequest="24"
+          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
+            <Label Text="{Binding StatusMessage}"
+             Padding="8,0" FontSize="10" Opacity="0.5"
+             VerticalOptions="Center" HorizontalOptions="Start"
+             TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                         IsVisible="{Binding IsLoading}"
+                         HeightRequest="16" WidthRequest="16"
+                         HorizontalOptions="End" VerticalOptions="Center"
+                         Margin="8,0" />
+        </Grid>
+
+    </Grid>
+</ContentPage>

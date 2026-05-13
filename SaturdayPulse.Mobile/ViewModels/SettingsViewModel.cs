@@ -6,7 +6,7 @@ using SaturdayPulse.Services;
 
 namespace SaturdayPulse.ViewModels
 {
-    public class FollowingViewModel : BaseViewModel
+    public class SettingsViewModel : BaseViewModel
     {
         private readonly GameDataApiService  _apiService;
         private readonly PersonalGameService _personalGameService;
@@ -31,6 +31,12 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsGamesView));
             }
         }
+        // Accordion state — only one section open at a time
+        private string? _expandedSection = "Following"; // open by default
+
+        public bool IsFollowingExpanded => _expandedSection == "Following";
+        public bool IsUserConfigExpanded => _expandedSection == "UserConfig";
+        public bool IsMoreCoolStuffExpanded => _expandedSection == "MoreCoolStuff";
 
         public bool IsTeamsView => _selectedView == "Teams";
         public bool IsGamesView => _selectedView == "Games";
@@ -78,7 +84,7 @@ namespace SaturdayPulse.ViewModels
         // before we set SelectedTier, avoiding the blank-until-expand bug
         public ObservableCollection<string> TierFilters { get; } = new();
 
-        private string _selectedTier = "➕ Personal";
+        private string _selectedTier = "♥ Personal";
         public string SelectedTier
         {
             get => _selectedTier;
@@ -96,9 +102,10 @@ namespace SaturdayPulse.ViewModels
         public ICommand LoadDataCommand       { get; }
         public ICommand SelectViewCommand     { get; }
         public ICommand TogglePersonalCommand { get; }
+        public ICommand ToggleSectionCommand { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
-        public FollowingViewModel(
+        public SettingsViewModel(
             GameDataApiService apiService,
             FollowService followService,
             PersonalGameService personalGameService)
@@ -109,13 +116,13 @@ namespace SaturdayPulse.ViewModels
 
             // Populate TierFilters here so the ObservableCollection
             // is ready before any binding occurs
-            TierFilters.Add("➕ Personal");
+            TierFilters.Add("All");
+            TierFilters.Add("♥ Personal");
             TierFilters.Add("── Rivalries ──");
             TierFilters.Add("🔥 Epic");
             TierFilters.Add("⭐ National");
             TierFilters.Add("🏠 Regional");
             TierFilters.Add("• Meh");
-
             LoadDataCommand = new Microsoft.Maui.Controls.Command(
                 async () => await LoadDataAsync());
 
@@ -131,8 +138,16 @@ namespace SaturdayPulse.ViewModels
                 rivalry.IsPersonalFollowed = _personalGameService.IsFollowed(
                     rivalry.Team1Id, rivalry.Team2Id);
 
-                if (!rivalry.IsPersonalFollowed && _selectedTier == "➕ Personal")
+                if (!rivalry.IsPersonalFollowed && _selectedTier == "♥ Personal")
                     ApplyGamesFilter();
+            });
+
+            ToggleSectionCommand = new Command<string>(section =>
+            {
+                _expandedSection = _expandedSection == section ? null : section;
+                OnPropertyChanged(nameof(IsFollowingExpanded));
+                OnPropertyChanged(nameof(IsUserConfigExpanded));
+                OnPropertyChanged(nameof(IsMoreCoolStuffExpanded));
             });
 
             _followService.TeamFollowChanged       += OnTeamFollowChanged;
@@ -152,6 +167,8 @@ namespace SaturdayPulse.ViewModels
                 var rivalriesTask = _apiService.GetNamedRivalriesAsync();
 
                 await Task.WhenAll(teamsTask, rivalriesTask);
+
+                Console.WriteLine($"ApplyGamesFilter: allTeams={_allTeams.Count}, allRivalries={_allRivalries.Count}, personalGames={_personalGames.Count}");
 
                 // ── Teams ─────────────────────────────────────────────────
                 var teams = teamsTask.Result;
@@ -190,9 +207,8 @@ namespace SaturdayPulse.ViewModels
                 await LoadPersonalGamesAsync(_allRivalries, followedIds);
 
                 // Set default tier AFTER data is ready so Picker shows correctly
-                _selectedTier = "➕ Personal";
+                _selectedTier = "♥ Personal";
                 OnPropertyChanged(nameof(SelectedTier));
-
                 ApplyGamesFilter();
 
                 StatusMessage = string.Empty;
@@ -271,7 +287,7 @@ namespace SaturdayPulse.ViewModels
 
             IEnumerable<RivalryInfo> filtered;
 
-            if (_selectedTier == "➕ Personal")
+            if (_selectedTier == "♥ Personal")
             {
                 var namedPersonal = _allRivalries.Where(r => r.IsPersonalFollowed);
                 filtered = namedPersonal.Concat(_personalGames)
@@ -330,7 +346,7 @@ namespace SaturdayPulse.ViewModels
             if (!isFollowed && personalMatch != null)
                 _personalGames.Remove(personalMatch);
 
-            if (_selectedTier == "➕ Personal")
+            if (_selectedTier == "♥ Personal")
                 ApplyGamesFilter();
         }
 

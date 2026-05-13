@@ -55,16 +55,15 @@ public static class MauiProgram
         // Register ViewModels
         builder.Services.AddTransient<PowerRankingsViewModel>();
         builder.Services.AddTransient<ScheduleViewModel>();
-        builder.Services.AddTransient<FollowingViewModel>();
+        builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.AddTransient<ProjectionsViewModel>();
         builder.Services.AddSingleton<MainViewModel>();
 
         // Register Pages
         builder.Services.AddTransient<PowerRankingsPage>();
         builder.Services.AddTransient<SchedulePage>();
-        builder.Services.AddTransient<FollowingPage>();
+        builder.Services.AddTransient<SettingsPage>();
         builder.Services.AddTransient<ProjectionsPage>();
-        builder.Services.AddTransient<ConfigPage>();
         builder.Services.AddSingleton<MainPage>();
 
 #if DEBUG
