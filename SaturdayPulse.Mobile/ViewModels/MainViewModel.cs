@@ -84,6 +84,8 @@ namespace SaturdayPulse.ViewModels
                     OnPropertyChanged(nameof(SelectedWeek));
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
                     OnPropertyChanged(nameof(SelectedConference));
+                if (e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
+                    OnPropertyChanged(nameof(ShowFavoritesFirst));
             };
         }
 
@@ -111,9 +113,11 @@ namespace SaturdayPulse.ViewModels
 
         // ── Shared navigation proxy properties ────────────────────────────
 
-        public int    SelectedYear        => _navState.SelectedYear;
-        public int    SelectedWeek        => _navState.SelectedWeek;
-        public string SelectedConference  => _navState.SelectedConference;
+        public int    SelectedYear       => _navState.SelectedYear;
+        public int    SelectedWeek       => _navState.SelectedWeek;
+        public string SelectedConference => _navState.SelectedConference;
+        public bool   ShowFavoritesFirst => _navState.ShowFavoritesFirst;
+
         public ObservableCollection<WeekItem> Weeks => _navState.Weeks;
 
         public ICommand SelectYearCommand       { get; }

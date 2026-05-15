@@ -250,7 +250,7 @@ namespace SaturdayPulse.Services
                     UpsetRate      = upsetRate,
                     FirstPlayed    = firstPlayed,
                     LastPlayed     = lastPlayed,
-                    IsPersonalFollowed = true
+                    IsGameFavorited = true
                 };
             }
             catch (Exception ex)

@@ -61,7 +61,7 @@
                <!-- Star: follow this game -->
                <controls:FollowGameIcon
                     Grid.Column="0"
-                    IsFollowed="{Binding IsPersonalFollowed}"
+                    IsFollowed="{Binding IsGameFavorited}"
                     VerticalOptions="Center"
                     HorizontalOptions="Start">
 

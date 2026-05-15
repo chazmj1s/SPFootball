@@ -36,7 +36,7 @@ namespace SaturdayPulse.ViewModels
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var options = new List<string> { "All", "Followed", "P4", "G5" };
+                var options = new List<string> { "All", "My Games", "My Teams", "P4", "G5" };
                 var result  = await Shell.Current.DisplayActionSheet(
                     "Filter", "Cancel", null, options.ToArray());
                 if (result != null && result != "Cancel")
@@ -64,13 +64,13 @@ namespace SaturdayPulse.ViewModels
             {
                 if (game == null) return;
                 _personalGameService.Toggle(game.VisitorId, game.HomeId);
-                game.IsPersonalFollowed = _personalGameService.IsFollowed(
+                game.IsGameFavorited = _personalGameService.IsFavorited(
                     game.VisitorId, game.HomeId);
             });
 
             _navState.PropertyChanged              += OnNavStateChanged;
             _followService.TeamFollowChanged       += OnTeamFollowChanged;
-            _personalGameService.GameFollowChanged += OnGameFollowChanged;
+            _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
         }
 
         // ── Bindable collections ──────────────────────────────────────────
@@ -138,9 +138,9 @@ namespace SaturdayPulse.ViewModels
                 var followedIds = _followService.GetFollowedIds();
                 foreach (var g in _allGames)
                 {
-                    g.WinnerIsFollowed   = followedIds.Contains(g.WinnerId);
-                    g.LoserIsFollowed    = followedIds.Contains(g.LoserId);
-                    g.IsPersonalFollowed = _personalGameService.IsFollowed(g.VisitorId, g.HomeId);
+                    g.WinnerIsFollowed = followedIds.Contains(g.WinnerId);
+                    g.LoserIsFollowed  = followedIds.Contains(g.LoserId);
+                    g.IsGameFavorited  = _personalGameService.IsFavorited(g.VisitorId, g.HomeId);
                 }
 
                 var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
@@ -181,14 +181,29 @@ namespace SaturdayPulse.ViewModels
             filtered = _activeFilter switch
             {
                 "All"      => filtered,
+                "Favorites" => filtered.Where(g => g.IsGameFavorited),
                 "Followed" => filtered.Where(g => g.WinnerIsFollowed || g.LoserIsFollowed),
                 "P4"       => filtered.Where(g => g.WinnerTier == "P4" || g.LoserTier == "P4"),
                 "G5"       => filtered.Where(g => g.WinnerTier == "G5" || g.LoserTier == "G5"),
                 _          => filtered
             };
 
-            var sorted = filtered.OrderBy(g => g.SequenceNumber).ToList();
+            // ShowFavoritesFirst: starred games → followed-team games → normal sequence
+            List<GameResult> sorted;
+            if (_navState.ShowFavoritesFirst)
+            {
+                sorted = filtered
+                    .OrderByDescending(g => g.IsGameFavorited)
+                    .ThenByDescending(g => g.WinnerIsFollowed || g.LoserIsFollowed)
+                    .ThenBy(g => g.SequenceNumber)
+                    .ToList();
+            }
+            else
+            {
+                sorted = filtered.OrderBy(g => g.SequenceNumber).ToList();
+            }
 
+            // Group headers — stamp after sort so they reflect actual display order
             string lastHeader = null;
             foreach (var g in sorted)
             {
@@ -205,8 +220,10 @@ namespace SaturdayPulse.ViewModels
         {
             if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
                 _ = LoadDataAsync();
+
             if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek) ||
-                e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
+                e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
                 ApplyFiltersAndSort();
         }
 
@@ -220,7 +237,7 @@ namespace SaturdayPulse.ViewModels
 
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                if (_activeFilter == "Followed")
+                if (_activeFilter == "My Teams" || _navState.ShowFavoritesFirst)
                     ApplyFiltersAndSort();
                 else
                 {
@@ -231,13 +248,17 @@ namespace SaturdayPulse.ViewModels
             });
         }
 
-        private void OnGameFollowChanged(string key, bool isFollowed)
+        private void OnGameFavoritedChange(string key, bool isFollowed)
         {
             foreach (var g in _allGames)
             {
                 if (PersonalGameService.Key(g.VisitorId, g.HomeId) == key)
-                    g.IsPersonalFollowed = isFollowed;
+                    g.IsGameFavorited = isFollowed;
             }
+
+            // Re-sort if ShowFavoritesFirst is on so the game moves immediately
+            if (_navState.ShowFavoritesFirst)
+                MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
         }
     }
 

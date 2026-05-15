@@ -28,7 +28,7 @@ namespace SaturdayPulse.Models
         public decimal UpsetRate { get; set; }
         public int FirstPlayed { get; set; }
         public int LastPlayed { get; set; }
-        public bool IsPersonalFollowed { get; set; }
+        public bool IsGameFavorited { get; set; }
 
         // Derived display helpers
         public string DisplayMatchup => $"{Team1ShortName} vs {Team2ShortName}";

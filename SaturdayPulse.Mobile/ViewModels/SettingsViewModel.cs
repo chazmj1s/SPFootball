@@ -8,8 +8,9 @@ namespace SaturdayPulse.ViewModels
 {
     public class SettingsViewModel : BaseViewModel
     {
-        private readonly GameDataApiService  _apiService;
-        private readonly PersonalGameService _personalGameService;
+        private readonly GameDataApiService           _apiService;
+        private readonly PersonalGameService          _personalGameService;
+        private readonly SharedNavigationStateService _navState;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -31,11 +32,12 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsGamesView));
             }
         }
-        // Accordion state — only one section open at a time
+
+        // ── Accordion state — only one section open at a time ─────────────
         private string? _expandedSection = "Following"; // open by default
 
-        public bool IsFollowingExpanded => _expandedSection == "Following";
-        public bool IsUserConfigExpanded => _expandedSection == "UserConfig";
+        public bool IsFollowingExpanded    => _expandedSection == "Following";
+        public bool IsUserConfigExpanded   => _expandedSection == "UserConfig";
         public bool IsMoreCoolStuffExpanded => _expandedSection == "MoreCoolStuff";
 
         public bool IsTeamsView => _selectedView == "Teams";
@@ -58,6 +60,16 @@ namespace SaturdayPulse.ViewModels
         {
             get => _statusMessage;
             set { _statusMessage = value; OnPropertyChanged(); }
+        }
+
+        // ── User preference: Show Favorites First ─────────────────────────
+        // Passthrough to SharedNavigationStateService so the setting
+        // propagates to all tabs automatically via PropertyChanged.
+
+        public bool ShowFavoritesFirst
+        {
+            get => _navState.ShowFavoritesFirst;
+            set => _navState.ShowFavoritesFirst = value;
         }
 
         // ── Teams ─────────────────────────────────────────────────────────
@@ -102,17 +114,20 @@ namespace SaturdayPulse.ViewModels
         public ICommand LoadDataCommand       { get; }
         public ICommand SelectViewCommand     { get; }
         public ICommand TogglePersonalCommand { get; }
-        public ICommand ToggleSectionCommand { get; }
+        public ICommand ToggleSectionCommand  { get; }
+        public ICommand ToggleFollowCommand   { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
         public SettingsViewModel(
             GameDataApiService apiService,
             FollowService followService,
-            PersonalGameService personalGameService)
+            PersonalGameService personalGameService,
+            SharedNavigationStateService navState)
             : base(followService)
         {
             _apiService          = apiService;
             _personalGameService = personalGameService;
+            _navState            = navState;
 
             // Populate TierFilters here so the ObservableCollection
             // is ready before any binding occurs
@@ -123,6 +138,7 @@ namespace SaturdayPulse.ViewModels
             TierFilters.Add("⭐ National");
             TierFilters.Add("🏠 Regional");
             TierFilters.Add("• Meh");
+
             LoadDataCommand = new Microsoft.Maui.Controls.Command(
                 async () => await LoadDataAsync());
 
@@ -135,10 +151,10 @@ namespace SaturdayPulse.ViewModels
             {
                 if (rivalry == null) return;
                 _personalGameService.Toggle(rivalry.Team1Id, rivalry.Team2Id);
-                rivalry.IsPersonalFollowed = _personalGameService.IsFollowed(
+                rivalry.IsGameFavorited = _personalGameService.IsFavorited(
                     rivalry.Team1Id, rivalry.Team2Id);
 
-                if (!rivalry.IsPersonalFollowed && _selectedTier == "♥ Personal")
+                if (!rivalry.IsGameFavorited && _selectedTier == "♥ Personal")
                     ApplyGamesFilter();
             });
 
@@ -150,8 +166,13 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsMoreCoolStuffExpanded));
             });
 
-            _followService.TeamFollowChanged       += OnTeamFollowChanged;
-            _personalGameService.GameFollowChanged += OnGameFollowChanged;
+            ToggleFollowCommand = new Microsoft.Maui.Controls.Command<int>(teamId =>
+            {
+                _followService.Toggle(teamId);
+            });
+
+            _followService.TeamFollowChanged         += OnTeamFollowChanged;
+            _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
         }
 
         // ── Load ──────────────────────────────────────────────────────────
@@ -167,8 +188,6 @@ namespace SaturdayPulse.ViewModels
                 var rivalriesTask = _apiService.GetNamedRivalriesAsync();
 
                 await Task.WhenAll(teamsTask, rivalriesTask);
-
-                Console.WriteLine($"ApplyGamesFilter: allTeams={_allTeams.Count}, allRivalries={_allRivalries.Count}, personalGames={_personalGames.Count}");
 
                 // ── Teams ─────────────────────────────────────────────────
                 var teams = teamsTask.Result;
@@ -194,9 +213,9 @@ namespace SaturdayPulse.ViewModels
 
                 foreach (var r in rivalries)
                 {
-                    r.Team1IsFollowed    = followedIds.Contains(r.Team1Id);
-                    r.Team2IsFollowed    = followedIds.Contains(r.Team2Id);
-                    r.IsPersonalFollowed = _personalGameService.IsFollowed(r.Team1Id, r.Team2Id);
+                    r.Team1IsFollowed = followedIds.Contains(r.Team1Id);
+                    r.Team2IsFollowed = followedIds.Contains(r.Team2Id);
+                    r.IsGameFavorited = _personalGameService.IsFavorited(r.Team1Id, r.Team2Id);
                 }
 
                 _allRivalries = [.. rivalries
@@ -246,9 +265,9 @@ namespace SaturdayPulse.ViewModels
                 var info = await _apiService.GetMatchupHistoryAsync(id1, id2);
                 if (info != null)
                 {
-                    info.Team1IsFollowed    = followedIds.Contains(id1);
-                    info.Team2IsFollowed    = followedIds.Contains(id2);
-                    info.IsPersonalFollowed = true;
+                    info.Team1IsFollowed = followedIds.Contains(id1);
+                    info.Team2IsFollowed = followedIds.Contains(id2);
+                    info.IsGameFavorited = true;
                 }
                 return info;
             });
@@ -289,7 +308,7 @@ namespace SaturdayPulse.ViewModels
 
             if (_selectedTier == "♥ Personal")
             {
-                var namedPersonal = _allRivalries.Where(r => r.IsPersonalFollowed);
+                var namedPersonal = _allRivalries.Where(r => r.IsGameFavorited);
                 filtered = namedPersonal.Concat(_personalGames)
                     .OrderBy(r => r.RivalryName ?? $"{r.Team1Name} vs {r.Team2Name}");
             }
@@ -327,12 +346,12 @@ namespace SaturdayPulse.ViewModels
             ApplyGamesFilter();
         }
 
-        private void OnGameFollowChanged(string key, bool isFollowed)
+        private void OnGameFavoritedChange(string key, bool isFollowed)
         {
             var rivalry = _allRivalries.FirstOrDefault(r =>
                 PersonalGameService.Key(r.Team1Id, r.Team2Id) == key);
             if (rivalry != null)
-                rivalry.IsPersonalFollowed = isFollowed;
+                rivalry.IsGameFavorited = isFollowed;
 
             var personalMatch = _personalGames.FirstOrDefault(r =>
                 PersonalGameService.Key(r.Team1Id, r.Team2Id) == key);
