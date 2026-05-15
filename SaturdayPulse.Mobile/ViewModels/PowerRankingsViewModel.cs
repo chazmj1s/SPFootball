@@ -8,15 +8,15 @@ namespace SaturdayPulse.ViewModels
 {
     public class PowerRankingsViewModel : BaseViewModel
     {
-        private readonly GameDataApiService _apiService;
+        private readonly GameDataApiService           _apiService;
         private readonly SharedNavigationStateService _navState;
         private List<TeamRanking> _allTeams = new();
         private ObservableCollection<TeamRanking> _filteredTeams = new();
-        private bool _isBusy;
-        private RankingFilter _currentFilter = RankingFilter.All;
-        private RankingSort _currentSort = RankingSort.PowerRating;
-        private bool _isSortAscending = false;
-        private string _selectedFilterDisplay = "All";
+        private bool         _isBusy;
+        private RankingFilter _currentFilter        = RankingFilter.All;
+        private RankingSort   _currentSort          = RankingSort.PowerRating;
+        private bool          _isSortAscending      = false;
+        private string        _selectedFilterDisplay = "All";
 
         public PowerRankingsViewModel(
             GameDataApiService apiService,
@@ -25,13 +25,13 @@ namespace SaturdayPulse.ViewModels
             : base(followService)
         {
             _apiService = apiService;
-            _navState = navState;
+            _navState   = navState;
 
-            LoadDataCommand  = new Command(async () => await LoadDataAsync());
-            RefreshCommand   = new Command(async () => await LoadDataAsync());
-            ApplyFilterCommand  = new Command<string>(ApplyFilter);
-            ApplySortCommand    = new Command<RankingSort>(ApplySort);
-            SortColumnCommand   = new Command<string>(SortByColumn);
+            LoadDataCommand       = new Command(async () => await LoadDataAsync());
+            RefreshCommand        = new Command(async () => await LoadDataAsync());
+            ApplyFilterCommand    = new Command<string>(ApplyFilter);
+            ApplySortCommand      = new Command<RankingSort>(ApplySort);
+            SortColumnCommand     = new Command<string>(SortByColumn);
 
             SelectFilterCommand = new Command(async () =>
             {
@@ -46,24 +46,16 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
-            // ── Offense / Defense expand (unchanged) ──────────────────────
             ToggleStatsExpandCommand = new Command<TeamRanking>(t =>
             {
                 if (t == null) return;
                 t.IsStatsExpanded = !t.IsStatsExpanded;
             });
 
-            // ── Trend / Pedigree expand ───────────────────────────────────
-            // /powerrankings does NOT include trendHistory in its payload,
-            // so we fetch on demand from /rollingAverages/team the first time
-            // the user taps the toggle for a given team.
-            // LoadChartPoints() fires automatically inside IsTrendExpanded setter.
-
             ToggleTrendExpandCommand = new Command<TeamRanking>(async t =>
             {
                 if (t == null) return;
 
-                // First open and no data yet — fetch from rollingAverages/team
                 if (!t.IsTrendExpanded && t.TrendHistory == null)
                 {
                     var data = await _apiService.GetTeamRollingAveragesAsync(
@@ -71,7 +63,6 @@ namespace SaturdayPulse.ViewModels
 
                     if (data?.History?.Count > 0)
                     {
-                        // Most recent season is last in the history list
                         var h = data.History[^1];
                         t.TrendRating     = h.TrendRating;
                         t.PedigreeRating  = h.PedigreeRating;
@@ -81,7 +72,6 @@ namespace SaturdayPulse.ViewModels
                     }
                 }
 
-                // Toggle — LoadChartPoints() fires on first expand via setter
                 t.IsTrendExpanded = !t.IsTrendExpanded;
             });
 
@@ -91,7 +81,9 @@ namespace SaturdayPulse.ViewModels
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
                     e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
                     _ = LoadDataAsync();
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
+                    e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
                     ApplyFiltersAndSort();
             };
 
@@ -121,7 +113,7 @@ namespace SaturdayPulse.ViewModels
         }
 
         public string StatusMessage { get; private set; } = "Loading...";
-        public bool HasLoaded { get; private set; }
+        public bool   HasLoaded     { get; private set; }
 
         public string ActiveSortLabel => _currentSort switch
         {
@@ -152,7 +144,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand SortColumnCommand        { get; }
         public ICommand SelectFilterCommand      { get; }
         public ICommand ToggleStatsExpandCommand { get; }
-        public ICommand ToggleTrendExpandCommand { get; }   // replaces ShowTrendPedigreeCommand
+        public ICommand ToggleTrendExpandCommand { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 
@@ -185,8 +177,6 @@ namespace SaturdayPulse.ViewModels
                     {
                         t.IsFollowed = followedIds.Contains(t.TeamID);
                         t.IsTop25    = t.OverallRank > 0 && t.OverallRank <= 25;
-                        // trendHistory is NOT in the /powerrankings payload —
-                        // fetched on demand via /rollingAverages/team when user taps the row.
                     }
 
                     ApplyFiltersAndSort();
@@ -283,6 +273,7 @@ namespace SaturdayPulse.ViewModels
         {
             var filtered = _allTeams.AsEnumerable();
 
+            // Conference filter
             var conf = _navState.SelectedConference;
             if (conf != "All")
             {
@@ -294,6 +285,7 @@ namespace SaturdayPulse.ViewModels
                         t.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase)));
             }
 
+            // Tier / top-25 filter
             filtered = _currentFilter switch
             {
                 RankingFilter.Top25       => filtered.Where(t => t.IsTop25),
@@ -303,6 +295,7 @@ namespace SaturdayPulse.ViewModels
                 _                         => filtered
             };
 
+            // Column sort
             IOrderedEnumerable<TeamRanking> sorted = _currentSort switch
             {
                 RankingSort.Rank => _isSortAscending
@@ -332,7 +325,11 @@ namespace SaturdayPulse.ViewModels
                 _ => filtered.OrderBy(t => t.OverallRank)
             };
 
-            var result = sorted.ToList();
+            // ShowFavoritesFirst: float followed teams to top, preserve sort within each group
+            var result = _navState.ShowFavoritesFirst
+                ? sorted.OrderByDescending(t => t.IsFollowed).ToList()
+                : sorted.ToList();
+
             for (int i = 0; i < result.Count; i++)
             {
                 result[i].ActiveSortValue = GetActiveSortValue(result[i]);
@@ -346,7 +343,14 @@ namespace SaturdayPulse.ViewModels
         private void OnTeamFollowChanged(int teamId, bool isFollowed)
         {
             var team = _allTeams.FirstOrDefault(t => t.TeamID == teamId);
-            if (team != null) team.IsFollowed = isFollowed;
+            if (team != null)
+            {
+                team.IsFollowed = isFollowed;
+
+                // Re-sort immediately if ShowFavoritesFirst is on
+                if (_navState.ShowFavoritesFirst)
+                    MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
+            }
         }
     }
 }

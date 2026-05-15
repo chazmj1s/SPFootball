@@ -6,7 +6,8 @@ using SaturdayPulse.ViewModels;
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// Single source of truth for year, week, and conference selection across all tabs.
+    /// Single source of truth for year, week, conference selection,
+    /// and user display preferences across all tabs.
     /// Registered as Singleton in MauiProgram.cs.
     /// </summary>
     public class SharedNavigationStateService : INotifyPropertyChanged
@@ -14,8 +15,9 @@ namespace SaturdayPulse.Services
         private int    _selectedYear       = 2025;
         private int    _selectedWeek       = 1;
         private string _selectedConference = "All";
+        private bool   _showFavoritesFirst = Preferences.Get("ShowFavoritesFirst", false);
 
-        // ── Year ─────────────────────────────────────────────────────────
+        // ── Year ──────────────────────────────────────────────────────────
 
         public int SelectedYear
         {
@@ -31,7 +33,7 @@ namespace SaturdayPulse.Services
             }
         }
 
-        // ── Week ─────────────────────────────────────────────────────────
+        // ── Week ──────────────────────────────────────────────────────────
 
         public int SelectedWeek
         {
@@ -57,6 +59,22 @@ namespace SaturdayPulse.Services
                 if (_selectedConference != value)
                 {
                     _selectedConference = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        // ── Show Favorites First ──────────────────────────────────────────
+
+        public bool ShowFavoritesFirst
+        {
+            get => _showFavoritesFirst;
+            set
+            {
+                if (_showFavoritesFirst != value)
+                {
+                    _showFavoritesFirst = value;
+                    Preferences.Set("ShowFavoritesFirst", value);
                     OnPropertyChanged();
                 }
             }

@@ -8,11 +8,11 @@ namespace SaturdayPulse.Services
     /// </summary>
     public class PersonalGameService
     {
-        private const string StorageKey = "personal_followed_games";
+        private const string StorageKey = "personal_favorited_games";
 
-        private readonly HashSet<string> _followed = new();
+        private readonly HashSet<string> _favorited = new();
 
-        public event Action<string, bool>? GameFollowChanged;
+        public event Action<string, bool>? GameFavoritedChange;
 
         public PersonalGameService()
         {
@@ -21,39 +21,39 @@ namespace SaturdayPulse.Services
 
         // ── Public API ────────────────────────────────────────────────────
 
-        public bool IsFollowed(int team1Id, int team2Id)
-            => _followed.Contains(Key(team1Id, team2Id));
+        public bool IsFavorited(int team1Id, int team2Id)
+            => _favorited.Contains(Key(team1Id, team2Id));
 
         public void Follow(int team1Id, int team2Id)
         {
             var key = Key(team1Id, team2Id);
-            if (_followed.Add(key))
+            if (_favorited.Add(key))
             {
                 Save();
-                GameFollowChanged?.Invoke(key, true);
+                GameFavoritedChange?.Invoke(key, true);
             }
         }
 
         public void Unfollow(int team1Id, int team2Id)
         {
             var key = Key(team1Id, team2Id);
-            if (_followed.Remove(key))
+            if (_favorited.Remove(key))
             {
                 Save();
-                GameFollowChanged?.Invoke(key, false);
+                GameFavoritedChange?.Invoke(key, false);
             }
         }
 
         public void Toggle(int team1Id, int team2Id)
         {
-            if (IsFollowed(team1Id, team2Id))
+            if (IsFavorited(team1Id, team2Id))
                 Unfollow(team1Id, team2Id);
             else
                 Follow(team1Id, team2Id);
         }
 
-        /// <summary>Returns all followed matchup keys as "lowId:highId" pairs.</summary>
-        public IReadOnlyCollection<string> GetAll() => _followed;
+        /// <summary>Returns all favorited matchup keys as "lowId:highId" pairs.</summary>
+        public IReadOnlyCollection<string> GetAll() => _favorited;
 
         /// <summary>Parses a key back into the two team IDs.</summary>
         public static (int, int) ParseKey(string key)
@@ -83,7 +83,7 @@ namespace SaturdayPulse.Services
                     var list = JsonSerializer.Deserialize<List<string>>(json);
                     if (list != null)
                         foreach (var k in list)
-                            _followed.Add(k);
+                            _favorited.Add(k);
                 }
             }
             catch { /* start fresh if corrupt */ }
@@ -93,7 +93,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var json = JsonSerializer.Serialize(_followed.ToList());
+                var json = JsonSerializer.Serialize(_favorited.ToList());
                 Preferences.Set(StorageKey, json);
             }
             catch { }

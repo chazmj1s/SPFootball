@@ -170,7 +170,7 @@ namespace SaturdayPulse.Models
             set { _loserIsFollowed = value; OnPropertyChanged(); OnPropertyChanged(nameof(VisitorIsFollowed)); OnPropertyChanged(nameof(HomeIsFollowed)); }
         }
         private bool _isPersonalFollowed;
-        public bool IsPersonalFollowed
+        public bool IsGameFavorited
         {
             get => _isPersonalFollowed;
             set { _isPersonalFollowed = value; OnPropertyChanged(); }
