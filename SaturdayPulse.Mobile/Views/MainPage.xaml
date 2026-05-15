@@ -13,7 +13,7 @@
     <!-- ROW 0: App title                                    -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Label Grid.Row="0"
-           Text="NCAA Power Ratings"
+           Text="SAturday Pulse"
            FontSize="16"
            FontAttributes="Bold"
            Padding="12,8"
