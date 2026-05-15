@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<!-- Build for Windows only for now -->
-    <TargetFrameworks>net9.0-windows10.0.19041.0;net9.0-ios</TargetFrameworks>
+    <TargetFrameworks>net9.0-windows10.0.19041.0;net9.0-ios18.0</TargetFrameworks>
 
 		<!-- Uncomment these when you want to build for other platforms -->
 		<!-- <TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst;net9.0-windows10.0.19041.0</TargetFrameworks> -->
@@ -51,6 +51,11 @@
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-ios|AnyCPU'">
 	  <NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(TargetFramework)'=='net9.0-ios'">
+	  <CodesignKey>Apple Development: Created via API (AFX747474P)</CodesignKey>
+	  <CodesignProvision>VS: com.companyname.SaturdayPulse Development</CodesignProvision>
 	</PropertyGroup>
   
   <ItemGroup>
