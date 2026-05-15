@@ -13,7 +13,7 @@
     <!-- ROW 0: App title                                    -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Label Grid.Row="0"
-           Text="SAturday Pulse"
+           Text="Saturday Pulse"
            FontSize="16"
            FontAttributes="Bold"
            Padding="12,8"
