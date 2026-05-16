@@ -116,6 +116,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand TogglePersonalCommand { get; }
         public ICommand ToggleSectionCommand  { get; }
         public ICommand ToggleFollowCommand   { get; }
+        public ICommand RefreshCommand { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
         public SettingsViewModel(
@@ -142,6 +143,9 @@ namespace SaturdayPulse.ViewModels
             LoadDataCommand = new Microsoft.Maui.Controls.Command(
                 async () => await LoadDataAsync());
 
+            RefreshCommand = new Microsoft.Maui.Controls.Command(
+                async () => await LoadDataAsync());
+
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
                 SelectedView = view;
@@ -164,11 +168,6 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsFollowingExpanded));
                 OnPropertyChanged(nameof(IsUserConfigExpanded));
                 OnPropertyChanged(nameof(IsMoreCoolStuffExpanded));
-            });
-
-            ToggleFollowCommand = new Microsoft.Maui.Controls.Command<int>(teamId =>
-            {
-                _followService.Toggle(teamId);
             });
 
             _followService.TeamFollowChanged         += OnTeamFollowChanged;

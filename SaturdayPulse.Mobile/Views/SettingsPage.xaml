@@ -21,8 +21,11 @@
         <!-- ═══════════════════════════════════════════════════ -->
         <!-- ROW 1: Accordion sections                           -->
         <!-- ═══════════════════════════════════════════════════ -->
-        <ScrollView Grid.Row="1">
-            <VerticalStackLayout Spacing="0">
+        <RefreshView Grid.Row="1"
+             Command="{Binding RefreshCommand}"
+             IsRefreshing="{Binding IsLoading}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="0">
 
                 <!-- ─────────────────────────────────────────── -->
                 <!-- SECTION: Following                          -->
@@ -437,7 +440,8 @@
                 <!-- ─────────────────────────────────────────── -->
 
             </VerticalStackLayout>
-        </ScrollView>
+            </ScrollView>
+        </RefreshView>
 
         <!-- ═══════════════════════════════════════════════════ -->
         <!-- ROW 2: Status bar                                   -->
