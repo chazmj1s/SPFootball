@@ -22,6 +22,255 @@ namespace SaturdayPulse.Services
         // Resolved once and reused — named client carries the bearer token
         private HttpClient CfbdClient => _httpClientFactory.CreateClient("cfbd");
 
+        #region CFBD V2 — Load Methods
+        /// <summary>
+        /// Bulk load — fetches teams for every year from startYear to current.
+        /// Teams change conference each year so we refresh annually.
+        /// </summary>
+        public async Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+            var total = 0;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                total += await LoadTeamsAsync(year, token);
+                await Task.Delay(300, token);
+            }
+
+            Console.WriteLine($"LoadTeamsBulkAsync: {total} total team upserts from {startYear} to {currentYear}");
+            return total;
+        }
+
+        /// <summary>
+        /// Bulk load — fetches all games for every year from startYear to current.
+        /// Sequential with 300ms delay per CFBD request guidelines.
+        /// </summary>
+        public async Task<int> LoadGamesBulkAsync(int startYear, CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+            var total = 0;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                total += await LoadGamesAsync(year, week: null, token);
+                await Task.Delay(300, token);
+            }
+
+            Console.WriteLine($"LoadGamesBulkAsync: {total} total game upserts from {startYear} to {currentYear}");
+            return total;
+        }
+
+        /// <summary>
+        /// Bulk load — fetches lines for every week of every year from startYear to current.
+        /// Two delays: 300ms between weeks, 500ms between years.
+        /// Lines only exist from ~2013 forward so early years will return empty gracefully.
+        /// </summary>
+        public async Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+            var total = 0;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                // Fetch week range from Games table so we only request weeks that exist
+                var weeks = (await _uow.GamesV2.GetByYearAsync(year, token))
+                    .Select(g => g.Week)
+                    .Distinct()
+                    .OrderBy(w => w)
+                    .ToList();
+
+                foreach (var week in weeks)
+                {
+                    total += await LoadLinesAsync(year, week, token);
+                    await Task.Delay(300, token);
+                }
+
+                Console.WriteLine($"LoadLinesBulkAsync: completed {year}");
+                await Task.Delay(500, token);
+            }
+
+            Console.WriteLine($"LoadLinesBulkAsync: {total} total lines from {startYear} to {currentYear}");
+            return total;
+        }
+        /// <summary>
+        /// Fetches all conferences from CFBD and upserts into Conferences table.
+        /// </summary>
+        public async Task<int> LoadConferencesAsync(CancellationToken token = default)
+        {
+            var response = await CfbdClient.GetAsync("/conferences", token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdConferenceDto>>(cancellationToken: token) ?? [];
+
+            var conferences = dtos.Select(d => new Conference
+            {
+                ConferenceId   = d.Id,
+                Name           = d.Name,
+                ShortName      = d.ShortName,
+                Abbreviation   = d.Abbreviation,
+                Classification = d.Classification
+            }).ToList();
+
+            await _uow.Conferences.UpsertRangeAsync(conferences, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadConferencesAsync: upserted {conferences.Count} conferences");
+            return conferences.Count;
+        }
+
+        /// <summary>
+        /// Fetches all teams for a given year from CFBD and upserts into Teams table.
+        /// Resolves ConferenceId by matching conference name against Conferences table.
+        /// </summary>
+        public async Task<int> LoadTeamsAsync(int? year = null, CancellationToken token = default)
+        {
+            var targetYear = year ?? (DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year);
+
+            var response = await CfbdClient.GetAsync($"/teams?year={targetYear}", token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdTeamV2Dto>>(cancellationToken: token) ?? [];
+
+            // Build conference lookup by name for FK resolution
+            var conferenceLookup = (await _uow.Conferences.GetAllAsync(token))
+                .ToDictionary(c => c.Name, c => c.ConferenceId, StringComparer.OrdinalIgnoreCase);
+
+            var teams = dtos.Select(d => new Teams
+            {
+                TeamId       = d.Id,
+                TeamName     = d.School,
+                Mascot       = d.Mascot,
+                Abbreviation = d.Abbreviation,
+                Alias        = d.AlternateNames != null ? string.Join(",", d.AlternateNames) : null,
+                Division     = d.Classification,
+                ConferenceId = d.Conference != null && conferenceLookup.TryGetValue(d.Conference, out var confId)
+                               ? confId : null,
+                ShortName    = null  // not in /teams endpoint
+            }).ToList();
+
+            await _uow.TeamsV2.UpsertRangeAsync(teams, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadTeamsAsync: upserted {teams.Count} teams for {targetYear}");
+            return teams.Count;
+        }
+
+        /// <summary>
+        /// Fetches games for a given year (and optionally week) from CFBD and upserts into Games table.
+        /// Pass week=null to load a full season sequentially with delay to avoid rate limiting.
+        /// </summary>
+        public async Task<int> LoadGamesAsync(int year, int? week = null, CancellationToken token = default)
+        {
+            var url = $"/games?year={year}&seasonType=both";
+            if (week.HasValue)
+                url += $"&week={week.Value}";
+
+            var response = await CfbdClient.GetAsync(url, token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdGameV2Dto>>(cancellationToken: token) ?? [];
+
+            var games = dtos.Select(d => new Games
+            {
+                GameId         = d.Id,
+                Year           = d.Season,
+                Week           = d.Week,
+                SeasonType     = d.SeasonType,
+                GameDate       = d.StartDate != null
+                                 ? DateTime.TryParse(d.StartDate, out var dt)
+                                   ? dt.ToString("MM/dd/yyyy") : d.StartDate
+                                 : null,
+                GameDay        = d.StartDate != null && DateTime.TryParse(d.StartDate, out var gd)
+                                 ? gd.DayOfWeek.ToString()[..3].ToUpper() : null,
+                HomeId         = d.HomeId,
+                HomeName       = d.HomeTeam,
+                HomePoints     = d.HomePoints,
+                AwayId         = d.AwayId,
+                AwayName       = d.AwayTeam,
+                AwayPoints     = d.AwayPoints,
+                NeutralSite    = d.NeutralSite,
+                ConferenceGame = d.ConferenceGame,
+                Attendance     = d.Attendance,
+                Venue          = d.Venue
+            }).ToList();
+
+            await _uow.GamesV2.UpsertRangeAsync(games, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadGamesAsync: upserted {games.Count} games for {year}" +
+                              (week.HasValue ? $" week {week}" : " (full season)"));
+            return games.Count;
+        }
+
+        /// <summary>
+        /// Fetches Vegas lines for a given year and week from CFBD.
+        /// Deletes existing lines for each game before inserting fresh ones
+        /// so each weekly refresh gets clean data.
+        /// </summary>
+        public async Task<int> LoadLinesAsync(int year, int week, CancellationToken token = default)
+        {
+            var url = $"/lines?year={year}&week={week}&seasonType=both";
+
+            var response = await CfbdClient.GetAsync(url, token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdLinesGameDto>>(cancellationToken: token) ?? [];
+
+            var allLines = new List<Lines>();
+
+            foreach (var gameDto in dtos)
+            {
+                // Delete existing lines for this game so refresh is always clean
+                await _uow.Lines.DeleteByGameIdAsync(gameDto.Id, token);
+
+                foreach (var line in gameDto.Lines)
+                {
+                    // Normalize provider name — handle "Draft Kings" / "DraftKings" typo
+                    var provider = line.Provider.Replace(" ", string.Empty);
+
+                    allLines.Add(new Lines
+                    {
+                        GameId          = gameDto.Id,
+                        Provider        = provider,
+                        Spread          = line.Spread,
+                        SpreadOpen      = line.SpreadOpen,
+                        FormattedSpread = line.FormattedSpread,
+                        OverUnder       = line.OverUnder,
+                        OverUnderOpen   = line.OverUnderOpen,
+                        HomeMoneyline   = line.HomeMoneyline,
+                        AwayMoneyline   = line.AwayMoneyline
+                    });
+                }
+            }
+
+            await _uow.Lines.AddRangeAsync(allLines, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadLinesAsync: inserted {allLines.Count} lines across {dtos.Count} games for {year} week {week}");
+            return allLines.Count;
+        }
+
+        /// <summary>
+        /// Sunday / Wednesday refresh — loads games and lines for the given week.
+        /// Conferences and Teams are stable enough to load on demand or at season start.
+        /// </summary>
+        public async Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
+        {
+            var gamesLoaded = await LoadGamesAsync(year, week, token);
+            var linesLoaded = await LoadLinesAsync(year, week, token);
+            Console.WriteLine($"WeeklyRefreshAsync: {year} week {week} — {gamesLoaded} games, {linesLoaded} lines");
+            return gamesLoaded + linesLoaded;
+        }
+
+        #endregion
+
+        #region Legacy — Original load methods (keep until V2 is validated)
+
         public async Task<List<Game>> ExtractGameDataHistoryAsync(int? year)
         {
             var gameDataList = new List<Game>();
@@ -59,10 +308,6 @@ namespace SaturdayPulse.Services
             return gameDataList;
         }
 
-        /// <summary>
-        /// Scrapes a single year's schedule page. Takes a team name dictionary instead of
-        /// a raw context so it remains stateless and safe for parallel execution.
-        /// </summary>
         private static async Task<List<Game>> ExtractGameDataForSingleYearAsync(
             HttpClient httpClient,
             string url,
@@ -232,11 +477,6 @@ namespace SaturdayPulse.Services
             }
         }
 
-
-        /// <summary>
-        /// Fetches a full season's games from CFBD and maps them to the internal Game model.
-        /// teamsById is used as a fallback when name matching fails.
-        /// </summary>
         private static async Task<List<Game>> FetchGameDataForYearAsync(
             HttpClient httpClient,
             int year,
@@ -257,7 +497,6 @@ namespace SaturdayPulse.Services
 
                 foreach (var g in apiGames)
                 {
-                    // Skip unplayed games
                     if (!g.Completed || g.HomePoints is null || g.AwayPoints is null)
                         continue;
 
@@ -269,7 +508,6 @@ namespace SaturdayPulse.Services
                     int winnerCfbdId = homeWon ? g.HomeId : g.AwayId;
                     int loserCfbdId = homeWon ? g.AwayId : g.HomeId;
 
-                    // Name match first, CFBD id fallback
                     var winnerId = teamsByName.TryGetValue(winnerName, out var wt) ? wt.TeamID
                                  : teamsById.TryGetValue(winnerCfbdId, out var wt2) ? wt2.TeamID
                                  : -1;
@@ -278,20 +516,19 @@ namespace SaturdayPulse.Services
                                  : teamsById.TryGetValue(loserCfbdId, out var lt2) ? lt2.TeamID
                                  : -1;
 
-                    // 'W' = winner at home, 'L' = winner away, 'N' = neutral
                     char location = g.NeutralSite ? 'N' : homeWon ? 'W' : 'L';
 
                     gameDataList.Add(new Game
                     {
-                        Year = year,
-                        Week = g.Week,
-                        WinnerId = winnerId,
+                        Year       = year,
+                        Week       = g.Week,
+                        WinnerId   = winnerId,
                         WinnerName = winnerName,
-                        WPoints = winnerPoints,
-                        Location = location,
-                        LoserId = loserId,
-                        LoserName = loserName,
-                        LPoints = loserPoints
+                        WPoints    = winnerPoints,
+                        Location   = location,
+                        LoserId    = loserId,
+                        LoserName  = loserName,
+                        LPoints    = loserPoints
                     });
                 }
 
@@ -305,6 +542,7 @@ namespace SaturdayPulse.Services
 
             return gameDataList;
         }
+
         private static void UpdateGameProperties(Game dbGame, Game game)
         {
             dbGame.WPoints = game.WPoints;
@@ -539,5 +777,7 @@ namespace SaturdayPulse.Services
 
         Task<int> IGameDataService.LoadTeamDataFromFile()
             => throw new NotImplementedException();
+
+        #endregion
     }
 }

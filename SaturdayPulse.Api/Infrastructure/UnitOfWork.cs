@@ -6,25 +6,40 @@ using SaturdayPulse.Repositories.Interfaces;
 namespace SaturdayPulse.Infrastructure
 {
     /// <summary>
-    /// Wraps the request-scoped NCAAContext. All four repositories share the
+    /// Wraps the request-scoped NCAAContext. All repositories share the
     /// same instance — no secondary connections, no factory calls mid-pipeline.
     /// </summary>
     public class UnitOfWork : IUnitOfWork
     {
         private readonly NCAAContext _context;
 
+        // ── Legacy repositories ───────────────────────────────────────────────
         public ITeamRepository       Teams       { get; }
         public ITeamRecordRepository TeamRecords { get; }
         public IGameRepository       Games       { get; }
         public ILookupRepository     Lookups     { get; }
-        
+
+        // ── CFBD V2 repositories ──────────────────────────────────────────────
+        public IConferenceRepository Conferences { get; }
+        public ITeamsRepository      TeamsV2     { get; }
+        public IGamesRepository      GamesV2     { get; }
+        public ILinesRepository      Lines       { get; }
+
         public UnitOfWork(NCAAContext context)
         {
             _context    = context;
+
+            // Legacy
             Teams       = new TeamRepository(_context);
             TeamRecords = new TeamRecordRepository(_context);
             Games       = new GameRepository(_context);
             Lookups     = new LookupRepository(_context);
+
+            // CFBD V2
+            Conferences = new ConferenceRepository(_context);
+            TeamsV2     = new TeamsRepository(_context);
+            GamesV2     = new GamesRepository(_context);
+            Lines       = new LinesRepository(_context);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken token = default)
