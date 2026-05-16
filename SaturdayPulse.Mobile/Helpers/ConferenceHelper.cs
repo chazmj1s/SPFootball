@@ -10,8 +10,6 @@ namespace SaturdayPulse.Helpers
         // These must match the ConferenceAbbr values returned by the /teams endpoint.
         public static readonly IReadOnlyList<(string Display, string Abbr)> OrderedConferences =
         [
-            ("My Games",    "My Games"),
-            ("My Teams",    "My Teams"),
             // P4
             ("ACC",          "ACC"),
             ("Big 12",       "Big 12"),

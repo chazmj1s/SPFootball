@@ -36,7 +36,7 @@ namespace SaturdayPulse.ViewModels
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var options = new List<string> { "All", "My Games", "My Teams", "P4", "G5" };
+                var options = new List<string> { "All", "P4", "G5" };
                 var result  = await Shell.Current.DisplayActionSheet(
                     "Filter", "Cancel", null, options.ToArray());
                 if (result != null && result != "Cancel")
