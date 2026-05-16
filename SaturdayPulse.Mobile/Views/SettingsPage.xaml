@@ -249,7 +249,7 @@
                                            HorizontalOptions="Center" Padding="20" />
                                 </BindableLayout.EmptyView>
                                 <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="models:RivalryInfo">
+                                    <DataTemplate>
                                         <VerticalStackLayout Spacing="0">
 
                                             <!-- Rivalry header: name + tier badge + star -->
