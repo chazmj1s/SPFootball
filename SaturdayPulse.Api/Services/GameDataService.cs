@@ -43,6 +43,102 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// Backfills TeamsConferenceHistory by replaying /teams?year={year} for each year
+        /// in the range and recording conference changes per team.
+        ///
+        /// Algorithm per team per year:
+        ///   - Find the open row (EndYear == null) for this team
+        ///   - If conference unchanged → do nothing
+        ///   - If conference changed → close the open row (EndYear = year - 1),
+        ///     open a new row (StartYear = year, EndYear = null)
+        ///   - If no row exists → open a new row
+        ///
+        /// Safe to re-run — will not duplicate rows, only fills gaps.
+        /// Example: POST /api/developer/buildTeamsConferenceHistory?startYear=2000
+        /// </summary>
+        public async Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+            var changes = 0;
+
+            // Build conference name → ConferenceId lookup once
+            var confByName = (await _uow.Conferences.GetAllAsync(token))
+                .ToDictionary(c => c.Name, c => c.ConferenceId, StringComparer.OrdinalIgnoreCase);
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                // Fetch teams for this year from CFBD
+                var response = await CfbdClient.GetAsync($"/teams?year={year}", token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"BuildTeamsConferenceHistoryAsync: CFBD returned {response.StatusCode} for {year}, skipping");
+                    await Task.Delay(300, token);
+                    continue;
+                }
+
+                var dtos = await response.Content
+                    .ReadFromJsonAsync<List<CfbdTeamV2Dto>>(cancellationToken: token) ?? [];
+
+                // Filter to FBS — log any with unrecognized conference names
+                var fbsDtos = dtos
+                    .Where(d => string.Equals(d.Classification, "fbs", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                foreach (var dto in fbsDtos.Where(d => d.Conference == null || !confByName.ContainsKey(d.Conference)))
+                    Console.WriteLine($"BuildTeamsConferenceHistoryAsync: unmatched conference '{dto.Conference ?? "null"}' for team '{dto.School}' in {year}");
+
+                fbsDtos = fbsDtos
+                    .Where(d => d.Conference != null && confByName.ContainsKey(d.Conference))
+                    .ToList();
+
+                foreach (var dto in fbsDtos)
+                {
+                    var confId = confByName[dto.Conference!];
+
+                    // Load this team's full history to find the open row
+                    var history = await _uow.TeamsConferenceHistory.GetByTeamIdAsync(dto.Id, token);
+                    var openRow = history.FirstOrDefault(h => h.EndYear == null);
+
+                    if (openRow == null)
+                    {
+                        // No history at all — open a new row
+                        await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
+                        {
+                            TeamId = dto.Id,
+                            ConferenceId = confId,
+                            StartYear = year,
+                            EndYear = null
+                        }, token);
+                        changes++;
+                    }
+                    else if (openRow.ConferenceId != confId)
+                    {
+                        // Conference changed — close the old row, open a new one
+                        openRow.EndYear = year - 1;
+                        await _uow.TeamsConferenceHistory.UpdateAsync(openRow, token);
+
+                        await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
+                        {
+                            TeamId = dto.Id,
+                            ConferenceId = confId,
+                            StartYear = year,
+                            EndYear = null
+                        }, token);
+                        changes++;
+                    }
+                    // else: same conference, nothing to do
+                }
+
+                Console.WriteLine($"BuildTeamsConferenceHistoryAsync: completed {year}, {fbsDtos.Count} teams processed");
+                await Task.Delay(300, token);
+            }
+
+            Console.WriteLine($"BuildTeamsConferenceHistoryAsync: {changes} conference changes recorded from {startYear} to {currentYear}");
+            return changes;
+        }
+
+
+        /// <summary>
         /// Bulk load — fetches all games for every year from startYear to current.
         /// Sequential with 300ms delay per CFBD request guidelines.
         /// </summary>
@@ -93,6 +189,9 @@ namespace SaturdayPulse.Services
             Console.WriteLine($"LoadLinesBulkAsync: {total} total lines from {startYear} to {currentYear}");
             return total;
         }
+
+
+
         /// <summary>
         /// Fetches all conferences from CFBD and upserts into Conferences table.
         /// </summary>

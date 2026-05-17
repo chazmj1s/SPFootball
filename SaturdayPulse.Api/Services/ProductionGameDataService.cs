@@ -10,7 +10,7 @@ namespace SaturdayPulse.Services
     /// Encapsulates all data-access and business logic for the production read-only
     /// endpoints. Pass 2 complete: all EF queries moved to repositories.
     /// </summary>
-    public class ProductionGameDataService
+    public partial class ProductionGameDataService
     {
         private readonly IUnitOfWork               _uow;
         private readonly GamePredictionService     _predictionService;

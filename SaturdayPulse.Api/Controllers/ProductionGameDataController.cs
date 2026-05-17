@@ -430,9 +430,94 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        /// <summary>
+        /// V2: rivalry history from Games table (CFBD-sourced).
+        /// Example: GET /api/productiongamedata/rivalryhistory/v2?team1Id=12&team2Id=47&years=10
+        /// </summary>
+        [HttpGet("rivalryhistory/v2")]
+        public async Task<IActionResult> GetRivalryHistoryV2(
+            [FromQuery] int team1Id,
+            [FromQuery] int team2Id,
+            [FromQuery] int years = 10,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetRivalryHistoryV2Async(team1Id, team2Id, years, token);
+                return Ok(new
+                {
+                    Team1Id = result.Team1Id,
+                    Team1Name = result.Team1Name,
+                    Team1ShortName = result.Team1ShortName,
+                    Team2Id = result.Team2Id,
+                    Team2Name = result.Team2Name,
+                    Team2ShortName = result.Team2ShortName,
+                    RivalryName = result.RivalryName,
+                    RivalryTier = result.RivalryTier,
+                    GamesPlayed = result.GamesPlayed,
+                    AvgMargin = result.AvgMargin,
+                    UpsetRate = result.UpsetRate,
+                    History = result.History,
+                    CurrentYearProjection = result.CurrentYearProjection
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 rivalry history for {T1} vs {T2}", team1Id, team2Id);
+                return StatusCode(500, "An error occurred while retrieving rivalry history.");
+            }
+        }
+
         #endregion
 
         #region Conference Standings and Projections
+
+        /// <summary>
+        /// V2: Championship qualifiers from Games + TeamsConferenceHistory tables.
+        /// Example: GET /api/productiongamedata/championship-qualifiers/v2?year=2025
+        /// </summary>
+        [HttpGet("championship-qualifiers/v2")]
+        public async Task<IActionResult> GetChampionshipQualifiersV2(
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetChampionshipQualifiersV2Async(year, token);
+                return Ok(result.Conferences);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing V2 championship qualifiers");
+                return StatusCode(500, "An error occurred computing championship qualifiers.");
+            }
+        }
+
+        /// <summary>
+        /// V2: Projected championship qualifiers from Games + TeamsConferenceHistory tables.
+        /// Example: GET /api/productiongamedata/projected-championship-qualifiers/v2?year=2025&throughWeek=8
+        /// </summary>
+        [HttpGet("projected-championship-qualifiers/v2")]
+        public async Task<IActionResult> GetProjectedChampionshipQualifiersV2(
+            [FromQuery] int? year,
+            [FromQuery] int? throughWeek,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetProjectedChampionshipQualifiersV2Async(year, throughWeek, token);
+                return Ok(result.Conferences);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing V2 projected championship qualifiers");
+                return StatusCode(500, "An error occurred computing projected championship qualifiers.");
+            }
+        }
 
         /// <summary>
         /// Returns the projected conference championship game qualifiers for all FBS conferences.

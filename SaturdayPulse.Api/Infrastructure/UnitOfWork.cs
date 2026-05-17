@@ -27,6 +27,7 @@ namespace SaturdayPulse.Infrastructure
         public ILinesRepository      Lines       { get; }
         public IProjectionRepository Projections { get; }
         public IWeeklyRankingsRepository WeeklyRankings { get; }
+        public ITeamsConferenceHistoryRepository TeamsConferenceHistory { get; }
 
         public UnitOfWork(NCAAContext context)
         {
@@ -45,6 +46,7 @@ namespace SaturdayPulse.Infrastructure
             Lines       = new LinesRepository(_context);
             Projections = new ProjectionRepository(_context);
             WeeklyRankings = new WeeklyRankingsRepository(_context);
+            TeamsConferenceHistory = new TeamsConferenceHistoryRepository(_context);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken token = default)

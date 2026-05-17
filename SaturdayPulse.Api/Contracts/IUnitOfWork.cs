@@ -18,6 +18,7 @@ namespace SaturdayPulse.Contracts
         ILinesRepository      Lines       { get; }
         IProjectionRepository Projections { get; }
         IWeeklyRankingsRepository WeeklyRankings { get; }
+        ITeamsConferenceHistoryRepository TeamsConferenceHistory { get; }
 
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }

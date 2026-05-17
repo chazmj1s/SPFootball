@@ -36,7 +36,16 @@ namespace SaturdayPulse.Repositories.Implementations
                 existing.Venue          = game.Venue;
             }
         }
-
+        public async Task<List<Games>> GetRivalryHistoryAsync(int team1Id, int team2Id, int cutoffYear, CancellationToken token = default)
+        {
+            return await _context.Games
+                .Where(g => g.Year >= cutoffYear &&
+                            ((g.HomeId == team1Id && g.AwayId == team2Id) ||
+                             (g.HomeId == team2Id && g.AwayId == team1Id)))
+                .OrderByDescending(g => g.Year)
+                .ThenBy(g => g.Week)
+                .ToListAsync(token);
+        }
         public async Task UpsertRangeAsync(IEnumerable<Games> games, CancellationToken token = default)
         {
             var incoming    = games.ToList();

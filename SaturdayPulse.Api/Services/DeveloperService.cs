@@ -137,6 +137,8 @@ namespace SaturdayPulse.Services
 
         public Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default)
             => _gameDataService.LoadLinesBulkAsync(startYear, token);
+        public Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
+    => _gameDataService.BuildTeamsConferenceHistoryAsync(startYear, token);
 
         public Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
             => _gameDataService.WeeklyRefreshAsync(year, week, token);

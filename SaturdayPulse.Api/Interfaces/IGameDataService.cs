@@ -27,5 +27,6 @@ namespace SaturdayPulse.Interfaces
         Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default);
         Task<int> LoadGamesBulkAsync(int startYear, CancellationToken token = default);
         Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default);
+        Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default);
     }
 }

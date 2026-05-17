@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 
 namespace SaturdayPulse.Controllers
@@ -329,6 +330,15 @@ namespace SaturdayPulse.Controllers
                 logger.LogError(ex, "Error bulk loading lines from CFBD starting year={StartYear}", startYear);
                 return StatusCode(500, "An error occurred during bulk lines load.");
             }
+        }
+
+        [HttpPost("buildTeamsConferenceHistory")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> BuildTeamsConferenceHistory(
+                [FromQuery] int startYear, CancellationToken token = default)
+        {
+            var result = await developerService.BuildTeamsConferenceHistoryAsync(startYear, token);
+            return Ok(new { message = $"{result} conference changes recorded from {startYear}" });
         }
 
         /// <summary>
