@@ -48,7 +48,8 @@ namespace SaturdayPulse.Services
             _logger                   = logger;
         }
 
-        // ── Data loading ──────────────────────────────────────────────────────────
+        // ── Legacy Data Loading ───────────────────────────────────────────────────
+        // TODO: Remove this entire section once CFBD V2 load is validated.
 
         public Task<List<Game>> ExtractGameDataHistoryAsync(int? startYear)
             => _gameDataService.ExtractGameDataHistoryAsync(startYear);
@@ -108,7 +109,43 @@ namespace SaturdayPulse.Services
             return new AvailableFilesResult(dataDir, files.Count, files);
         }
 
-        // ── Rolling averages ──────────────────────────────────────────────────────
+        // ── CFBD V2 — Load ────────────────────────────────────────────────────────
+        // NOTE: These methods call through to GameDataService. If IGameDataService does not yet
+        // declare these members, cast to GameDataService directly (or add them to the interface).
+
+        public Task<int> LoadConferencesAsync(CancellationToken token = default)
+            => _gameDataService.LoadConferencesAsync(token);
+
+        public Task<int> LoadTeamsAsync(int? year, CancellationToken token = default)
+            => _gameDataService.LoadTeamsAsync(year, token);
+
+        public Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.LoadTeamsBulkAsync(startYear, token);
+
+        public Task<int> LoadGamesAsync(int year, int? week, CancellationToken token = default)
+            => _gameDataService.LoadGamesAsync(year, week, token);
+
+        public Task<int> LoadGamesBulkAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.LoadGamesBulkAsync(startYear, token);
+
+        public Task<int> LoadLinesAsync(int year, int week, CancellationToken token = default)
+            => _gameDataService.LoadLinesAsync(year, week, token);
+
+        public Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.LoadLinesBulkAsync(startYear, token);
+
+        public Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
+            => _gameDataService.WeeklyRefreshAsync(year, week, token);
+
+        // ── CFBD V2 — Preview (non-destructive) ──────────────────────────────────
+
+        public Task<List<CfbdTeamDto>> PreviewCfbdTeamsAsync(int? year, CancellationToken token)
+            => _gameDataService.PreviewCfbdTeamsAsync(year, token);
+
+        public Task<List<CfbdGameDto>> PreviewCfbdGamesAsync(int year, int? week, CancellationToken token)
+            => _gameDataService.PreviewCfbdGamesAsync(year, week, token);
+
+        // ── Rolling Averages ──────────────────────────────────────────────────────
 
         public async Task<BackfillResult> BackfillRollingAveragesAsync(int? startYear, CancellationToken token)
         {
@@ -146,14 +183,7 @@ namespace SaturdayPulse.Services
             };
         }
 
-        // CFBd
-        public Task<List<CfbdTeamDto>> PreviewCfbdTeamsAsync(int? year, CancellationToken token)
-    => _gameDataService.PreviewCfbdTeamsAsync(year, token);
-
-        public Task<List<CfbdGameDto>> PreviewCfbdGamesAsync(int year, int? week, CancellationToken token)
-            => _gameDataService.PreviewCfbdGamesAsync(year, week, token);
-
-        // ── Team records and metrics ──────────────────────────────────────────────
+        // ── Team Records and Metrics ──────────────────────────────────────────────
 
         public Task UpdateTeamRecordsAsync(int? year)
             => _gameDataService.UpdateTeamRecordsAsync(year);
@@ -193,7 +223,7 @@ namespace SaturdayPulse.Services
                 years.Any() ? (int?)years.First() : null);
         }
 
-        // ── Score deltas and rivalries ────────────────────────────────────────────
+        // ── Score Deltas and Rivalries ────────────────────────────────────────────
 
         public async Task<RecalculateScoreDeltasResult> RecalculateScoreDeltasAsync(CancellationToken token)
         {
@@ -224,7 +254,7 @@ namespace SaturdayPulse.Services
                 "Matchup-specific variance will now be used in predictions");
         }
 
-        // ── Analytics and diagnostics ─────────────────────────────────────────────
+        // ── Analytics and Diagnostics ─────────────────────────────────────────────
 
         public async Task<AnalyticsResult> GetAnalyticsAsync(int? startYear, int? endYear, CancellationToken token)
         {
@@ -266,7 +296,7 @@ namespace SaturdayPulse.Services
         public async Task<TeamGameAnalysisResult> AnalyzeTeamGamesAsync(int teamId, int? year, CancellationToken token)
         {
             var targetYear     = year ?? DateTime.Now.Year;
-            var allGames       = await _uow.Games.GetByYearAsync(targetYear, token);
+            var allGames       = await _uow.Game.GetByYearAsync(targetYear, token);
             var teamGames      = allGames
                 .Where(g => g.WinnerId == teamId || g.LoserId == teamId)
                 .OrderBy(g => g.Week).ToList();
@@ -370,7 +400,7 @@ namespace SaturdayPulse.Services
         public async Task<DiagnosticScoreDeltaResult> DiagnosticScoreDeltasAsync(int? year, CancellationToken token)
         {
             var targetYear  = year ?? DateTime.Now.Year;
-            var games       = await _uow.Games.GetByYearAsync(targetYear, token);
+            var games       = await _uow.Game.GetByYearAsync(targetYear, token);
             var teamRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
             var recordById  = teamRecords.ToDictionary(tr => tr.TeamID);
 
@@ -404,12 +434,12 @@ namespace SaturdayPulse.Services
                 results.Take(20));
         }
 
-        // ── Weekly rankings ───────────────────────────────────────────────────────
+        // ── Weekly Rankings ───────────────────────────────────────────────────────
 
         public async Task<WeeklyRankingsBackfillResult> BackfillWeeklyRankingsAsync(int? startYear, CancellationToken token)
         {
             var fromYear = startYear ?? 1960;
-            var allGames = await _uow.Games.GetPlayedGamesSinceYearAsync(fromYear, token);
+            var allGames = await _uow.Game.GetPlayedGamesSinceYearAsync(fromYear, token);
 
             var yearWeeks = allGames
                 .Select(g => new { g.Year, g.Week })

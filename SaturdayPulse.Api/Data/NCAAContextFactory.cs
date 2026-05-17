@@ -19,7 +19,7 @@ namespace SaturdayPulse.Data
                 .AddJsonFile("appsettings.json")
                 .Build();
 
-            optionsBuilder.UseSqlServer(
+            optionsBuilder.UseSqlite(
                 configuration.GetConnectionString("DefaultConnection"));
 
             return new NCAAContext(optionsBuilder.Options);

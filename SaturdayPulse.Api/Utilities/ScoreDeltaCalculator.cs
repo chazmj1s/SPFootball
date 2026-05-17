@@ -8,10 +8,10 @@ namespace SaturdayPulse.Utilities
         public async Task<List<AvgScoreDeltaStats>> CalculateAvgScoreDeltasAsync(CancellationToken token = default)
         {
             // Load all played games and team records into memory
-            var games      = await _uow.Games.GetPlayedGamesSinceYearAsync(1, token);
+            var games      = await _uow.Game.GetPlayedGamesSinceYearAsync(1, token);
             var allRecords = await _uow.TeamRecords.GetHistoricalAsync(1, 9999, token);
 
-            // Build win percentage lookup: (teamId, year) → winPct
+            // Build win percentage lookup: (teamId, year) → record
             var recordLookup = allRecords
                 .GroupBy(r => (r.TeamID, (int)r.Year))
                 .ToDictionary(g => g.Key, g => g.First());
@@ -21,7 +21,7 @@ namespace SaturdayPulse.Utilities
                 .Select(g =>
                 {
                     recordLookup.TryGetValue((g.WinnerId, g.Year), out var winnerRecord);
-                    recordLookup.TryGetValue((g.LoserId,  g.Year), out var loserRecord);
+                    recordLookup.TryGetValue((g.LoserId, g.Year), out var loserRecord);
 
                     var winnerGames = winnerRecord != null ? winnerRecord.Wins + winnerRecord.Losses : 0;
                     var loserGames  = loserRecord  != null ? loserRecord.Wins  + loserRecord.Losses  : 0;
@@ -44,8 +44,8 @@ namespace SaturdayPulse.Utilities
             var normalizedData = cteData
                 .Select(x => new
                 {
-                    WinPct1      = Math.Round(x.WinnerWinPct * 20m, MidpointRounding.AwayFromZero) / 20m,
-                    WinPct2      = Math.Round(x.LoserWinPct  * 20m, MidpointRounding.AwayFromZero) / 20m,
+                    WinPct1 = Math.Round(x.WinnerWinPct * 20m, MidpointRounding.AwayFromZero) / 20m,
+                    WinPct2 = Math.Round(x.LoserWinPct  * 20m, MidpointRounding.AwayFromZero) / 20m,
                     x.WinnerPoints,
                     x.LoserPoints
                 })
@@ -95,37 +95,22 @@ namespace SaturdayPulse.Utilities
         }
 
         /// <summary>
-        /// Upserts calculated statistics into the AvgScoreDeltas table.
+        /// Clears and repopulates the AvgScoreDeltas table.
         /// </summary>
         public async Task UpdateAvgScoreDeltasTableAsync(CancellationToken token = default)
         {
-            var stats    = await CalculateAvgScoreDeltasAsync(token);
-            var existing = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
+            var stats = await CalculateAvgScoreDeltasAsync(token);
 
-            foreach (var stat in stats)
+            await _uow.Lookups.ClearAvgScoreDeltasAsync(token);
+
+            await _uow.Lookups.AddAvgScoreDeltasAsync(stats.Select(stat => new AvgScoreDelta
             {
-                var existingRecord = existing.FirstOrDefault(e =>
-                    e.Team1WinPct == stat.Team1WinPct &&
-                    e.Team2WinPct == stat.Team2WinPct);
-
-                if (existingRecord != null)
-                {
-                    existingRecord.AverageScoreDelta = (decimal)Math.Round(stat.AvgDelta, 2);
-                    existingRecord.StDevP            = (decimal)Math.Round(stat.StdDevP, 8);
-                    existingRecord.SampleSize        = stat.SampleSize;
-                }
-                else
-                {
-                    existing.Add(new AvgScoreDelta
-                    {
-                        Team1WinPct       = stat.Team1WinPct,
-                        Team2WinPct       = stat.Team2WinPct,
-                        AverageScoreDelta = (decimal)Math.Round(stat.AvgDelta, 2),
-                        StDevP            = (decimal)Math.Round(stat.StdDevP, 8),
-                        SampleSize        = stat.SampleSize
-                    });
-                }
-            }
+                Team1WinPct       = stat.Team1WinPct,
+                Team2WinPct       = stat.Team2WinPct,
+                AverageScoreDelta = (decimal)Math.Round(stat.AvgDelta, 2),
+                StDevP            = (decimal)Math.Round(stat.StdDevP, 8),
+                SampleSize        = stat.SampleSize
+            }), token);
 
             await _uow.SaveChangesAsync(token);
         }

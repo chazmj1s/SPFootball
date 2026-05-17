@@ -49,14 +49,14 @@ namespace SaturdayPulse.Services
 
         public async Task<DiagnosticInfo> GetDiagnosticAsync(CancellationToken token = default)
         {
-            var allTeams    = await _uow.Teams.GetAllAsync(token);
-            var allGames    = await _uow.Games.GetByYearAsync(DateTime.Now.Year, token);
+            var allTeams    = await _uow.Team.GetAllAsync(token);
+            var allGames    = await _uow.Game.GetByYearAsync(DateTime.Now.Year, token);
             var allRecords  = await _uow.TeamRecords.GetByYearAsync(DateTime.Now.Year, token);
 
             // For totals we need counts across all years — use lookup methods
             var totalTeams             = allTeams.Count;
             var yearRecords            = await _uow.TeamRecords.GetSinceYearWithTeamsAsync(1960, token);
-            var totalGames             = (await _uow.Games.GetPlayedGamesSinceYearAsync(1960, token)).Count;
+            var totalGames             = (await _uow.Game.GetPlayedGamesSinceYearAsync(1960, token)).Count;
             var totalRecords           = yearRecords.Count;
             var recordsWithPowerRating = yearRecords.Count(tr => tr.PowerRating.HasValue);
 
@@ -141,7 +141,7 @@ namespace SaturdayPulse.Services
         public async Task<TeamRollingAveragesResult> GetTeamRollingAveragesAsync(
             int teamId, int? startYear, CancellationToken token = default)
         {
-            var team = await _uow.Teams.GetByIdAsync(teamId, token)
+            var team = await _uow.Team.GetByIdAsync(teamId, token)
                        ?? throw new KeyNotFoundException($"Team {teamId} not found.");
 
             var allRecords = await _uow.TeamRecords.GetByTeamAllYearsAsync(teamId, token);
@@ -184,7 +184,7 @@ namespace SaturdayPulse.Services
 
             matchups = matchups.OrderByDescending(m => m.GamesPlayed).ToList();
 
-            var teamDict = await _uow.Teams.GetTeamDictionaryAsync(token);
+            var teamDict = await _uow.Team.GetTeamDictionaryAsync(token);
             var asdList  = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var avgStDev = asdList.Any() ? asdList.Average(a => (double)a.StDevP) : 15.0;
 
@@ -225,7 +225,7 @@ namespace SaturdayPulse.Services
                         $"No weekly rankings found for year {targetYear} week {throughWeek}.");
 
                 //Team data
-                var teamDict = await _uow.Teams.GetTeamDictionaryAsync(token);
+                var teamDict = await _uow.Team.GetTeamDictionaryAsync(token);
 
                 //Rolling Averages
                 var currentRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
@@ -353,12 +353,12 @@ namespace SaturdayPulse.Services
         {
             var targetYear = year ?? DateTime.Now.Year;
 
-            var games = await _uow.Games.GetByYearAsync(targetYear, token);
+            var games = await _uow.Game.GetByYearAsync(targetYear, token);
             games = games.OrderBy(g => g.Week).ToList();
 
             if (games.Count == 0) return new ScheduleResult(Array.Empty<object>());
 
-            var teams          = await _uow.Teams.GetTeamDictionaryAsync(token);
+            var teams          = await _uow.Team.GetTeamDictionaryAsync(token);
             var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
 
             var results = games.Select(g =>
@@ -400,7 +400,7 @@ namespace SaturdayPulse.Services
 
         public async Task<TeamsResult> GetTeamsAsync(CancellationToken token = default)
         {
-            var teams = await _uow.Teams.GetAllAsync(token);
+            var teams = await _uow.Team.GetAllAsync(token);
             var result = teams.Select(t => (object)new
             {
                 t.TeamID, t.TeamName, ShortName = t.ShortName ?? t.TeamName,
@@ -419,7 +419,7 @@ namespace SaturdayPulse.Services
                 .OrderBy(m => m.RivalryTier).ThenBy(m => m.RivalryName)
                 .ToList();
 
-            var teams = await _uow.Teams.GetTeamDictionaryAsync(token);
+            var teams = await _uow.Team.GetTeamDictionaryAsync(token);
 
             var result = rivalries.Select(r =>
             {
@@ -440,7 +440,7 @@ namespace SaturdayPulse.Services
         public async Task<TeamHistoryResult> GetTeamHistoryAsync(
             int teamId, int years, CancellationToken token = default)
         {
-            var team = await _uow.Teams.GetByIdAsync(teamId, token)
+            var team = await _uow.Team.GetByIdAsync(teamId, token)
                        ?? throw new KeyNotFoundException($"Team {teamId} not found.");
 
             var cutoffYear = (short)(DateTime.Now.Year - years);
@@ -471,13 +471,13 @@ namespace SaturdayPulse.Services
         public async Task<RivalryHistoryResult> GetRivalryHistoryAsync(
             int team1Id, int team2Id, int years, CancellationToken token = default)
         {
-            var team1 = await _uow.Teams.GetByIdAsync(team1Id, token)
+            var team1 = await _uow.Team.GetByIdAsync(team1Id, token)
                         ?? throw new KeyNotFoundException($"Team {team1Id} not found.");
-            var team2 = await _uow.Teams.GetByIdAsync(team2Id, token)
+            var team2 = await _uow.Team.GetByIdAsync(team2Id, token)
                         ?? throw new KeyNotFoundException($"Team {team2Id} not found.");
 
             var cutoffYear     = DateTime.Now.Year - years;
-            var games          = await _uow.Games.GetRivalryHistoryAsync(team1Id, team2Id, cutoffYear, token);
+            var games          = await _uow.Game.GetRivalryHistoryAsync(team1Id, team2Id, cutoffYear, token);
             var rivalry        = await _uow.Lookups.GetMatchupHistoryAsync(team1Id, team2Id, token);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
 
@@ -564,10 +564,10 @@ namespace SaturdayPulse.Services
             int? year, int? throughWeek, string? conference, CancellationToken token = default)
         {
             var targetYear = year ?? DateTime.Now.Year;
-            var teams      = await _uow.Teams.GetTeamDictionaryAsync(token);
+            var teams      = await _uow.Team.GetTeamDictionaryAsync(token);
             var fbsTeamIds = teams.Values.Where(t => t.Division == "FBS").Select(t => t.TeamID).ToHashSet();
 
-            var allGames = await _uow.Games.GetByYearAsync(targetYear, token);
+            var allGames = await _uow.Game.GetByYearAsync(targetYear, token);
             allGames = allGames.Where(g => g.Week < 16).ToList();
 
             bool IsConfGame(Game g) =>
@@ -707,12 +707,12 @@ namespace SaturdayPulse.Services
         private async Task<Dictionary<string, List<ConferenceStanding>>> BuildConferenceStandingsAsync(
             int year, CancellationToken token)
         {
-            var teams      = await _uow.Teams.GetTeamDictionaryAsync(token);
+            var teams      = await _uow.Team.GetTeamDictionaryAsync(token);
             var records    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordById = records.ToDictionary(tr => tr.TeamID);
             var fbsTeamIds = teams.Values.Where(t => t.Division == "FBS").Select(t => t.TeamID).ToHashSet();
 
-            var allGames  = await _uow.Games.GetByYearUpToWeekAsync(year, 15, token);
+            var allGames  = await _uow.Game.GetByYearUpToWeekAsync(year, 15, token);
             var confGames = allGames.Where(g =>
                 fbsTeamIds.Contains(g.WinnerId) && fbsTeamIds.Contains(g.LoserId) &&
                 teams.TryGetValue(g.WinnerId, out var w) && teams.TryGetValue(g.LoserId, out var l) &&
@@ -751,12 +751,12 @@ namespace SaturdayPulse.Services
         private async Task<Dictionary<string, List<ConferenceStanding>>> BuildProjectedConferenceStandingsAsync(
             int year, int? throughWeek, CancellationToken token)
         {
-            var teams      = await _uow.Teams.GetTeamDictionaryAsync(token);
+            var teams      = await _uow.Team.GetTeamDictionaryAsync(token);
             var records    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordById = records.ToDictionary(tr => tr.TeamID);
             var fbsTeamIds = teams.Values.Where(t => t.Division == "FBS").Select(t => t.TeamID).ToHashSet();
 
-            var allGames = await _uow.Games.GetByYearAsync(year, token);
+            var allGames = await _uow.Game.GetByYearAsync(year, token);
             allGames = allGames.Where(g => g.Week < 16).ToList();
 
             bool IsConfGame(Game g) =>

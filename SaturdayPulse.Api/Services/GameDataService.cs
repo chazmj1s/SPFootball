@@ -278,8 +278,8 @@ namespace SaturdayPulse.Services
             var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
             var getYear = year ?? currentYear;
 
-            var teamsByName = await _uow.Teams.GetTeamDictionaryByNameAsync();
-            var teamsById = (await _uow.Teams.GetTeamDictionaryAsync())
+            var teamsByName = await _uow.Team.GetTeamDictionaryByNameAsync();
+            var teamsById = (await _uow.Team.GetTeamDictionaryAsync())
                                   .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             while (getYear <= currentYear)
@@ -296,7 +296,7 @@ namespace SaturdayPulse.Services
             {
                 try
                 {
-                    await _uow.Games.AddRangeAsync(gameDataList);
+                    await _uow.Game.AddRangeAsync(gameDataList);
                     await _uow.SaveChangesAsync();
                 }
                 catch (Exception ex)
@@ -369,8 +369,8 @@ namespace SaturdayPulse.Services
             bool usedLocalFile = false;
             string? actualFileUsed = null;
 
-            var teamsByName = await _uow.Teams.GetTeamDictionaryByNameAsync(token);
-            var teamsById = (await _uow.Teams.GetTeamDictionaryAsync(token))
+            var teamsByName = await _uow.Team.GetTeamDictionaryByNameAsync(token);
+            var teamsById = (await _uow.Team.GetTeamDictionaryAsync(token))
                                   .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             try
@@ -403,7 +403,7 @@ namespace SaturdayPulse.Services
                 {
                     try
                     {
-                        var allTeams = await _uow.Teams.GetAllAsync(token);
+                        var allTeams = await _uow.Team.GetAllAsync(token);
                         scrapedGames = new List<Game>();
                         await foreach (var recordInfo in ReadRecordsFromFileAsync(fileToUse, token))
                         {
@@ -441,7 +441,7 @@ namespace SaturdayPulse.Services
                     return 0;
                 }
 
-                var existing = await _uow.Games.GetByYearAndWeekAsync(year, week, token);
+                var existing = await _uow.Game.GetByYearAndWeekAsync(year, week, token);
                 var existingDict = existing.ToDictionary(g => (g.WinnerId, g.LoserId));
 
                 int updated = 0, added = 0;
@@ -462,7 +462,7 @@ namespace SaturdayPulse.Services
                 }
 
                 if (toAdd.Count > 0)
-                    await _uow.Games.AddRangeAsync(toAdd, token);
+                    await _uow.Game.AddRangeAsync(toAdd, token);
 
                 await _uow.SaveChangesAsync(token);
 
@@ -629,7 +629,7 @@ namespace SaturdayPulse.Services
 
             try
             {
-                var allTeams  = await _uow.Teams.GetAllAsync(token);
+                var allTeams  = await _uow.Team.GetAllAsync(token);
                 var fileGames = new List<Game>();
 
                 await foreach (var recordInfo in ReadRecordsFromFileAsync(filePath, token))
@@ -644,7 +644,7 @@ namespace SaturdayPulse.Services
                     return 0;
                 }
 
-                var existing     = await _uow.Games.GetByYearAndWeekAsync(year, week, token);
+                var existing     = await _uow.Game.GetByYearAndWeekAsync(year, week, token);
                 var existingDict = existing.ToDictionary(g => (g.WinnerId, g.LoserId));
 
                 int updated = 0, added = 0;
@@ -665,7 +665,7 @@ namespace SaturdayPulse.Services
                 }
 
                 if (toAdd.Count > 0)
-                    await _uow.Games.AddRangeAsync(toAdd, token);
+                    await _uow.Game.AddRangeAsync(toAdd, token);
 
                 await _uow.SaveChangesAsync(token);
 
@@ -700,7 +700,7 @@ namespace SaturdayPulse.Services
             try
             {
                 var teamRecord = await _uow.TeamRecords.GetByTeamAndYearAsync(teamId, year, token);
-                var team       = await _uow.Teams.GetByIdAsync(teamId, token);
+                var team       = await _uow.Team.GetByIdAsync(teamId, token);
 
                 var summary = teamRecord != null && team != null
                     ? new TeamSeasonSummaryView
@@ -714,13 +714,13 @@ namespace SaturdayPulse.Services
                     }
                     : null;
 
-                var allGames  = await _uow.Games.GetByYearAsync(year, token);
+                var allGames  = await _uow.Game.GetByYearAsync(year, token);
                 var teamGames = allGames
                     .Where(g => g.WinnerId == teamId || g.LoserId == teamId)
                     .OrderBy(g => g.Week)
                     .ToList();
 
-                var allTeams = await _uow.Teams.GetTeamDictionaryAsync(token);
+                var allTeams = await _uow.Team.GetTeamDictionaryAsync(token);
 
                 var games = teamGames.Select(g =>
                 {

@@ -1,263 +1,339 @@
-TeamName,Division,Nickname
-Air Force,FBS,Falcons
-Akron,FBS,Zips
-Alabama,FBS,Crimson Tide
-Appalachian State,FBS,Mountaineers
-Arizona,FBS,Wildcats
-Arizona State,FBS,Sun Devils
-Arkansas,FBS,Razorbacks
-Arkansas State,FBS,Red Wolves
-Army,FBS,Black Knights
-Auburn,FBS,Tigers
-Ball State,FBS,Cardinals
-Baylor,FBS,Bears
-Boise State,FBS,Broncos
-Boston College,FBS,Eagles
-Bowling Green,FBS,Falcons
-Buffalo,FBS,Bulls
-BYU,FBS,Cougars
-California,FBS,Golden Bears
-Central Michigan,FBS,Chippewas
-Charlotte,FBS,49ers
-Cincinnati,FBS,Bearcats
-Clemson,FBS,Tigers
-Coastal Carolina,FBS,Chanticleers
-Colorado,FBS,Buffaloes
-Colorado State,FBS,Rams
-Delaware,FBS,Fightin' Blue Hens
-Duke,FBS,Blue Devils
-East Carolina,FBS,Pirates
-Eastern Michigan,FBS,Eagles
-FIU,FBS,Panthers
-Florida,FBS,Gators
-Florida Atlantic,FBS,Owls
-Florida State,FBS,Seminoles
-Fresno State,FBS,Bulldogs
-Georgia,FBS,Bulldogs
-Georgia Southern,FBS,Eagles
-Georgia State,FBS,Panthers
-Georgia Tech,FBS,Yellow Jackets
-Hawaii,FBS,Rainbow Warriors
-Houston,FBS,Cougars
-Illinois,FBS,Fighting Illini
-Indiana,FBS,Hoosiers
-Iowa,FBS,Hawkeyes
-Iowa State,FBS,Cyclones
-Jacksonville State,FBS,Gamecocks
-James Madison,FBS,Dukes
-Kansas,FBS,Jayhawks
-Kansas State,FBS,Wildcats
-Kennesaw State,FBS,Owls
-Kent State,FBS,Golden Flashes
-Kentucky,FBS,Wildcats
-Liberty,FBS,Flames
-Louisiana,FBS,Ragin' Cajuns
-Louisiana Tech,FBS,Bulldogs
-Louisville,FBS,Cardinals
-LSU,FBS,Tigers
-Marshall,FBS,Thundering Herd
-Maryland,FBS,Terrapins
-Memphis,FBS,Tigers
-Miami (FL),FBS,Hurricanes
-Miami (OH),FBS,RedHawks
-Michigan,FBS,Wolverines
-Michigan State,FBS,Spartans
-Middle Tennessee,FBS,Blue Raiders
-Minnesota,FBS,Golden Gophers
-Mississippi State,FBS,Bulldogs
-Missouri,FBS,Tigers
-Missouri State,FBS,Bears
-Navy,FBS,Midshipmen
-NC State,FBS,Wolfpack
-Nebraska,FBS,Cornhuskers
-Nevada,FBS,Wolf Pack
-New Mexico,FBS,Lobos
-New Mexico State,FBS,Aggies
-North Carolina,FBS,Tar Heels
-North Texas,FBS,Mean Green
-Northern Illinois,FBS,Huskies
-Northwestern,FBS,Wildcats
-Notre Dame,FBS,Fighting Irish
-Ohio,FBS,Bobcats
-Ohio State,FBS,Buckeyes
-Oklahoma,FBS,Sooners
-Oklahoma State,FBS,Cowboys
-Old Dominion,FBS,Monarchs
-Ole Miss,FBS,Rebels
-Oregon,FBS,Ducks
-Oregon State,FBS,Beavers
-Penn State,FBS,Nittany Lions
-Pittsburgh,FBS,Panthers
-Purdue,FBS,Boilermakers
-Rice,FBS,Owls
-Rutgers,FBS,Scarlet Knights
-Sam Houston,FBS,Bearkats
-San Diego State,FBS,Aztecs
-San Jose State,FBS,Spartans
-SMU,FBS,Mustangs
-South Alabama,FBS,Jaguars
-South Carolina,FBS,Gamecocks
-South Florida,FBS,Bulls
-Southern Miss,FBS,Golden Eagles
-Stanford,FBS,Cardinal
-Syracuse,FBS,Orange
-TCU,FBS,Horned Frogs
-Temple,FBS,Owls
-Tennessee,FBS,Volunteers
-Texas,FBS,Longhorns
-Texas A&M,FBS,Aggies
-Texas State,FBS,Bobcats
-Texas Tech,FBS,Red Raiders
-Toledo,FBS,Rockets
-Troy,FBS,Trojans
-Tulane,FBS,Green Wave
-Tulsa,FBS,Golden Hurricane
-UAB,FBS,Blazers
-UCF,FBS,Knights
-UCLA,FBS,Bruins
-UConn,FBS,Huskies
-ULM,FBS,Warhawks
-UMass,FBS,Minutemen
-UNLV,FBS,Rebels
-USC,FBS,Trojans
-Utah,FBS,Utes
-Utah State,FBS,Aggies
-UTEP,FBS,Miners
-UTSA,FBS,Roadrunners
-Vanderbilt,FBS,Commodores
-Virginia,FBS,Cavaliers
-Virginia Tech,FBS,Hokies
-Wake Forest,FBS,Demon Deacons
-Washington,FBS,Huskies
-Washington State,FBS,Cougars
-West Virginia,FBS,Mountaineers
-Western Kentucky,FBS,Hilltoppers
-Western Michigan,FBS,Broncos
-Wisconsin,FBS,Badgers
-Wyoming,FBS,Cowboys
-Abilene Christian,FCS,Wildcats
-Alabama A&M,FCS,Bulldogs
-Alabama State,FCS,Hornets
-Albany,FCS,Great Danes
-Alcorn State,FCS,Braves
-Arkansas Pine Bluff,FCS,Golden Lions
-Austin Peay,FCS,Governors
-Bethune Cookman,FCS,Wildcats
-Brown,FCS,Bears
-Bryant,FCS,Bulldogs
-Bucknell,FCS,Bison
-Butler,FCS,Bulldogs
-Cal Poly,FCS,Mustangs
-Campbell,FCS,Fighting Camels
-Central Arkansas,FCS,Bears
-Central Connecticut,FCS,Blue Devils
-Charleston Southern,FCS,Buccaneers
-Chattanooga,FCS,Mocs
-Colgate,FCS,Raiders
-Columbia,FCS,Lions
-Cornell,FCS,Big Red
-Dartmouth,FCS,Big Green
-Davidson,FCS,Wildcats
-Dayton,FCS,Flyers
-Delaware State,FCS,Hornets
-Drake,FCS,Bulldogs
-Duquesne,FCS,Dukes
-East Tennessee State,FCS,Buccaneers
-East Texas A&M,FCS,Lions
-Eastern Illinois,FCS,Panthers
-Eastern Kentucky,FCS,Colonels
-Eastern Washington,FCS,Eagles
-Elon,FCS,Phoenix
-Florida A&M,FCS,Rattlers
-Fordham,FCS,Rams
-Furman,FCS,Paladins
-Gardner Webb,FCS,Runnin' Bulldogs
-Georgetown,FCS,Hoyas
-Grambling State,FCS,Tigers
-Hampton,FCS,Pirates
-Harvard,FCS,Crimson
-Holy Cross,FCS,Crusaders
-Houston Christian,FCS,Huskies
-Howard,FCS,Bison
-Idaho,FCS,Vandals
-Idaho State,FCS,Bengals
-Illinois State,FCS,Redbirds
-Incarnate Word,FCS,Cardinals
-Indiana State,FCS,Sycamores
-Jackson State,FCS,Tigers
-Lafayette,FCS,Leopards
-Lamar,FCS,Cardinals
-Lehigh,FCS,Mountain Hawks
-Lindenwood,FCS,Lions
-LIU,FCS,Sharks
-Maine,FCS,Black Bears
-Marist,FCS,Red Foxes
-McNeese,FCS,Cowboys
-Mercer,FCS,Bears
-Merrimack,FCS,Warriors
-Mississippi Valley State,FCS,Delta Devils
-Monmouth,FCS,Hawks
-Montana,FCS,Grizzlies
-Montana State,FCS,Bobcats
-Morehead State,FCS,Eagles
-Morgan State,FCS,Bears
-Murray State,FCS,Racers
-New Hampshire,FCS,Wildcats
-Nicholls,FCS,Colonels
-Norfolk State,FCS,Spartans
-North Alabama,FCS,Lions
-North Carolina A&T,FCS,Aggies
-North Carolina Central,FCS,Eagles
-North Dakota,FCS,Fighting Hawks
-North Dakota State,FCS,Bison
-Northern Arizona,FCS,Lumberjacks
-Northern Colorado,FCS,Bears
-Northern Iowa,FCS,Panthers
-Northwestern State,FCS,Demons
-Penn,FCS,Quakers
-Portland State,FCS,Vikings
-Prairie View A&M,FCS,Panthers
-Presbyterian,FCS,Blue Hose
-Princeton,FCS,Tigers
-Rhode Island,FCS,Rams
-Richmond,FCS,Spiders
-Robert Morris,FCS,Colonials
-Sacramento State,FCS,Hornets
-Sacred Heart,FCS,Pioneers
-Saint Francis (PA),FCS,Red Flash
-Samford,FCS,Bulldogs
-San Diego,FCS,Toreros
-South Carolina State,FCS,Bulldogs
-South Dakota,FCS,Coyotes
-South Dakota State,FCS,Jackrabbits
-Southeast Missouri State,FCS,Redhawks
-Southeastern Louisiana,FCS,Lions
-Southern,FCS,Jaguars
-Southern Illinois,FCS,Salukis
-Southern Utah,FCS,Thunderbirds
-St. Thomas,FCS,Tommies
-Stephen F. Austin,FCS,Lumberjacks
-Stetson,FCS,Hatters
-Stonehill,FCS,Skyhawks
-Stony Brook,FCS,Seawolves
-Tarleton State,FCS,Texans
-Tennessee State,FCS,Tigers
-Tennessee Tech,FCS,Golden Eagles
-Texas Southern,FCS,Tigers
-The Citadel,FCS,Bulldogs
-Towson,FCS,Tigers
-UC Davis,FCS,Aggies
-UT Martin,FCS,Skyhawks
-Utah Tech,FCS,Trailblazers
-UTRGV,FCS,Vaqueros
-Valparaiso,FCS,Beacons
-Villanova,FCS,Wildcats
-VMI,FCS,Keydets
-Wagner,FCS,Seahawks
-Weber State,FCS,Wildcats
-Western Carolina,FCS,Catamounts
-Western Illinois,FCS,Leathernecks
-William & Mary,FCS,Tribe
-Wofford,FCS,Terriers
-Yale,FCS,Bulldogs
-Youngstown State,FCS,Penguins
+TeamID,TeamName,Alias,Division,Conference,ConferenceAbbr,ShortName
+1,"Air Force",NULL,"FBS","Mountain West Conference","MW","Air Force"
+2,"Akron",NULL,"FBS","Mid-American Conference","MAC","Akron"
+3,"Alabama",NULL,"FBS","Southeastern Conference","SEC","Alabama"
+4,"Appalachian State",NULL,"FBS","Sun Belt Conference","Sun Belt","App State"
+5,"Arizona",NULL,"FBS","Big 12 Conference","Big 12","Arizona"
+6,"Arizona State",NULL,"FBS","Big 12 Conference","Big 12","Ariz State"
+7,"Arkansas",NULL,"FBS","Southeastern Conference","SEC","Arkansas"
+8,"Arkansas State",NULL,"FBS","Sun Belt Conference","Sun Belt","Ark State"
+9,"Army",NULL,"FBS","American Athletic Conference","AAC","Army"
+10,"Auburn",NULL,"FBS","Southeastern Conference","SEC","Auburn"
+11,"Ball State",NULL,"FBS","Mid-American Conference","MAC","Ball State"
+12,"Baylor",NULL,"FBS","Big 12 Conference","Big 12","Baylor"
+13,"Boise State",NULL,"FBS","Mountain West Conference","MW","Boise State"
+14,"Boston College",NULL,"FBS","Atlantic Coast Conference","ACC","Boston Col"
+15,"Bowling Green",NULL,"FBS","Mid-American Conference","MAC","Bowl Green"
+16,"Buffalo",NULL,"FBS","Mid-American Conference","MAC","Buffalo"
+17,"BYU","Brigham Young","FBS","Big 12 Conference","Big 12","BYU"
+18,"California",NULL,"FBS","Atlantic Coast Conference","ACC","California"
+19,"Central Michigan",NULL,"FBS","Mid-American Conference","MAC","Cent Mich"
+20,"Charlotte",NULL,"FBS","American Athletic Conference","AAC","Charlotte"
+21,"Cincinnati",NULL,"FBS","Big 12 Conference","Big 12","Cincinnati"
+22,"Clemson",NULL,"FBS","Atlantic Coast Conference","ACC","Clemson"
+23,"Coastal Carolina",NULL,"FBS","Sun Belt Conference","Sun Belt","Cstl Carol"
+24,"Colorado",NULL,"FBS","Big 12 Conference","Big 12","Colorado"
+25,"Colorado State",NULL,"FBS","Mountain West Conference","MW","Colo State"
+26,"Connecticut",NULL,"FBS","Independent (football)","IND","UConn"
+27,"Delaware",NULL,"FBS","Conference USA","C-USA","Delaware"
+28,"Duke",NULL,"FBS","Atlantic Coast Conference","ACC","Duke"
+29,"East Carolina",NULL,"FBS","American Athletic Conference","AAC","E Carolina"
+30,"Eastern Michigan",NULL,"FBS","Mid-American Conference","MAC","E Michigan"
+31,"Florida",NULL,"FBS","Southeastern Conference","SEC","Florida"
+32,"Florida Atlantic",NULL,"FBS","American Athletic Conference","AAC","Fla Atlant"
+33,"Florida International",NULL,"FBS","Conference USA","C-USA","FIU"
+34,"Florida State",NULL,"FBS","Atlantic Coast Conference","ACC","Florida St"
+35,"Fresno State",NULL,"FBS","Mountain West Conference","MW","Fresno St"
+36,"Georgia",NULL,"FBS","Southeastern Conference","SEC","Georgia"
+37,"Georgia Southern",NULL,"FBS","Sun Belt Conference","Sun Belt","Ga Southern"
+38,"Georgia State",NULL,"FBS","Sun Belt Conference","Sun Belt","Georgia St"
+39,"Georgia Tech",NULL,"FBS","Atlantic Coast Conference","ACC","Georgia Tec"
+40,"Hawaii",NULL,"FBS","Mountain West Conference","MW","Hawaii"
+41,"Houston",NULL,"FBS","Big 12 Conference","Big 12","Houston"
+42,"Illinois",NULL,"FBS","Big Ten Conference","Big Ten","Illinois"
+43,"Indiana",NULL,"FBS","Big Ten Conference","Big Ten","Indiana"
+44,"Iowa",NULL,"FBS","Big Ten Conference","Big Ten","Iowa"
+45,"Iowa State",NULL,"FBS","Big 12 Conference","Big 12","Iowa State"
+46,"Jacksonville State",NULL,"FBS","Conference USA","C-USA","Jax State"
+47,"James Madison",NULL,"FBS","Sun Belt Conference","Sun Belt","James Mad"
+48,"Kansas",NULL,"FBS","Big 12 Conference","Big 12","Kansas"
+49,"Kansas State",NULL,"FBS","Big 12 Conference","Big 12","Kansas St"
+50,"Kennesaw State",NULL,"FBS","Conference USA","C-USA","Ken State"
+51,"Kent State",NULL,"FBS","Mid-American Conference","MAC","Kent State"
+52,"Kentucky",NULL,"FBS","Southeastern Conference","SEC","Kentucky"
+53,"Liberty",NULL,"FBS","Conference USA","C-USA","Liberty"
+54,"Louisiana",NULL,"FBS","Sun Belt Conference","Sun Belt","Louisiana"
+55,"Louisiana Tech",NULL,"FBS","Conference USA","C-USA","La Tech"
+56,"Louisiana-Monroe",NULL,"FBS","Sun Belt Conference","Sun Belt","La Monroe"
+57,"Louisville",NULL,"FBS","Atlantic Coast Conference","ACC","Louisville"
+58,"LSU","Louisiana State","FBS","Southeastern Conference","SEC","LSU"
+59,"Marshall",NULL,"FBS","Sun Belt Conference","Sun Belt","Marshall"
+60,"Maryland",NULL,"FBS","Big Ten Conference","Big Ten","Maryland"
+61,"Massachusetts",NULL,"FBS","Mid-American Conference","MAC","UMass"
+62,"Memphis",NULL,"FBS","American Athletic Conference","AAC","Memphis"
+63,"Miami (FL)","Miami","FBS","Atlantic Coast Conference","ACC","Miami"
+64,"Miami (OH)",NULL,"FBS","Mid-American Conference","MAC","Miami (OH)"
+65,"Michigan",NULL,"FBS","Big Ten Conference","Big Ten","Michigan"
+66,"Michigan State",NULL,"FBS","Big Ten Conference","Big Ten","Mich State"
+67,"Middle Tennessee State",NULL,"FBS","Conference USA","C-USA","Mid Tenn"
+68,"Minnesota",NULL,"FBS","Big Ten Conference","Big Ten","Minnesota"
+69,"Mississippi State",NULL,"FBS","Southeastern Conference","SEC","Miss State"
+70,"Missouri",NULL,"FBS","Southeastern Conference","SEC","Missouri"
+71,"Missouri State",NULL,"FBS","Conference USA","C-USA","Mo State"
+72,"Navy",NULL,"FBS","American Athletic Conference","AAC","Navy"
+73,"Nebraska",NULL,"FBS","Big Ten Conference","Big Ten","Nebraska"
+74,"Nevada",NULL,"FBS","Mountain West Conference","MW","Nevada"
+75,"Nevada-Las Vegas",NULL,"FBS","Mountain West Conference","MW","UNLV"
+76,"New Mexico",NULL,"FBS","Mountain West Conference","MW","New Mexico"
+77,"New Mexico State",NULL,"FBS","Conference USA","C-USA","NM State"
+78,"North Carolina",NULL,"FBS","Atlantic Coast Conference","ACC","N Carolina"
+79,"North Carolina State","NC State","FBS","Atlantic Coast Conference","ACC","NC State"
+80,"North Texas",NULL,"FBS","American Athletic Conference","AAC","North Texas"
+81,"Northern Illinois",NULL,"FBS","Mid-American Conference","MAC","N Illinois"
+82,"Northwestern",NULL,"FBS","Big Ten Conference","Big Ten","Northwstrn"
+83,"Notre Dame",NULL,"FBS","Independent (football)","IND","Notre Dame"
+84,"Ohio",NULL,"FBS","Mid-American Conference","MAC","Ohio"
+85,"Ohio State",NULL,"FBS","Big Ten Conference","Big Ten","Ohio State"
+86,"Oklahoma",NULL,"FBS","Southeastern Conference","SEC","Oklahoma"
+87,"Oklahoma State",NULL,"FBS","Big 12 Conference","Big 12","Okla State"
+88,"Old Dominion",NULL,"FBS","Sun Belt Conference","Sun Belt","Old Dom"
+89,"Ole Miss","Mississippi","FBS","Southeastern Conference","SEC","Ole Miss"
+90,"Oregon",NULL,"FBS","Big Ten Conference","Big Ten","Oregon"
+91,"Oregon State",NULL,"FBS","Pac-12 Conference","Pac-12","Oregon St"
+92,"Penn State",NULL,"FBS","Big Ten Conference","Big Ten","Penn State"
+93,"Pitt","Pittsburgh","FBS","Atlantic Coast Conference","ACC","Pitt"
+94,"Purdue",NULL,"FBS","Big Ten Conference","Big Ten","Purdue"
+95,"Rice",NULL,"FBS","American Athletic Conference","AAC","Rice"
+96,"Rutgers",NULL,"FBS","Big Ten Conference","Big Ten","Rutgers"
+97,"Sam Houston",NULL,"FBS","Conference USA","C-USA","Sam Houston"
+98,"San Diego State",NULL,"FBS","Mountain West Conference","MW","SD State"
+99,"San Jose State",NULL,"FBS","Mountain West Conference","MW","SJ State"
+100,"SMU","Southern Methodist","FBS","Atlantic Coast Conference","ACC","SMU"
+101,"South Alabama",NULL,"FBS","Sun Belt Conference","Sun Belt","S Alabama"
+102,"South Carolina",NULL,"FBS","Southeastern Conference","SEC","S Carolina"
+103,"South Florida",NULL,"FBS","American Athletic Conference","AAC","S Florida"
+104,"Southern Mississippi",NULL,"FBS","Sun Belt Conference","Sun Belt","So Miss"
+105,"Stanford",NULL,"FBS","Atlantic Coast Conference","ACC","Stanford"
+106,"Syracuse",NULL,"FBS","Atlantic Coast Conference","ACC","Syracuse"
+107,"TCU","Texas Christian","FBS","Big 12 Conference","Big 12","TCU"
+108,"Temple",NULL,"FBS","American Athletic Conference","AAC","Temple"
+109,"Tennessee",NULL,"FBS","Southeastern Conference","SEC","Tennessee"
+110,"Texas",NULL,"FBS","Southeastern Conference","SEC","Texas"
+111,"Texas A&M",NULL,"FBS","Southeastern Conference","SEC","Texas A&M"
+112,"Texas State",NULL,"FBS","Sun Belt Conference","Sun Belt","Texas St"
+113,"Texas Tech",NULL,"FBS","Big 12 Conference","Big 12","Texas Tech"
+114,"Toledo",NULL,"FBS","Mid-American Conference","MAC","Toledo"
+115,"Troy",NULL,"FBS","Sun Belt Conference","Sun Belt","Troy"
+116,"Tulane",NULL,"FBS","American Athletic Conference","AAC","Tulane"
+117,"Tulsa",NULL,"FBS","American Athletic Conference","AAC","Tulsa"
+118,"UAB","Alabama-Birmingham","FBS","American Athletic Conference","AAC","UAB"
+119,"UCF","Central Florida","FBS","Big 12 Conference","Big 12","UCF"
+120,"UCLA",NULL,"FBS","Big Ten Conference","Big Ten","UCLA"
+121,"USC","Southern California","FBS","Big Ten Conference","Big Ten","USC"
+122,"Utah",NULL,"FBS","Big 12 Conference","Big 12","Utah"
+123,"Utah State",NULL,"FBS","Mountain West Conference","MW","Utah State"
+124,"UTEP","Texas-El Paso","FBS","Conference USA","C-USA","UTEP"
+125,"UTSA","Texas-San Antonio","FBS","American Athletic Conference","AAC","UTSA"
+126,"Vanderbilt",NULL,"FBS","Southeastern Conference","SEC","Vanderbilt"
+127,"Virginia",NULL,"FBS","Atlantic Coast Conference","ACC","Virginia"
+128,"Virginia Tech",NULL,"FBS","Atlantic Coast Conference","ACC","Va Tech"
+129,"Wake Forest",NULL,"FBS","Atlantic Coast Conference","ACC","Wake Forest"
+130,"Washington",NULL,"FBS","Big Ten Conference","Big Ten","Washington"
+131,"Washington State",NULL,"FBS","Pac-12 Conference","Pac-12","Wash State"
+132,"West Virginia",NULL,"FBS","Big 12 Conference","Big 12","W Virginia"
+133,"Western Kentucky",NULL,"FBS","Conference USA","C-USA","W Kentucky"
+134,"Western Michigan",NULL,"FBS","Mid-American Conference","MAC","W Michigan"
+135,"Wisconsin",NULL,"FBS","Big Ten Conference","Big Ten","Wisconsin"
+136,"Wyoming",NULL,"FBS","Mountain West Conference","MW","Wyoming"
+137,"Abilene Christian",NULL,"FCS","United Athletic Conference","UAC","Abil Chr"
+138,"Alabama A&M",NULL,"FCS","Southwestern Athletic Conference","SWAC","Alabama A&M"
+139,"Alabama State",NULL,"FCS","Southwestern Athletic Conference","SWAC","Ala State"
+140,"Albany",NULL,"FCS","CAA Football","CAA","Albany"
+141,"Alcorn State",NULL,"FCS","Southwestern Athletic Conference","SWAC","Alcorn St"
+142,"Arkansas-Pine Bluff",NULL,"FCS","Southwestern Athletic Conference","SWAC","AR Pine Blf"
+143,"Austin Peay",NULL,"FCS","United Athletic Conference","UAC","Austin Peay"
+144,"Bethune-Cookman",NULL,"FCS","Southwestern Athletic Conference","SWAC","Beth-Cook"
+145,"Brown",NULL,"FCS","Ivy League","Ivy","Brown"
+146,"Bryant",NULL,"FCS","CAA Football","CAA","Bryant"
+147,"Bucknell",NULL,"FCS","Patriot League","Patriot","Bucknell"
+148,"Cal Poly",NULL,"FCS","Big Sky Conference","Big Sky","Cal Poly"
+149,"California-Davis",NULL,"FCS","Big Sky Conference","Big Sky","UC Davis"
+150,"Campbell",NULL,"FCS","CAA Football","CAA","Campbell"
+151,"Central Arkansas",NULL,"FCS","United Athletic Conference","UAC","Cent Ark"
+152,"Central Connecticut State",NULL,"FCS","Northeast Conference","NEC","Cent Conn"
+153,"Charleston Southern",NULL,"FCS","OVC-Big South Association","OVC-BSA","Chas Sou"
+154,"Chattanooga",NULL,"FCS","Southern Conference","SoCon","Chattanooga"
+155,"Citadel",NULL,"FCS","Southern Conference","SoCon","Citadel"
+156,"Colgate",NULL,"FCS","Patriot League","Patriot","Colgate"
+157,"Columbia",NULL,"FCS","Ivy League","Ivy","Columbia"
+158,"Cornell",NULL,"FCS","Ivy League","Ivy","Cornell"
+159,"Dartmouth",NULL,"FCS","Ivy League","Ivy","Dartmouth"
+160,"Davidson",NULL,"FCS","Pioneer Football League","PFL","Davidson"
+161,"Dayton",NULL,"FCS","Pioneer Football League","PFL","Dayton"
+162,"Delaware State",NULL,"FCS","Mid-Eastern Athletic Conference","MEAC","Del State"
+163,"Drake",NULL,"FCS","Pioneer Football League","PFL","Drake"
+164,"Duquesne",NULL,"FCS","Northeast Conference","NEC","Duquesne"
+165,"East Tennessee State",NULL,"FCS","Southern Conference","SoCon","E Tenn St"
+166,"Eastern Illinois",NULL,"FCS","OVC-Big South Association","OVC-BSA","E Illinois"
+167,"Eastern Kentucky",NULL,"FCS","United Athletic Conference","UAC","E Kentucky"
+168,"Eastern Washington",NULL,"FCS","Big Sky Conference","Big Sky","E Wash"
+169,"Elon",NULL,"FCS","CAA Football","CAA","Elon"
+170,"Florida A&M",NULL,"FCS","Southwestern Athletic Conference","SWAC","Florida A&M"
+171,"Fordham",NULL,"FCS","Patriot League","Patriot","Fordham"
+172,"Furman",NULL,"FCS","Southern Conference","SoCon","Furman"
+173,"Gardner-Webb",NULL,"FCS","OVC-Big South Association","OVC-BSA","Gard Webb"
+174,"Grambling State",NULL,"FCS","Southwestern Athletic Conference","SWAC","Grambling"
+175,"Hampton",NULL,"FCS","CAA Football","CAA","Hampton"
+176,"Harvard",NULL,"FCS","Ivy League","Ivy","Harvard"
+177,"Holy Cross",NULL,"FCS","Patriot League","Patriot","Holy Cross"
+178,"Houston Christian","Houston Baptist","FCS","Southland Conference","Southland","Houst Chr"
+179,"Howard",NULL,"FCS","Mid-Eastern Athletic Conference","MEAC","Howard"
+180,"Idaho",NULL,"FCS","Big Sky Conference","Big Sky","Idaho"
+181,"Idaho State",NULL,"FCS","Big Sky Conference","Big Sky","Idaho St"
+182,"Illinois State",NULL,"FCS","Missouri Valley Football Conference","MVFC","Ill State"
+183,"Incarnate Word",NULL,"FCS","Southland Conference","Southland","Inc Word"
+184,"Indiana State",NULL,"FCS","Missouri Valley Football Conference","MVFC","Ind State"
+185,"Jackson State",NULL,"FCS","Southwestern Athletic Conference","SWAC","Jack State"
+186,"Lafayette",NULL,"FCS","Patriot League","Patriot","Lafayette"
+187,"Lamar",NULL,"FCS","Southland Conference","Southland","Lamar"
+188,"Lehigh",NULL,"FCS","Patriot League","Patriot","Lehigh"
+189,"Lindenwood",NULL,"FCS","OVC-Big South Association","OVC-BSA","Lindenwood"
+190,"LIU","Long Island","FCS","Northeast Conference","NEC","LIU"
+191,"Maine",NULL,"FCS","CAA Football","CAA","Maine"
+192,"McNeese State",NULL,"FCS","Southland Conference","Southland","McNeese St"
+193,"Mercer",NULL,"FCS","Southern Conference","SoCon","Mercer"
+194,"Merrimack",NULL,"FCS","Independent (football)","IND","Merrimack"
+195,"Mississippi Valley State",NULL,"FCS","Southwestern Athletic Conference","SWAC","Miss Val St"
+196,"Monmouth",NULL,"FCS","CAA Football","CAA","Monmouth"
+197,"Montana",NULL,"FCS","Big Sky Conference","Big Sky","Montana"
+198,"Montana State",NULL,"FCS","Big Sky Conference","Big Sky","Mont State"
+199,"Morehead State",NULL,"FCS","Pioneer Football League","PFL","More State"
+200,"Morgan State",NULL,"FCS","Mid-Eastern Athletic Conference","MEAC","Morgan St"
+201,"Murray State",NULL,"FCS","Missouri Valley Football Conference","MVFC","Murray St"
+202,"New Hampshire",NULL,"FCS","CAA Football","CAA","N Hampshire"
+203,"Nicholls State",NULL,"FCS","Southland Conference","Southland","Nicholls St"
+204,"Norfolk State",NULL,"FCS","Mid-Eastern Athletic Conference","MEAC","Norf State"
+205,"North Alabama",NULL,"FCS","United Athletic Conference","UAC","N Alabama"
+206,"North Carolina A&T",NULL,"FCS","CAA Football","CAA","NC A&T"
+207,"North Carolina Central",NULL,"FCS","Mid-Eastern Athletic Conference","MEAC","NC Central"
+208,"North Dakota",NULL,"FCS","Missouri Valley Football Conference","MVFC","N Dakota"
+209,"North Dakota State",NULL,"FCS","Missouri Valley Football Conference","MVFC","ND State"
+210,"Northern Arizona",NULL,"FCS","Big Sky Conference","Big Sky","N Arizona"
+211,"Northern Colorado",NULL,"FCS","Big Sky Conference","Big Sky","N Colorado"
+212,"Northern Iowa",NULL,"FCS","Missouri Valley Football Conference","MVFC","N Iowa"
+213,"Northwestern State",NULL,"FCS","Southland Conference","Southland","NW State"
+214,"Penn","Pennsylvania","FCS","Ivy League","Ivy","Penn"
+215,"Portland State",NULL,"FCS","Big Sky Conference","Big Sky","Port State"
+216,"Prairie View A&M",NULL,"FCS","Southwestern Athletic Conference","SWAC","Pr View AM"
+217,"Presbyterian",NULL,"FCS","Pioneer Football League","PFL","Presbytrn"
+218,"Princeton",NULL,"FCS","Ivy League","Ivy","Princeton"
+219,"Rhode Island",NULL,"FCS","CAA Football","CAA","Rhode Islnd"
+220,"Richmond",NULL,"FCS","Patriot League","Patriot","Richmond"
+221,"Robert Morris",NULL,"FCS","Northeast Conference","NEC","Robert Morr"
+222,"Sacramento State",NULL,"FCS","Big Sky Conference","Big Sky","Sac State"
+223,"Sacred Heart",NULL,"FCS","Independent (football)","IND","Sacred Hrt"
+224,"Samford",NULL,"FCS","Southern Conference","SoCon","Samford"
+225,"San Diego",NULL,"FCS","Pioneer Football League","PFL","San Diego"
+226,"South Carolina State",NULL,"FCS","Mid-Eastern Athletic Conference","MEAC","SC State"
+227,"South Dakota",NULL,"FCS","Missouri Valley Football Conference","MVFC","S Dakota"
+228,"South Dakota State",NULL,"FCS","Missouri Valley Football Conference","MVFC","South Dakota State"
+229,"Southeast Missouri State",NULL,"FCS","OVC-Big South Association","OVC-BSA","SE Mo State"
+230,"Southeastern Louisiana",NULL,"FCS","Southland Conference","Southland","SE Louisian"
+231,"Southern",NULL,"FCS","Southwestern Athletic Conference","SWAC","Southern"
+232,"Southern Illinois",NULL,"FCS","Missouri Valley Football Conference","MVFC","So Illinois"
+233,"Southern Utah",NULL,"FCS","United Athletic Conference","UAC","So Utah"
+234,"St. Francis (PA)",NULL,"FCS","Northeast Conference","NEC","St Francis"
+235,"Stephen F. Austin",NULL,"FCS","Southland Conference","Southland","SF Austin"
+236,"Stony Brook",NULL,"FCS","CAA Football","CAA","Stony Brook"
+237,"Tarleton State",NULL,"FCS","United Athletic Conference","UAC","Tarlton St"
+238,"Tennessee State",NULL,"FCS","OVC-Big South Association","OVC-BSA","Tenn State"
+239,"Tennessee Tech",NULL,"FCS","OVC-Big South Association","OVC-BSA","Tenn Tech"
+240,"Texas Southern",NULL,"FCS","Southwestern Athletic Conference","SWAC","Tex Southrn"
+241,"Towson",NULL,"FCS","CAA Football","CAA","Towson"
+242,"UT Martin","Tennessee-Martin","FCS","OVC-Big South Association","OVC-BSA","UT Martin"
+243,"Utah Tech","Dixie State","FCS","United Athletic Conference","UAC","Utah Tech"
+245,"Valparaiso",NULL,"FCS","Pioneer Football League","PFL","Valparaiso"
+246,"Villanova",NULL,"FCS","Patriot League","Patriot","Villanova"
+247,"VMI","Virginia Military Institute","FCS","","","VMI"
+248,"Wagner",NULL,"FCS","Northeast Conference","NEC","Wagner"
+249,"Weber State",NULL,"FCS","Big Sky Conference","Big Sky","Weber State"
+250,"Western Carolina",NULL,"FCS","Southern Conference","SoCon","W Carolina"
+251,"Western Illinois",NULL,"FCS","OVC-Big South Association","OVC-BSA","W Illinois"
+252,"William & Mary",NULL,"FCS","Patriot League","Patriot","Wm & Mary"
+253,"Wofford",NULL,"FCS","Southern Conference","SoCon","Wofford"
+254,"Yale",NULL,"FCS","Ivy League","Ivy","Yale"
+255,"Youngstown State",NULL,"FCS","Missouri Valley Football Conference","MVFC","Y'town St"
+256,"Angelo State",NULL,"N/A","Non-DI (Lone Star)","N/A (D-II)","Angelo St"
+257,"Augustana (South Dakota)",NULL,"N/A","Non-DI (NSIC)","N/A (D-II)","Augustana"
+258,"Bishop",NULL,"N/A","Non-DI (various/NAIA)","N/A","Bishop"
+259,"Boston University",NULL,"N/A","Patriot League (non-football)","Patriot","Boston U"
+260,"Bradley",NULL,"N/A","Missouri Valley Conference (non-football)","MVC","Bradley"
+261,"Cal Poly-Pomona",NULL,"N/A","Non-DI (CCAA)","N/A (D-II)","Cal Poly-P"
+262,"Cal State Fullerton",NULL,"N/A","Big West Conference (non-football)","Big West","CS Fullrtn"
+263,"Cal State Los Angeles",NULL,"N/A","Non-DI (CCAA)","N/A (D-II)","CS LA"
+264,"Cal State Northridge",NULL,"N/A","Big West Conference (non-football)","Big West","CS Northrdg"
+265,"California Lutheran",NULL,"N/A","Non-DI (SCIAC)","N/A (D-III)","Cal Luthern"
+266,"California-Riverside",NULL,"N/A","Big West Conference (non-football)","Big West","UC Riverside"
+267,"California-Santa Barbara",NULL,"N/A","Big West Conference (non-football)","Big West","UC Santa Bar"
+268,"Camp Lejeune",NULL,"N/A","Non-DI (historical)","N/A","Camp Lejeune"
+269,"Carson-Newman",NULL,"N/A","Non-DI (SAC)","N/A (D-II)","Carson-Newm"
+270,"Central Missouri State",NULL,"N/A","Non-DI (MIAA)","N/A (D-II)","Cent Mo St"
+271,"Central State",NULL,"N/A","Non-DI (SIAC)","N/A (D-II)","Central St"
+272,"Delta State",NULL,"N/A","Non-DI (GSC)","N/A (D-II)","Delta State"
+273,"Eastern New Mexico",NULL,"N/A","Non-DI (Lone Star)","N/A (D-II)","E New Mex"
+274,"Edward Waters",NULL,"N/A","Non-DI (SIAC)","N/A (D-II/NAIA)","Edward Wat"
+275,"Emporia State",NULL,"N/A","Non-DI (MIAA)","N/A (D-II)","Emporia St"
+276,"Fort Hays State",NULL,"N/A","Non-DI (MIAA)","N/A (D-II)","Ft Hays St"
+277,"Frederick",NULL,"N/A","Non-DI (historical)","N/A","Frederick"
+278,"George Washington",NULL,"N/A","Atlantic 10 Conference (non-football)","A-10","Geo Wash"
+279,"Gettysburg",NULL,"N/A","Non-DI (Centennial)","N/A (D-III)","Gettysburg"
+280,"Grand Valley State",NULL,"N/A","Non-DI (GLIAC)","N/A (D-II)","Gr Valley"
+281,"Guilford",NULL,"N/A","Non-DI (ODAC)","N/A (D-III)","Guilford"
+282,"Hayward State",NULL,"N/A","Non-DI (historical)","N/A","Hayward St"
+283,"Hofstra",NULL,"N/A","CAA (non-football primary)","CAA","Hofstra"
+284,"Howard Payne",NULL,"N/A","Non-DI (ASC)","N/A (D-III)","Howard Payn"
+285,"Humboldt State",NULL,"N/A","Non-DI (CCAA)","N/A (D-II)","Humboldt St"
+286,"Langston",NULL,"N/A","Non-DI (SAC NAIA)","N/A (NAIA)","Langston"
+287,"Lenoir-Rhyne",NULL,"N/A","Non-DI (SAC)","N/A (D-II)","Lenoir-Rhn"
+288,"Lincoln",NULL,"N/A","Non-DI (various)","N/A (D-II)","Lincoln"
+289,"Linfield",NULL,"N/A","Non-DI (NWC)","N/A (D-III)","Linfield"
+290,"Long Beach State",NULL,"N/A","Big West Conference (non-football)","Big West","LB State"
+291,"Mankato State",NULL,"N/A","Non-DI (NSIC)","N/A (D-II)","Mankato St"
+292,"Mars Hill",NULL,"N/A","Non-DI (SAC)","N/A (D-II)","Mars Hill"
+293,"Minnesota-Morris",NULL,"N/A","Non-DI (UMAC)","N/A (D-III)","Minn-Morris"
+294,"Mississippi College",NULL,"N/A","Non-DI (GSC)","N/A (D-II)","Miss College"
+295,"Missouri Southern",NULL,"N/A","Non-DI (MIAA)","N/A (D-II)","Mo Southern"
+296,"Missouri-Rolla",NULL,"N/A","Non-DI (GLVC)","N/A (D-II)","Mo-Rolla"
+297,"Moorhead State",NULL,"N/A","Non-DI (NSIC)","N/A (D-II)","Moorhead St"
+298,"Nebraska-Omaha",NULL,"N/A","Non-DI (Summit non-football)","Summit","Neb-Omaha"
+299,"New Mexico Highlands",NULL,"N/A","Non-DI (RMAC)","N/A (D-II)","NM Highland"
+300,"Newberry",NULL,"N/A","Non-DI (SAC)","N/A (D-II)","Newberry"
+301,"Northeastern",NULL,"N/A","CAA (non-football)","CAA","Northeastrn"
+302,"Northern Michigan",NULL,"N/A","Non-DI (GLIAC)","N/A (D-II)","N Michigan"
+303,"Northwestern Oklahoma State",NULL,"N/A","Non-DI (GAC)","N/A (NAIA)","NW Okla St"
+304,"Ohio Wesleyan",NULL,"N/A","Non-DI (NCAC)","N/A (D-III)","Ohio Wesley"
+305,"Pacific",NULL,"N/A","West Coast Conference (non-football)","WCC","Pacific"
+306,"Parsons",NULL,"N/A","Non-DI (historical)","N/A","Parsons"
+307,"Parsons (Iowa)",NULL,"N/A","Non-DI (historical)","N/A","Parsons IA"
+308,"Pensacola NAS",NULL,"N/A","Non-DI (historical)","N/A","Pensacola"
+309,"Quantico Marines",NULL,"N/A","Non-DI (historical)","N/A","Q Marines"
+310,"Saint Mary's (CA)",NULL,"N/A","West Coast Conference (non-football)","WCC","St Mary's"
+311,"San Francisco State",NULL,"N/A","Non-DI (CCAA)","N/A (D-II)","SF State"
+312,"Santa Clara",NULL,"N/A","West Coast Conference (non-football)","WCC","Santa Clara"
+313,"Savannah State",NULL,"N/A","Non-DI (historical)","N/A (D-II)","Savannah St"
+314,"Sonoma State",NULL,"N/A","Non-DI (CCAA)","N/A (D-II)","Sonoma State"
+315,"St. Cloud State",NULL,"N/A","Non-DI (NSIC)","N/A (D-II)","St Cloud St"
+316,"St. Joseph's (Pennsylvania)",NULL,"N/A","Atlantic 10 Conference (non-football)","A-10","St Joseph's"
+317,"Tampa",NULL,"N/A","Non-DI (SSC)","N/A (D-II)","Tampa"
+318,"Texas A&M-Commerce",NULL,"N/A","Non-DI (Lone Star)","N/A (D-II)","TAMU-Comrce"
+319,"Texas A&M-Kingsville",NULL,"N/A","Non-DI (Lone Star)","N/A (D-II)","TAMU-Kngsvl"
+320,"Texas Lutheran",NULL,"N/A","Non-DI (SCAC)","N/A (D-III)","Tex Lutheran"
+321,"Texas-Arlington",NULL,"N/A","Western Athletic Conference (non-football)","WAC","UT Arlington"
+322,"Trinity (Texas)",NULL,"N/A","Non-DI (SCAC)","N/A (D-III)","Trinity TX"
+323,"Truman State",NULL,"N/A","Non-DI (GLVC)","N/A (D-II)","Truman St"
+324,"Tufts",NULL,"N/A","Non-DI (NESCAC)","N/A (D-III)","Tufts"
+325,"Tuskegee",NULL,"N/A","Non-DI (SIAC)","N/A (D-II)","Tuskegee"
+326,"U.S. International",NULL,"N/A","Non-DI (historical)","N/A","US Intl"
+327,"Valdosta State",NULL,"N/A","Non-DI (GSC)","N/A (D-II)","Valdosta St"
+328,"Virginia Union",NULL,"N/A","Non-DI (CIAA)","N/A (D-II)","Va Union"
+329,"Wayne State",NULL,"N/A","Non-DI (GLIAC)","N/A (D-II)","Wayne State"
+330,"West Chester",NULL,"N/A","Non-DI (PSAC)","N/A (D-II)","W Chester"
+331,"West Texas State",NULL,"N/A","Non-DI (historical)","N/A (D-II)","W Texas St"
+332,"West Virginia Tech",NULL,"N/A","Non-DI (historical)","N/A","WVU Tech"
+333,"Western New Mexico",NULL,"N/A","Non-DI (Lone Star)","N/A (D-II)","W New Mex"
+334,"Whittier",NULL,"N/A","Non-DI (SCIAC)","N/A (D-III)","Whittier"
+335,"Wichita State",NULL,"N/A","American Athletic Conference (non-football)","AAC","Wichita St"
+336,"Wisconsin-Milwaukee",NULL,"N/A","Horizon League (non-football)","Horizon","UW-Milwauke"
+337,"Wittenberg",NULL,"N/A","Non-DI (NCAC)","N/A (D-III)","Wittenberg"
+338,"Xavier",NULL,"N/A","Big East Conference (non-football)","Big East","Xavier"
+339,"East Texas A&M",NULL,"FCS","Southland Conference","Southland","E Texas AM"

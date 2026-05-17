@@ -14,6 +14,10 @@ namespace SaturdayPulse.Repositories.Implementations
         public Task<List<AvgScoreDelta>> GetAvgScoreDeltasAsync(CancellationToken token = default)
             => _context.AvgScoreDeltas.ToListAsync(token);
 
+        public Task AddAvgScoreDeltasAsync(
+            IEnumerable<AvgScoreDelta> deltas, CancellationToken token = default)
+            => _context.AvgScoreDeltas.AddRangeAsync(deltas, token);
+
         public Task<List<MatchupHistory>> GetMatchupHistoriesAsync(CancellationToken token = default)
             => _context.MatchupHistories.ToListAsync(token);
 

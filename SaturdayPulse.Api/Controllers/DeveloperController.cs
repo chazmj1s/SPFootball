@@ -17,13 +17,15 @@ namespace SaturdayPulse.Controllers
         DeveloperService developerService,
         ILogger<DeveloperController> logger) : ControllerBase
     {
-        #region Data Loading
+        #region Legacy Data Loading
+        // TODO: Remove this region once CFBD V2 load is validated.
 
         /// <summary>
         /// Extracts game data starting from the provided year via web scraping.
         /// Example: GET /api/developer/initialGamesExtract?startYear=2020
         /// </summary>
         [HttpGet("initialGamesExtract")]
+        [Tags("Legacy")]
         public async Task<IActionResult> InitialGamesExtract([FromQuery] int? startYear)
         {
             try
@@ -43,6 +45,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/loadGameHistoryFromFiles
         /// </summary>
         [HttpGet("loadGameHistoryFromFiles")]
+        [Tags("Legacy")]
         public async Task<IActionResult> LoadGameHistoryFromFiles()
         {
             try
@@ -62,6 +65,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/processSingleFile?filePath=D:\NCAA Raw Game Data\2024.txt
         /// </summary>
         [HttpPost("processSingleFile")]
+        [Tags("Legacy")]
         public async Task<IActionResult> ProcessSingleFile(
             [FromQuery] string filePath,
             CancellationToken token = default)
@@ -97,6 +101,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/updateWeekGamesFromFile?year=2024&week=10
         /// </summary>
         [HttpPost("updateWeekGamesFromFile")]
+        [Tags("Legacy")]
         public async Task<IActionResult> UpdateWeekGamesFromFile(
             [FromQuery] int year,
             [FromQuery] int week,
@@ -124,6 +129,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/updateWeekGames?year=2024&week=10
         /// </summary>
         [HttpPost("updateWeekGames")]
+        [Tags("Legacy")]
         public async Task<IActionResult> UpdateWeekGames([FromQuery] int year, [FromQuery] int week)
         {
             try
@@ -143,6 +149,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/listAvailableFiles
         /// </summary>
         [HttpGet("listAvailableFiles")]
+        [Tags("Legacy")]
         public IActionResult ListAvailableFiles()
         {
             try
@@ -161,61 +168,203 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        #endregion
+
+        #region CFBD V2 — Load
+
         /// <summary>
-        /// Backfills SeedRating, TrendRating, and PedigreeRating for all teams.
-        /// Example: POST /api/developer/backfillRollingAverages?startYear=1975
+        /// Fetches all conferences from CFBD and upserts into the Conferences table.
+        /// Run once at season start or when conference realignment occurs.
+        /// Example: POST /api/developer/loadConferences
         /// </summary>
-        [HttpPost("backfillRollingAverages")]
-        public async Task<IActionResult> BackfillRollingAverages(
-            [FromQuery] int? startYear,
-            CancellationToken token = default)
+        [HttpPost("loadConferences")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadConferences(CancellationToken token = default)
         {
             try
             {
-                var result = await developerService.BackfillRollingAveragesAsync(startYear, token);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(ex.Message);
+                var count = await developerService.LoadConferencesAsync(token);
+                return Ok(new { message = "Conferences loaded successfully", count });
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error during rolling averages backfill");
-                return StatusCode(500, "An error occurred during backfill.");
+                logger.LogError(ex, "Error loading conferences from CFBD");
+                return StatusCode(500, "An error occurred while loading conferences.");
             }
         }
 
         /// <summary>
-        /// Recalculates rolling averages for a single year/week.
-        /// Example: POST /api/developer/calculateRollingAverages?year=2025&week=8
-        /// Example: POST /api/developer/calculateRollingAverages?year=2025  (preseason)
+        /// Fetches teams for a single year from CFBD and upserts into the Teams table.
+        /// Omit year to default to the current season.
+        /// Example: POST /api/developer/loadTeams?year=2025
         /// </summary>
-        [HttpPost("calculateRollingAverages")]
-        public async Task<IActionResult> CalculateRollingAverages(
+        [HttpPost("loadTeams")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadTeams(
             [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadTeamsAsync(year, token);
+                return Ok(new { message = "Teams loaded successfully", year = year ?? DateTime.Now.Year, count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading teams from CFBD for year={Year}", year);
+                return StatusCode(500, "An error occurred while loading teams.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches teams for every year from startYear to current and upserts into the Teams table.
+        /// Example: POST /api/developer/loadTeamsBulk?startYear=2000
+        /// </summary>
+        [HttpPost("loadTeamsBulk")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadTeamsBulk(
+            [FromQuery] int startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var total = await developerService.LoadTeamsBulkAsync(startYear, token);
+                return Ok(new { message = "Bulk team load complete", startYear, total });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error bulk loading teams from CFBD starting year={StartYear}", startYear);
+                return StatusCode(500, "An error occurred during bulk team load.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches games for a single year (and optionally week) from CFBD and upserts into the Games table.
+        /// Omit week to load the full season.
+        /// Example: POST /api/developer/loadGames?year=2025
+        /// Example: POST /api/developer/loadGames?year=2025&week=10
+        /// </summary>
+        [HttpPost("loadGames")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadGames(
+            [FromQuery] int year,
             [FromQuery] int? week,
             CancellationToken token = default)
         {
             try
             {
-                var result = await developerService.CalculateRollingAveragesAsync(year, week, token);
-                return Ok(result);
+                var count = await developerService.LoadGamesAsync(year, week, token);
+                return Ok(new { message = "Games loaded successfully", year, week, count });
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error calculating rolling averages: year={Year}, week={Week}", year, week);
-                return StatusCode(500, "An error occurred calculating rolling averages.");
+                logger.LogError(ex, "Error loading games from CFBD for year={Year}, week={Week}", year, week);
+                return StatusCode(500, "An error occurred while loading games.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches games for every year from startYear to current and upserts into the Games table.
+        /// Example: POST /api/developer/loadGamesBulk?startYear=2000
+        /// </summary>
+        [HttpPost("loadGamesBulk")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadGamesBulk(
+            [FromQuery] int startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var total = await developerService.LoadGamesBulkAsync(startYear, token);
+                return Ok(new { message = "Bulk game load complete", startYear, total });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error bulk loading games from CFBD starting year={StartYear}", startYear);
+                return StatusCode(500, "An error occurred during bulk game load.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches Vegas lines for a single year/week from CFBD and upserts into the Lines table.
+        /// Example: POST /api/developer/loadLines?year=2025&week=10
+        /// </summary>
+        [HttpPost("loadLines")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadLines(
+            [FromQuery] int year,
+            [FromQuery] int week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadLinesAsync(year, week, token);
+                return Ok(new { message = "Lines loaded successfully", year, week, count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading lines from CFBD for year={Year}, week={Week}", year, week);
+                return StatusCode(500, "An error occurred while loading lines.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches Vegas lines for every year/week from startYear to current and upserts into the Lines table.
+        /// Lines only exist from ~2013 forward; earlier years return empty gracefully.
+        /// Example: POST /api/developer/loadLinesBulk?startYear=2013
+        /// </summary>
+        [HttpPost("loadLinesBulk")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> LoadLinesBulk(
+            [FromQuery] int startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var total = await developerService.LoadLinesBulkAsync(startYear, token);
+                return Ok(new { message = "Bulk lines load complete", startYear, total });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error bulk loading lines from CFBD starting year={StartYear}", startYear);
+                return StatusCode(500, "An error occurred during bulk lines load.");
+            }
+        }
+
+        /// <summary>
+        /// Sunday/Wednesday refresh — loads games and lines for a single week.
+        /// Use this for the regular in-season weekly data update.
+        /// Example: POST /api/developer/weeklyRefresh?year=2025&week=10
+        /// </summary>
+        [HttpPost("weeklyRefresh")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> WeeklyRefresh(
+            [FromQuery] int year,
+            [FromQuery] int week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var total = await developerService.WeeklyRefreshAsync(year, week, token);
+                return Ok(new { message = "Weekly refresh complete", year, week, recordsLoaded = total });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during weekly refresh for year={Year}, week={Week}", year, week);
+                return StatusCode(500, "An error occurred during weekly refresh.");
             }
         }
 
         #endregion
-        #region Cfbd 
+
+        #region CFBD V2 — Preview (non-destructive)
+
         /// <summary>
         /// Previews team data from CFBD without writing to the database.
         /// Example: GET /api/developer/previewCfbdTeams?year=2026
         /// </summary>
         [HttpGet("previewCfbdTeams")]
+        [Tags("CFBD V2 - Preview")]
         public async Task<IActionResult> PreviewCfbdTeams(
             [FromQuery] int? year,
             CancellationToken token = default)
@@ -242,6 +391,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/previewCfbdGames?year=2026&week=1
         /// </summary>
         [HttpGet("previewCfbdGames")]
+        [Tags("CFBD V2 - Preview")]
         public async Task<IActionResult> PreviewCfbdGames(
             [FromQuery] int year,
             [FromQuery] int? week,
@@ -264,6 +414,61 @@ namespace SaturdayPulse.Controllers
                 return StatusCode(500, "An error occurred while previewing games.");
             }
         }
+
+        #endregion
+
+        #region Rolling Averages
+
+        /// <summary>
+        /// Backfills SeedRating, TrendRating, and PedigreeRating for all teams.
+        /// Example: POST /api/developer/backfillRollingAverages?startYear=1975
+        /// </summary>
+        [HttpPost("backfillRollingAverages")]
+        [Tags("Rolling Averages")]
+        public async Task<IActionResult> BackfillRollingAverages(
+            [FromQuery] int? startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.BackfillRollingAveragesAsync(startYear, token);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during rolling averages backfill");
+                return StatusCode(500, "An error occurred during backfill.");
+            }
+        }
+
+        /// <summary>
+        /// Recalculates rolling averages for a single year/week.
+        /// Example: POST /api/developer/calculateRollingAverages?year=2025&week=8
+        /// Example: POST /api/developer/calculateRollingAverages?year=2025  (preseason)
+        /// </summary>
+        [HttpPost("calculateRollingAverages")]
+        [Tags("Rolling Averages")]
+        public async Task<IActionResult> CalculateRollingAverages(
+            [FromQuery] int? year,
+            [FromQuery] int? week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.CalculateRollingAveragesAsync(year, week, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error calculating rolling averages: year={Year}, week={Week}", year, week);
+                return StatusCode(500, "An error occurred calculating rolling averages.");
+            }
+        }
+
         #endregion
 
         #region Team Records and Metrics
@@ -273,6 +478,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/updateTeamRecords?year=2024
         /// </summary>
         [HttpPost("updateTeamRecords")]
+        [Tags("Team Records and Metrics")]
         public async Task<IActionResult> UpdateTeamRecords([FromQuery] int? year)
         {
             try
@@ -292,6 +498,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/setSOS?year=2024&week=10
         /// </summary>
         [HttpPost("setSOS")]
+        [Tags("Team Records and Metrics")]
         public async Task<IActionResult> SetSOS([FromQuery] int? year, [FromQuery] int? week)
         {
             try
@@ -308,9 +515,10 @@ namespace SaturdayPulse.Controllers
 
         /// <summary>
         /// Calculates power ratings for a specific year.
-        /// Example: GET /api/developer/calculatePowerRatings?year=2024
+        /// Example: POST /api/developer/calculatePowerRatings?year=2024
         /// </summary>
-        [HttpGet("calculatePowerRatings")]
+        [HttpPost("calculatePowerRatings")]   // was HttpGet — this modifies DB state
+        [Tags("Team Records and Metrics")]
         public async Task<IActionResult> CalculatePowerRatings([FromQuery] int? year)
         {
             try
@@ -327,9 +535,10 @@ namespace SaturdayPulse.Controllers
 
         /// <summary>
         /// Calculates rankings for all teams in a specific year.
-        /// Example: GET /api/developer/calculateRankings?year=2024
+        /// Example: POST /api/developer/calculateRankings?year=2024
         /// </summary>
-        [HttpGet("calculateRankings")]
+        [HttpPost("calculateRankings")]   // was HttpGet — this modifies DB state
+        [Tags("Team Records and Metrics")]
         public async Task<IActionResult> CalculateRankings([FromQuery] int? year)
         {
             try
@@ -350,6 +559,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/updateWeeklyMetrics?year=2024&week=10
         /// </summary>
         [HttpPost("updateWeeklyMetrics")]
+        [Tags("Team Records and Metrics")]
         public async Task<IActionResult> UpdateWeeklyMetrics([FromQuery] int? year, [FromQuery] int? week)
         {
             try
@@ -377,6 +587,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/backfillAllMetrics?startYear=2000
         /// </summary>
         [HttpPost("backfillAllMetrics")]
+        [Tags("Team Records and Metrics")]
         public async Task<IActionResult> BackfillAllMetrics(
             [FromQuery] int? startYear,
             CancellationToken token = default)
@@ -407,6 +618,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/recalculateScoreDeltas
         /// </summary>
         [HttpPost("recalculateScoreDeltas")]
+        [Tags("Score Deltas and Rivalries")]
         public async Task<IActionResult> RecalculateScoreDeltas(CancellationToken token = default)
         {
             try
@@ -426,6 +638,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/recreateAvgScoreDeltasTable
         /// </summary>
         [HttpPost("recreateAvgScoreDeltasTable")]
+        [Tags("Score Deltas and Rivalries")]
         public async Task<IActionResult> RecreateAvgScoreDeltasTable(CancellationToken token = default)
         {
             try
@@ -445,6 +658,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/calculateMatchupHistories
         /// </summary>
         [HttpPost("calculateMatchupHistories")]
+        [Tags("Score Deltas and Rivalries")]
         public async Task<IActionResult> CalculateMatchupHistories()
         {
             try
@@ -468,6 +682,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/analytics?startYear=2020&endYear=2024
         /// </summary>
         [HttpGet("analytics")]
+        [Tags("Analytics and Diagnostics")]
         public async Task<IActionResult> GetAnalytics(
             [FromQuery] int? startYear,
             [FromQuery] int? endYear,
@@ -498,6 +713,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/analyzeTeamGames?teamId=110&year=2024
         /// </summary>
         [HttpGet("analyzeTeamGames")]
+        [Tags("Analytics and Diagnostics")]
         public async Task<IActionResult> AnalyzeTeamGames(
             [FromQuery] int teamId,
             [FromQuery] int? year,
@@ -530,6 +746,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/calculateTrends?teamId=110&year=2024
         /// </summary>
         [HttpGet("calculateTrends")]
+        [Tags("Analytics and Diagnostics")]
         public async Task<IActionResult> CalculateTrends(
             [FromQuery] int? teamId,
             [FromQuery] int? year,
@@ -552,6 +769,7 @@ namespace SaturdayPulse.Controllers
         /// Example: GET /api/developer/diagnosticScoreDeltas?year=2024
         /// </summary>
         [HttpGet("diagnosticScoreDeltas")]
+        [Tags("Analytics and Diagnostics")]
         public async Task<IActionResult> DiagnosticScoreDeltas(
             [FromQuery] int? year,
             CancellationToken token = default)
@@ -583,6 +801,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/backfillWeeklyRankings?startYear=2010
         /// </summary>
         [HttpPost("backfillWeeklyRankings")]
+        [Tags("Analytics and Diagnostics")]
         public async Task<IActionResult> BackfillWeeklyRankings(
             [FromQuery] int? startYear,
             CancellationToken token = default)
@@ -609,6 +828,7 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/computeweekly?year=2025&backfill=true
         /// </summary>
         [HttpPost("computeweekly")]
+        [Tags("Analytics and Diagnostics")]
         public async Task<IActionResult> ComputeWeekly(
             [FromQuery] int? year,
             [FromQuery] int? week,

@@ -10,6 +10,8 @@ namespace SaturdayPulse.Repositories.Interfaces
     public interface ILookupRepository
     {
         Task<List<AvgScoreDelta>>  GetAvgScoreDeltasAsync(CancellationToken token = default);
+        Task AddAvgScoreDeltasAsync(IEnumerable<AvgScoreDelta> deltas, CancellationToken token = default);
+
         Task<List<MatchupHistory>> GetMatchupHistoriesAsync(CancellationToken token = default);
 
         /// <summary>

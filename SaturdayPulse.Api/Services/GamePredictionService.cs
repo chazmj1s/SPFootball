@@ -26,9 +26,9 @@ namespace SaturdayPulse.Services
             int year, string teamName, string opponentName,
             char location, int week = 0, CancellationToken token = default)
         {
-            var team     = await _uow.Teams.GetByNameAsync(teamName, token)
+            var team     = await _uow.Team.GetByNameAsync(teamName, token)
                            ?? throw new ArgumentException($"Team not found: {teamName}");
-            var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
+            var opponent = await _uow.Team.GetByNameAsync(opponentName, token)
                            ?? throw new ArgumentException($"Team not found: {opponentName}");
 
             var teamRecords = await _uow.TeamRecords.GetByTeamsAndYearAsync(
@@ -51,7 +51,7 @@ namespace SaturdayPulse.Services
         public async Task<List<GamePrediction>> PredictMatchups(
             int year, List<MatchupRequest> matchups, CancellationToken token = default)
         {
-            var teams          = await _uow.Teams.GetTeamDictionaryByNameAsync(token);
+            var teams          = await _uow.Team.GetTeamDictionaryByNameAsync(token);
             var teamRecords    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordsById    = teamRecords.ToDictionary(tr => tr.TeamID);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
@@ -174,7 +174,7 @@ namespace SaturdayPulse.Services
             if (_cachedAvgTeamScore.HasValue) return _cachedAvgTeamScore.Value;
 
             var cutoffYear = year - RecentYearsForAverage;
-            var games      = await _uow.Games.GetPlayedGamesSinceYearAsync(cutoffYear, token);
+            var games      = await _uow.Game.GetPlayedGamesSinceYearAsync(cutoffYear, token);
 
             _cachedAvgTeamScore = games.Count == 0
                 ? 28.0

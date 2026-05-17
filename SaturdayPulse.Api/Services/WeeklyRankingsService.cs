@@ -31,14 +31,14 @@ namespace SaturdayPulse.Services
         public async Task ComputeAndSaveAsync(int year, int week, CancellationToken token = default)
         {
             // ── 1. Load reference data ────────────────────────────────────────────
-            var allTeams         = await _uow.Teams.GetAllAsync(token);
+            var allTeams         = await _uow.Team.GetAllAsync(token);
             var fbsTeams         = allTeams.Where(t => t.Division == "FBS").ToList();
             var fbsIds           = fbsTeams.Select(t => t.TeamID).ToHashSet();
             var avgScoreDeltas   = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var matchupHistories = await _uow.Lookups.GetMatchupHistoriesAsync(token);
 
             // ── 2. Played games through this week ─────────────────────────────────
-            var games = await _uow.Games.GetPlayedGamesByYearAndWeekAsync(year, week, token);
+            var games = await _uow.Game.GetPlayedGamesByYearAndWeekAsync(year, week, token);
 
             // ── 3. Raw stats per team [wins, losses, pf, pa] ──────────────────────
             var rawStats = fbsTeams.ToDictionary(t => t.TeamID, _ => new int[4]);
@@ -295,6 +295,29 @@ namespace SaturdayPulse.Services
             }
 
             await _uow.SaveChangesAsync(token);
+
+            // ── 15. Update TeamRecord with latest scoring stats ───────────────────
+            // TeamRecord has one row per team per year — always overwrite with the
+            // most recently computed week so the final week of any year persists.
+            var teamRecords = await _uow.TeamRecords.GetByTeamsAndYearAsync(fbsIds, year, token);
+
+            foreach (var t in fbsTeams)
+            {
+                if (!teamRecords.TryGetValue(t.TeamID, out var record)) continue;
+
+                var s           = rawStats[t.TeamID];
+                var gamesPlayed = s[0] + s[1];
+                if (gamesPlayed == 0) continue;
+
+                record.AvgPointsScored  = Math.Round((decimal)s[2] / gamesPlayed, 2);
+                record.AvgPointsAllowed = Math.Round((decimal)s[3] / gamesPlayed, 2);
+                record.OffensiveZScore  = gamesPlayed > 0 ? (decimal)Math.Round(offensiveZScores.GetValueOrDefault(t.TeamID, 0.0), 4) : 0;
+                record.DefensiveZScore  = gamesPlayed > 0 ? (decimal)Math.Round(defensiveZScores.GetValueOrDefault(t.TeamID, 0.0), 4) : 0;
+                record.OffensiveRank    = offensiveRanks.GetValueOrDefault(t.TeamID, 0);
+                record.DefensiveRank    = defensiveRanks.GetValueOrDefault(t.TeamID, 0);
+            }
+
+            await _uow.SaveChangesAsync(token);
         }
 
         /// <summary>
@@ -302,7 +325,7 @@ namespace SaturdayPulse.Services
         /// </summary>
         public async Task BackfillYearAsync(int year, CancellationToken token = default)
         {
-            var playedWeeks = await _uow.Games.GetPlayedWeeksByYearAsync(year, token);
+            var playedWeeks = await _uow.Game.GetPlayedWeeksByYearAsync(year, token);
 
             foreach (var week in playedWeeks)
                 await ComputeAndSaveAsync(year, week, token);

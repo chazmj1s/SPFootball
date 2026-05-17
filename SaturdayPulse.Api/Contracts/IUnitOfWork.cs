@@ -5,9 +5,9 @@ namespace SaturdayPulse.Contracts
     public interface IUnitOfWork : IAsyncDisposable
     {
         // ── Legacy repositories ───────────────────────────────────────────────
-        ITeamRepository       Teams       { get; }
+        ITeamRepository       Team       { get; }
         ITeamRecordRepository TeamRecords { get; }
-        IGameRepository       Games       { get; }
+        IGameRepository       Game       { get; }
         ILookupRepository     Lookups     { get; }
 
         // ── CFBD V2 repositories ──────────────────────────────────────────────

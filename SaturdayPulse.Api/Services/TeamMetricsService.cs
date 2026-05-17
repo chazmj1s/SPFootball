@@ -141,7 +141,7 @@ namespace SaturdayPulse.Services
                 }
 
                 // ── Step 2: Game participants ─────────────────────────────────────
-                var gameParticipants = await _uow.Games.GetGameParticipantsAsync(targetYear, token);
+                var gameParticipants = await _uow.Game.GetGameParticipantsAsync(targetYear, token);
 
                 // ── Step 3: Annotate with wins/losses ─────────────────────────────
                 var withRecords = gameParticipants.Select(gp => new
@@ -264,7 +264,7 @@ namespace SaturdayPulse.Services
         {
             var targetYear = year ?? DateTime.Now.Year;
 
-            var gameParticipants = await _uow.Games.GetGameParticipantsAsync(targetYear, token);
+            var gameParticipants = await _uow.Game.GetGameParticipantsAsync(targetYear, token);
 
             var teamRecords  = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
             var winsLookup   = teamRecords.ToDictionary(tr => tr.TeamID, tr => (int)tr.Wins);

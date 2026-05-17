@@ -10,6 +10,7 @@ namespace SaturdayPulse.Models
         [Column("Id")]
         public int Id { get; set; }
 
+        [Required]
         [Column("Year")]
         public int Year { get; set; }
 
@@ -22,6 +23,7 @@ namespace SaturdayPulse.Models
         [Column("GameDay", TypeName = "varchar(3)")]
         public string? GameDay { get; set; }
 
+        [Required]
         [Column("WinnerId")]
         public int WinnerId { get; set; }
 
@@ -32,6 +34,7 @@ namespace SaturdayPulse.Models
         [Column("WPoints")]
         public int WPoints { get; set; }
 
+        [Required]
         [Column("LoserId")]
         public int LoserId { get; set; }
 

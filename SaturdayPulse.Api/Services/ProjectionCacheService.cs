@@ -69,8 +69,8 @@ namespace SaturdayPulse.Services
                 // Double-check inside lock
                 if (_cachedYear == year && _cache.Count > 0) return;
 
-                var teams = await _uow.Teams.GetTeamDictionaryAsync(token);
-                var allGames = await _uow.Games.GetByYearAsync(year, token);
+                var teams = await _uow.Team.GetTeamDictionaryAsync(token);
+                var allGames = await _uow.Game.GetByYearAsync(year, token);
 
                 // Filter to regular season only
                 var regularSeasonGames = allGames.Where(g => g.Week < 16).ToList();

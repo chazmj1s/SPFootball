@@ -34,7 +34,7 @@ namespace SaturdayPulse.Utilities
             _logger.LogInformation("Found {Count} rivalries to process", rivalryMetadata.Count);
 
             // Load all games, teams, and records into memory for efficient processing
-            var allGames = (await _uow.Games.GetPlayedGamesSinceYearAsync(1, cancellationToken))
+            var allGames = (await _uow.Game.GetPlayedGamesSinceYearAsync(1, cancellationToken))
                 .Select(g => new GameData
                 {
                     Team1    = g.WinnerId < g.LoserId ? g.WinnerId : g.LoserId,
@@ -46,7 +46,7 @@ namespace SaturdayPulse.Utilities
                 })
                 .ToList();
 
-            var teamMapping = await _uow.Teams.GetAllAsync(cancellationToken);
+            var teamMapping = await _uow.Team.GetAllAsync(cancellationToken);
 
             // Pre-load win totals for upset rate calculation — eliminates N+1 query
             var allRecords = await _uow.TeamRecords.GetHistoricalAsync(1, 9999, cancellationToken);
