@@ -477,6 +477,29 @@ namespace SaturdayPulse.Controllers
         #region Conference Standings and Projections
 
         /// <summary>
+        /// V2: Projected conference standings from Games + TeamsConferenceHistory tables.
+        /// Example: GET /api/productiongamedata/projected-standings/v2?year=2025&throughWeek=8&conference=SEC
+        /// </summary>
+        [HttpGet("projected-standings/v2")]
+        public async Task<IActionResult> GetProjectedStandingsV2(
+            [FromQuery] int? year,
+            [FromQuery] int? throughWeek,
+            [FromQuery] string? conference = null,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetProjectedStandingsV2Async(year, throughWeek, conference, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing V2 projected standings");
+                return StatusCode(500, "An error occurred computing projected standings.");
+            }
+        }
+
+        /// <summary>
         /// V2: Championship qualifiers from Games + TeamsConferenceHistory tables.
         /// Example: GET /api/productiongamedata/championship-qualifiers/v2?year=2025
         /// </summary>

@@ -288,6 +288,145 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// V2: Projected conference standings for all FBS teams.
+        /// Legacy equivalent: GetProjectedStandingsAsync() which reads from Game + Team tables.
+        /// Uses ConferenceGame flag for conference game detection.
+        /// Uses TeamsConferenceHistory to resolve conference for the target year.
+        /// </summary>
+        public async Task<IReadOnlyList<object>> GetProjectedStandingsV2Async(
+            int? year, int? throughWeek, string? conference, CancellationToken token = default)
+        {
+            var targetYear = year ?? DateTime.Now.Year;
+            var teamsV2    = await _uow.TeamsV2.GetDictionaryByTeamIdAsync(token);
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+            var confByYear = await _uow.TeamsConferenceHistory.GetConferenceIdsByYearAsync(targetYear, token);
+
+            // Helper: get conference abbreviation for a team in the target year
+            string ConfAbbrForYear(int teamId)
+            {
+                if (!confByYear.TryGetValue(teamId, out var confId)) return string.Empty;
+                confLookup.TryGetValue(confId, out var conf);
+                return conf?.Abbreviation ?? string.Empty;
+            }
+
+            var allGames = await _uow.GamesV2.GetByYearAsync(targetYear, token);
+
+            if (allGames.Any())
+            {
+                var maxWeek = allGames.Max(g => g.Week);
+                allGames = allGames.Where(g => g.Week < maxWeek).ToList();
+            }
+
+            var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
+
+            // Target teams: FBS, has a conference assignment this year, not IND/Pac-12,
+            // optionally filtered by conference param
+            var targetTeams = teamsV2.Values
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase)
+                         && confByYear.ContainsKey(t.TeamId))
+                .Select(t => new { Team = t, ConfAbbr = ConfAbbrForYear(t.TeamId) })
+                .Where(x => !string.IsNullOrEmpty(x.ConfAbbr)
+                         && x.ConfAbbr != "IND"
+                         && x.ConfAbbr != "Pac-12"
+                         && (conference == null ||
+                             x.ConfAbbr.Equals(conference, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var teamResults = targetTeams.Select(x =>
+            {
+                var team     = x.Team;
+                var confAbbr = x.ConfAbbr;
+
+                // Conference games for this team this year
+                var teamConfGames = allGames
+                    .Where(g => g.ConferenceGame == true &&
+                                (g.HomeId == team.TeamId || g.AwayId == team.TeamId))
+                    .OrderBy(g => g.Week)
+                    .ToList();
+
+                int actualWins = 0, actualLosses = 0, projWins = 0, projLosses = 0;
+
+                var gameDetails = teamConfGames.Select(g =>
+                {
+                    bool isHome   = g.HomeId == team.TeamId;
+                    var oppId     = isHome ? (g.AwayId ?? 0) : (g.HomeId ?? 0);
+                    teamsV2.TryGetValue(oppId, out var opp);
+                    var oppName   = opp?.Abbreviation ?? opp?.TeamName ?? "Unknown";
+
+                    bool isPlayed = ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0) &&
+                                    (!throughWeek.HasValue || g.Week <= throughWeek.Value);
+
+                    if (isPlayed)
+                    {
+                        int myPts  = isHome ? (g.HomePoints ?? 0) : (g.AwayPoints ?? 0);
+                        int oppPts = isHome ? (g.AwayPoints ?? 0) : (g.HomePoints ?? 0);
+                        bool won   = myPts > oppPts;
+                        if (won) actualWins++; else actualLosses++;
+
+                        return (object)new
+                        {
+                            g.Week, Opponent = oppName, Location = isHome ? "vs" : "@",
+                            Result = won ? "W" : "L", Score = $"{myPts}-{oppPts}",
+                            ProjScore = (string?)null, Confidence = (string?)null,
+                            Type = "Actual", NeutralSite = g.NeutralSite == true
+                        };
+                    }
+                    else
+                    {
+                        double projMyScore = 0, projOppScore = 0;
+                        string confidence  = "Unknown";
+                        bool projWin       = false;
+
+                        if (allProjections.TryGetValue(g.GameId, out var pred))
+                        {
+                            projMyScore  = isHome ? pred.PredictedTeamScore     : pred.PredictedOpponentScore;
+                            projOppScore = isHome ? pred.PredictedOpponentScore  : pred.PredictedTeamScore;
+                            confidence   = pred.Confidence ?? "Unknown";
+                            projWin      = projMyScore >= projOppScore;
+                        }
+                        else { projWin = isHome; }   // home default
+
+                        if (projWin) projWins++; else projLosses++;
+
+                        return (object)new
+                        {
+                            g.Week, Opponent = oppName, Location = isHome ? "vs" : "@",
+                            Result = projWin ? "W" : "L", Score = (string?)null,
+                            ProjScore = projMyScore > 0
+                                ? $"{Math.Round(projMyScore)}-{Math.Round(projOppScore)}" : null,
+                            Confidence = confidence, Type = "Projected",
+                            NeutralSite = g.NeutralSite == true
+                        };
+                    }
+                }).ToList();
+
+                int totalWins   = actualWins   + projWins;
+                int totalLosses = actualLosses + projLosses;
+                int total       = totalWins + totalLosses;
+
+                return (object)new
+                {
+                    team.TeamName,
+                    Conference      = confAbbr,
+                    Division        = RatingCalculator.GetDivision(team.TeamName, confAbbr),
+                    ActualWins      = actualWins,
+                    ActualLosses    = actualLosses,
+                    ProjectedWins   = totalWins,
+                    ProjectedLosses = totalLosses,
+                    ProjectedWinPct = Math.Round(total > 0 ? (double)totalWins / total : 0.0, 3),
+                    Games           = gameDetails,
+                    SimulatedThrough = throughWeek.HasValue ? $"Week {throughWeek}" : "Current"
+                };
+            }).ToList();
+
+            return teamResults
+                .OrderBy(t  => RatingCalculator.ConferenceDisplayOrder(((dynamic)t).Conference))
+                .ThenByDescending(t => ((dynamic)t).ProjectedWinPct)
+                .ThenByDescending(t => ((dynamic)t).ProjectedWins)
+                .ToList();
+        }
+
+        /// <summary>
         /// V2: Builds actual conference standings for a year.
         /// Uses ConferenceGame flag on Games for conference game detection.
         /// Uses TeamsConferenceHistory to identify which conference each team was in that year.
