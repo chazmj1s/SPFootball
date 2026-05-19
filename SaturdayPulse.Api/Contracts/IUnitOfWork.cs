@@ -13,8 +13,8 @@ namespace SaturdayPulse.Contracts
 
         // ── CFBD V2 repositories ──────────────────────────────────────────────
         IConferenceRepository Conferences { get; }
-        ITeamsRepository      TeamsV2     { get; }
-        IGamesRepository      GamesV2     { get; }
+        ITeamsRepository      Teams     { get; }
+        IGamesRepository      Games     { get; }
         ILinesRepository      Lines       { get; }
         IProjectionRepository Projections { get; }
         IWeeklyRankingsRepository WeeklyRankings { get; }

@@ -91,7 +91,7 @@ namespace SaturdayPulse.Services
             var mapped = results.Select(tr => (object)new
             {
                 tr.Year,
-                TeamName          = tr.Team!.TeamName,
+                TeamName          = tr.Teams!.TeamName,
                 Record            = $"{tr.Wins}-{tr.Losses}",
                 tr.Wins, tr.Losses, tr.PointsFor, tr.PointsAgainst,
                 PointDifferential = tr.PointsFor - tr.PointsAgainst,
@@ -127,7 +127,7 @@ namespace SaturdayPulse.Services
                 var avg = _rollingAverageService.Compute(r, history, useLiveSwap: false);
                 return (object)new
                 {
-                    teamId = r.TeamID, teamName = r.Team?.TeamName, conference = r.Team?.ConferenceAbbr,
+                    teamId = r.TeamID, teamName = r.Teams?.TeamName, conference = r.Teams?.Conference?.Abbreviation,
                     seedRating = avg.SeedRating, trendRating = avg.TrendRating,
                     trendHistory = avg.TrendHistory, pedigreeRating = avg.PedigreeRating,
                     pedigreeHistory = avg.PedigreeHistory
@@ -305,7 +305,7 @@ namespace SaturdayPulse.Services
                 var ranked      = teamRecords.Where(tr => tr.Ranking.HasValue).ToList();
 
                 var withTiers = ranked
-                    .Select(tr => new { TeamRecord = tr, Tier = RatingCalculator.GetConferenceTier(tr.Team?.Conference, tr.Team?.TeamName) })
+                    .Select(tr => new { TeamRecord = tr, Tier = RatingCalculator.GetConferenceTier(tr.Teams?.Conference?.Abbreviation, tr.Teams?.TeamName) })
                     .OrderByDescending(t => t.TeamRecord.Ranking)
                     .ToList();
 
@@ -329,10 +329,10 @@ namespace SaturdayPulse.Services
                     .Select(t => new PowerRankingRowResponse
                     {
                         TeamID         = t.TeamRecord.TeamID,
-                        TeamName       = t.TeamRecord.Team?.TeamName,
-                        Conference     = t.TeamRecord.Team?.Conference,
-                        ConferenceAbbr = t.TeamRecord.Team?.ConferenceAbbr,
-                        Division       = t.TeamRecord.Team?.Division,
+                        TeamName       = t.TeamRecord.Teams?.TeamName,
+                        Conference     = t.TeamRecord.Teams?.Conference?.Name,
+                        ConferenceAbbr = t.TeamRecord.Teams?.Conference?.Abbreviation,
+                        Division       = t.TeamRecord.Teams?.Division,
                         Tier           = t.Tier,
                         OverallRank    = t.OverallRank,
                         TierRank       = tierRankLookup[t.TeamRecord.TeamID],

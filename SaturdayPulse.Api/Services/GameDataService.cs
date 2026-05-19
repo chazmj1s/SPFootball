@@ -1,4 +1,6 @@
 using HtmlAgilityPack;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Extensions;
@@ -137,6 +139,105 @@ namespace SaturdayPulse.Services
             return changes;
         }
 
+        /// <summary>
+        /// Assigns correct week numbers (17, 18, 19...) to postseason games for a given year.
+        /// CFBD returns week=1 for all postseason games; this fixes that by bucketing on
+        /// game date (Thursday-anchored weeks) and assigning sequential weeks from 17.
+        /// Example: POST /api/developer/assignPostseasonWeeks?year=2024
+        /// </summary>
+        public async Task<int> AssignPostseasonWeeksAsync(int year, CancellationToken token = default)
+        {
+            var games = await _uow.Games.GetByYearAsync(year, token);
+            var postseason = games.Where(g => g.SeasonType == "postseason"
+                                           && g.GameDate != null
+                                           && DateTime.TryParse(g.GameDate, out _)).ToList();
+
+            if (postseason.Count == 0)
+            {
+                Console.WriteLine($"AssignPostseasonWeeksAsync: no postseason games found for {year}");
+                return 0;
+            }
+
+            var regularGames = games.Where(g => g.SeasonType == "regular" && g.GameDate != null).ToList();
+
+            var maxRegularWeek = regularGames.Max(g => g.Week);
+
+            var regularWeekByTuesdayStart = regularGames
+                .Where(g => DateTime.TryParse(g.GameDate, out _))
+                .GroupBy(g =>
+                {
+                    DateTime.TryParse(g.GameDate, out var dt);
+                    var daysFromTuesday = ((int)dt.DayOfWeek + 6) % 7;
+                    return dt.Date.AddDays(-daysFromTuesday);
+                })
+                .ToDictionary(grp => grp.Key, grp => grp.First().Week);
+
+            var weekMap = BuildPostseasonWeekMapFromGames(postseason, regularWeekByTuesdayStart, maxRegularWeek);
+            foreach (var game in postseason)
+                if (weekMap.TryGetValue(game.GameId, out var pw))
+                    game.Week = pw;
+
+            await _uow.SaveChangesAsync(token);
+            Console.WriteLine($"AssignPostseasonWeeksAsync: assigned postseason weeks for {postseason.Count} games in {year}");
+            return postseason.Count;
+        }
+
+        /// <summary>
+        /// Bulk version — runs AssignPostseasonWeeksAsync for every year from startYear to current.
+        /// Example: POST /api/developer/assignPostseasonWeeksBulk?startYear=1963
+        /// </summary>
+        public async Task<int> AssignPostseasonWeeksBulkAsync(int startYear, CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+            var total = 0;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                total += await AssignPostseasonWeeksAsync(year, token);
+                await Task.Delay(50, token); // no HTTP calls, just DB — short delay is fine
+            }
+
+            Console.WriteLine($"AssignPostseasonWeeksBulkAsync: {total} total postseason games updated from {startYear} to {currentYear}");
+            return total;
+        }
+
+        /// <summary>
+        /// Buckets Games entities by Thursday-anchored calendar week, assigns week 17, 18, 19...
+        /// </summary>
+        private static Dictionary<int, int> BuildPostseasonWeekMapFromGames(
+            List<Games> postseason,
+            Dictionary<DateTime, int> regularWeekByTuesdayStart,
+            int maxRegularWeek)
+        {
+            var parsed = postseason
+                .Select(g =>
+                {
+                    DateTime.TryParse(g.GameDate, out var dt);
+                    var daysFromTuesday = ((int)dt.DayOfWeek + 6) % 7; // Tue=0 ... Mon=6
+                    var weekStart = dt.Date.AddDays(-daysFromTuesday);
+                    return (g.GameId, weekStart);
+                })
+                .ToList();
+
+            var distinctBuckets = parsed
+                .Select(x => x.weekStart)
+                .Distinct()
+                .OrderBy(w => w)
+                .ToList();
+
+            var weekLabels = new Dictionary<DateTime, int>();
+            var nextFallback = maxRegularWeek + 1;
+
+            foreach (var bucket in distinctBuckets)
+            {
+                if (regularWeekByTuesdayStart.TryGetValue(bucket, out var existingWeek))
+                    weekLabels[bucket] = existingWeek;
+                else
+                    weekLabels[bucket] = nextFallback++;
+            }
+
+            return parsed.ToDictionary(x => x.GameId, x => weekLabels[x.weekStart]);
+        }
 
         /// <summary>
         /// Bulk load — fetches all games for every year from startYear to current.
@@ -170,7 +271,7 @@ namespace SaturdayPulse.Services
             for (var year = startYear; year <= currentYear; year++)
             {
                 // Fetch week range from Games table so we only request weeks that exist
-                var weeks = (await _uow.GamesV2.GetByYearAsync(year, token))
+                var weeks = (await _uow.Games.GetByYearAsync(year, token))
                     .Select(g => g.Week)
                     .Distinct()
                     .OrderBy(w => w)
@@ -250,7 +351,7 @@ namespace SaturdayPulse.Services
                 ShortName    = null  // not in /teams endpoint
             }).ToList();
 
-            await _uow.TeamsV2.UpsertRangeAsync(teams, token);
+            await _uow.Teams.UpsertRangeAsync(teams, token);
             await _uow.SaveChangesAsync(token);
 
             Console.WriteLine($"LoadTeamsAsync: upserted {teams.Count} teams for {targetYear}");
@@ -263,7 +364,7 @@ namespace SaturdayPulse.Services
         /// </summary>
         public async Task<int> LoadGamesAsync(int year, int? week = null, CancellationToken token = default)
         {
-            var url = $"/games?year={year}&seasonType=both";
+            var url = $"/games?year={year}&seasonType=both&classification=fbs";
             if (week.HasValue)
                 url += $"&week={week.Value}";
 
@@ -297,7 +398,7 @@ namespace SaturdayPulse.Services
                 Venue          = d.Venue
             }).ToList();
 
-            await _uow.GamesV2.UpsertRangeAsync(games, token);
+            await _uow.Games.UpsertRangeAsync(games, token);
             await _uow.SaveChangesAsync(token);
 
             Console.WriteLine($"LoadGamesAsync: upserted {games.Count} games for {year}" +
@@ -784,6 +885,13 @@ namespace SaturdayPulse.Services
             {
                 await _uow.TeamRecords.UpsertFromGamesAsync(targetYear, token);
                 await _uow.SaveChangesAsync(token);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqliteException sqliteEx)
+            {
+                // This gives you the specific SQLite error code (787 for Foreign Key)
+                Console.WriteLine($"SQLite Error Code: {sqliteEx.SqliteErrorCode}");
+                Console.WriteLine($"SQLite Extended Error Code: {sqliteEx.SqliteExtendedErrorCode}");
+                Console.WriteLine($"Message: {sqliteEx.Message}");
             }
             catch (Exception ex)
             {

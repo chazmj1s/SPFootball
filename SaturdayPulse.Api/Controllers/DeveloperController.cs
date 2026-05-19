@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 
@@ -172,6 +173,52 @@ namespace SaturdayPulse.Controllers
         #endregion
 
         #region CFBD V2 — Load
+
+        /// <summary>
+        /// Assigns correct week numbers (17+) to postseason games for a single year.
+        /// CFBD returns week=1 for all postseason games; this fixes it by bucketing on game date.
+        /// Example: POST /api/developer/assignPostseasonWeeks?year=2024
+        /// </summary>
+        [HttpPost("assignPostseasonWeeks")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> AssignPostseasonWeeks(
+            [FromQuery] int year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.AssignPostseasonWeeksAsync(year, token);
+                return Ok(new { message = $"Postseason weeks assigned for {year}", gamesUpdated = count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error assigning postseason weeks for year={Year}", year);
+                return StatusCode(500, "An error occurred while assigning postseason weeks.");
+            }
+        }
+
+        /// <summary>
+        /// Bulk version — assigns correct postseason week numbers for every year from startYear to current.
+        /// Run once to fix all historical week=1 postseason games.
+        /// Example: POST /api/developer/assignPostseasonWeeksBulk?startYear=1963
+        /// </summary>
+        [HttpPost("assignPostseasonWeeksBulk")]
+        [Tags("CFBD V2 - Load")]
+        public async Task<IActionResult> AssignPostseasonWeeksBulk(
+            [FromQuery] int startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.AssignPostseasonWeeksBulkAsync(startYear, token);
+                return Ok(new { message = $"Postseason weeks assigned from {startYear} to current", gamesUpdated = count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error bulk-assigning postseason weeks from startYear={StartYear}", startYear);
+                return StatusCode(500, "An error occurred while bulk-assigning postseason weeks.");
+            }
+        }
 
         /// <summary>
         /// Fetches all conferences from CFBD and upserts into the Conferences table.

@@ -82,11 +82,11 @@ namespace SaturdayPulse.Services
 
             foreach (var record in currentYearRecords)
             {
-                if (record.Team?.Division == "FCS")
+                if (record.Teams?.Division == "FCS")
                 {
-                    record.SeedRating     = null;
-                    record.TrendRating    = null;
-                    record.PedigreeRating = null;
+                    record.SeedRating     = 0;
+                    record.TrendRating    = 0;
+                    record.PedigreeRating = 0;
                     continue;
                 }
 

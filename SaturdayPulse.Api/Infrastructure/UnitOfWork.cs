@@ -22,8 +22,8 @@ namespace SaturdayPulse.Infrastructure
 
         // ── CFBD V2 repositories ──────────────────────────────────────────────
         public IConferenceRepository Conferences { get; }
-        public ITeamsRepository      TeamsV2     { get; }
-        public IGamesRepository      GamesV2     { get; }
+        public ITeamsRepository      Teams     { get; }
+        public IGamesRepository      Games     { get; }
         public ILinesRepository      Lines       { get; }
         public IProjectionRepository Projections { get; }
         public IWeeklyRankingsRepository WeeklyRankings { get; }
@@ -41,8 +41,8 @@ namespace SaturdayPulse.Infrastructure
 
             // CFBD V2
             Conferences = new ConferenceRepository(_context);
-            TeamsV2     = new TeamsRepository(_context);
-            GamesV2     = new GamesRepository(_context);
+            Teams     = new TeamsRepository(_context);
+            Games     = new GamesRepository(_context);
             Lines       = new LinesRepository(_context);
             Projections = new ProjectionRepository(_context);
             WeeklyRankings = new WeeklyRankingsRepository(_context);

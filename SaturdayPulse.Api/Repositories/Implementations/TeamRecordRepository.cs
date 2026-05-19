@@ -28,16 +28,16 @@ namespace SaturdayPulse.Repositories.Implementations
 
         public Task<List<TeamRecord>> GetByYearWithTeamsAsync(int year, CancellationToken token = default)
             => _context.TeamRecords
-                .Include(tr => tr.Team)
+                .Include(tr => tr.Teams)
                 .Where(tr => tr.Year == year)
                 .ToListAsync(token);
 
         public Task<List<TeamRecord>> GetFbsByYearAsync(int year, CancellationToken token = default)
             => _context.TeamRecords
-                .Include(tr => tr.Team)
+                .Include(tr => tr.Teams)
                 .Where(tr => tr.Year == year &&
-                             tr.Team != null &&
-                             tr.Team.Division == "FBS")
+                             tr.Teams != null &&
+                             tr.Teams.Division == "FBS")
                 .ToListAsync(token);
 
         public Task<List<TeamRecord>> GetHistoricalAsync(
@@ -49,7 +49,7 @@ namespace SaturdayPulse.Repositories.Implementations
         public Task<List<TeamRecord>> GetSinceYearWithTeamsAsync(
             int fromYear, CancellationToken token = default)
             => _context.TeamRecords
-                .Include(tr => tr.Team)
+                .Include(tr => tr.Teams)
                 .Where(tr => tr.Year >= fromYear)
                 .ToListAsync(token);
 
@@ -68,36 +68,43 @@ namespace SaturdayPulse.Repositories.Implementations
                 .ToListAsync(token);
 
         /// <summary>
-        /// Aggregates wins/losses/points from the Game table and upserts into TeamRecords.
-        /// The UNION+GroupBy runs in-database so no large result sets are pulled into memory.
+        /// Aggregates wins/losses/points from the Games table (CFBD V2, home/away model)
+        /// and upserts into TeamRecords.
         /// </summary>
         public async Task UpsertFromGamesAsync(int? targetYear = null, CancellationToken token = default)
         {
-            var query = _context.Game.Where(g => g.Year > 0);
+            var query = _context.Games
+                .Where(g => g.Year > 0 &&
+                            ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0));
+
             if (targetYear.HasValue)
                 query = query.Where(g => g.Year == targetYear.Value);
 
-            var winners = query.Select(g => new
-            {
-                Year          = g.Year,
-                TeamId        = g.WinnerId,
-                Wins          = 1,
-                Losses        = 0,
-                PointsFor     = g.WPoints,
-                PointsAgainst = g.LPoints
-            });
+            var homeTeams = query
+                .Where(g => g.HomeId != null)
+                .Select(g => new
+                {
+                    Year          = g.Year,
+                    TeamId        = g.HomeId!.Value,
+                    Wins          = (g.HomePoints ?? 0) > (g.AwayPoints ?? 0) ? 1 : 0,
+                    Losses        = (g.HomePoints ?? 0) > (g.AwayPoints ?? 0) ? 0 : 1,
+                    PointsFor     = g.HomePoints ?? 0,
+                    PointsAgainst = g.AwayPoints ?? 0
+                });
 
-            var losers = query.Select(g => new
-            {
-                Year          = g.Year,
-                TeamId        = g.LoserId,
-                Wins          = 0,
-                Losses        = 1,
-                PointsFor     = g.LPoints,
-                PointsAgainst = g.WPoints
-            });
+            var awayTeams = query
+                .Where(g => g.AwayId != null)
+                .Select(g => new
+                {
+                    Year          = g.Year,
+                    TeamId        = g.AwayId!.Value,
+                    Wins          = (g.AwayPoints ?? 0) > (g.HomePoints ?? 0) ? 1 : 0,
+                    Losses        = (g.AwayPoints ?? 0) > (g.HomePoints ?? 0) ? 0 : 1,
+                    PointsFor     = g.AwayPoints ?? 0,
+                    PointsAgainst = g.HomePoints ?? 0
+                });
 
-            var grouped = await winners.Concat(losers)
+            var grouped = await homeTeams.Concat(awayTeams)
                 .GroupBy(x => new { x.Year, x.TeamId })
                 .Select(g => new
                 {
@@ -112,15 +119,23 @@ namespace SaturdayPulse.Repositories.Implementations
 
             if (grouped.Count == 0) return;
 
-            var aggregated = grouped.Select(g => new TeamRecord
-            {
-                TeamID        = g.TeamId,
-                Year          = (short)g.Year,
-                Wins          = (byte)g.Wins,
-                Losses        = (byte)g.Losses,
-                PointsFor     = g.PointsFor,
-                PointsAgainst = g.PointsAgainst
-            }).ToList();
+            // Filter out FCS placeholder IDs (1000xxx) and any team not in the Teams table.
+            var validTeamIds = (await _context.Teams
+                .Select(t => t.TeamId)
+                .ToListAsync(token))
+                .ToHashSet();
+
+            var aggregated = grouped
+                .Where(g => validTeamIds.Contains(g.TeamId))
+                .Select(g => new TeamRecord
+                {
+                    TeamID        = g.TeamId,
+                    Year          = (short)g.Year,
+                    Wins          = (byte)g.Wins,
+                    Losses        = (byte)g.Losses,
+                    PointsFor     = g.PointsFor,
+                    PointsAgainst = g.PointsAgainst
+                }).ToList();
 
             var years           = aggregated.Select(a => a.Year).Distinct().ToList();
             var existingRecords = await _context.TeamRecords
@@ -129,7 +144,8 @@ namespace SaturdayPulse.Repositories.Implementations
 
             foreach (var rec in aggregated)
             {
-                var exist = existingRecords.FirstOrDefault(e => e.TeamID == rec.TeamID && e.Year == rec.Year);
+                var exist = existingRecords
+                    .FirstOrDefault(e => e.TeamID == rec.TeamID && e.Year == rec.Year);
                 if (exist != null)
                 {
                     exist.Wins          = rec.Wins;
@@ -142,6 +158,17 @@ namespace SaturdayPulse.Repositories.Implementations
                     _context.TeamRecords.Add(rec);
                 }
             }
+
+            // Debug — log what EF is tracking before save
+            var tracked = _context.ChangeTracker.Entries()
+                .Where(e => e.State != Microsoft.EntityFrameworkCore.EntityState.Unchanged)
+                .Select(e => new { Type = e.Entity.GetType().Name, e.State })
+                .ToList();
+
+            foreach (var t in tracked)
+                Console.WriteLine($"Tracked: {t.Type} - {t.State}");
+
+            // SaveChanges called through IUnitOfWork.SaveChangesAsync — not here.
             // SaveChanges called through IUnitOfWork.SaveChangesAsync — not here.
         }
 
@@ -153,7 +180,7 @@ namespace SaturdayPulse.Repositories.Implementations
             int limit = 50, CancellationToken token = default)
         {
             var query = _context.TeamRecords
-                .Include(tr => tr.Team)
+                .Include(tr => tr.Teams)
                 .Where(tr => tr.PowerRating != null)
                 .AsQueryable();
 

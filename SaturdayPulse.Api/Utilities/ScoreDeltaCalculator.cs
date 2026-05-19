@@ -8,7 +8,7 @@ namespace SaturdayPulse.Utilities
         public async Task<List<AvgScoreDeltaStats>> CalculateAvgScoreDeltasAsync(CancellationToken token = default)
         {
             // Load all played games and team records into memory
-            var games      = await _uow.Game.GetPlayedGamesSinceYearAsync(1, token);
+            var games      = await _uow.Games.GetPlayedGamesSinceYearAsync(1, token);
             var allRecords = await _uow.TeamRecords.GetHistoricalAsync(1, 9999, token);
 
             // Build win percentage lookup: (teamId, year) → record
@@ -20,8 +20,13 @@ namespace SaturdayPulse.Utilities
             var cteData = games
                 .Select(g =>
                 {
-                    recordLookup.TryGetValue((g.WinnerId, g.Year), out var winnerRecord);
-                    recordLookup.TryGetValue((g.LoserId, g.Year), out var loserRecord);
+                    var winnerId  = (g.HomePoints ?? 0) >= (g.AwayPoints ?? 0) ? g.HomeId ?? 0 : g.AwayId ?? 0;
+                    var loserId   = (g.HomePoints ?? 0) >= (g.AwayPoints ?? 0) ? g.AwayId ?? 0 : g.HomeId ?? 0;
+                    var wPoints   = Math.Max(g.HomePoints ?? 0, g.AwayPoints ?? 0);
+                    var lPoints   = Math.Min(g.HomePoints ?? 0, g.AwayPoints ?? 0);
+
+                    recordLookup.TryGetValue((winnerId, g.Year), out var winnerRecord);
+                    recordLookup.TryGetValue((loserId,  g.Year), out var loserRecord);
 
                     var winnerGames = winnerRecord != null ? winnerRecord.Wins + winnerRecord.Losses : 0;
                     var loserGames  = loserRecord  != null ? loserRecord.Wins  + loserRecord.Losses  : 0;
@@ -34,8 +39,8 @@ namespace SaturdayPulse.Utilities
                         LoserWinPct = loserGames > 0
                             ? (decimal)loserRecord!.Wins / loserGames
                             : 0m,
-                        WinnerPoints = g.WPoints,
-                        LoserPoints  = g.LPoints
+                        WinnerPoints = wPoints,
+                        LoserPoints  = lPoints
                     };
                 })
                 .ToList();
