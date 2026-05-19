@@ -59,6 +59,11 @@ namespace SaturdayPulse.Services
 
         // ── Private ───────────────────────────────────────────────────────────────
 
+        public ProjectionCacheService(IUnitOfWork uow)
+        {
+            _uow = uow;
+        }
+
         private async Task EnsureCacheAsync(int year, CancellationToken token)
         {
             if (_cachedYear == year && _cache.Count > 0) return;
@@ -66,45 +71,32 @@ namespace SaturdayPulse.Services
             await _lock.WaitAsync(token);
             try
             {
-                // Double-check inside lock
                 if (_cachedYear == year && _cache.Count > 0) return;
 
-                var teams = await _uow.Team.GetTeamDictionaryAsync(token);
-                var allGames = await _uow.Game.GetByYearAsync(year, token);
-                var maxWeek = allGames.Max(g => g.Week);
-                // Filter to regular season only
-                var regularSeasonGames = allGames.Where(g => g.Week < maxWeek).ToList();
+                // Get game weeks so we know the snapshot cutoff per game
+                var games = await _uow.Games.GetByYearAsync(year, token);
+                var gameWeekById = games
+                    .Where(g => g.GameId > 0)
+                    .ToDictionary(g => g.GameId, g => g.Week);
 
-                // Build matchup requests for ALL games (played and unplayed)
-                var matchupRequests = regularSeasonGames
-                    .Where(g => teams.ContainsKey(g.WinnerId) && teams.ContainsKey(g.LoserId))
-                    .Select(g => new MatchupRequest
-                    {
-                        TeamName = teams[g.WinnerId].TeamName,
-                        OpponentName = teams[g.LoserId].TeamName,
-                        Location = g.Location,
-                        Week = g.Week
-                    })
-                    .ToList();
+                // Load all projections for the year
+                var allProjections = await _uow.Projections.GetByYearAsync(year, token);
 
-                var predictions = await _predictionService.PredictMatchups(
-                    year, matchupRequests, token);
-
-                // Key predictions by GameId using team name matching
-                var newCache = new Dictionary<int, GamePrediction>();
-
-                foreach (var g in regularSeasonGames)
-                {
-                    if (!teams.TryGetValue(g.WinnerId, out var wTeam)) continue;
-                    if (!teams.TryGetValue(g.LoserId, out var lTeam)) continue;
-
-                    var pred = predictions.FirstOrDefault(p =>
-                        p.TeamName == wTeam.TeamName &&
-                        p.OpponentName == lTeam.TeamName);
-
-                    if (pred != null)
-                        newCache[g.Id] = pred;
-                }
+                // For each game, pick the projection with the highest snapshot
+                // week that is strictly less than the game's own week
+                var newCache = allProjections
+                    .Where(p => gameWeekById.TryGetValue(p.GameId, out var gameWeek)
+                                && p.Week < gameWeek)
+                    .GroupBy(p => p.GameId)
+                    .Select(g => g.OrderByDescending(p => p.Week).First())
+                    .ToDictionary(
+                        p => p.GameId,
+                        p => new GamePrediction
+                        {
+                            PredictedTeamScore = (double)(p.PredictedTotal + p.PredictedSpread) / 2.0,
+                            PredictedOpponentScore = (double)(p.PredictedTotal - p.PredictedSpread) / 2.0,
+                            ExpectedMargin = (double)p.PredictedSpread
+                        });
 
                 _cache = newCache;
                 _cachedYear = year;
@@ -114,5 +106,60 @@ namespace SaturdayPulse.Services
                 _lock.Release();
             }
         }
+        //private async Task EnsureCacheAsync(int year, CancellationToken token)
+        //{
+        //    if (_cachedYear == year && _cache.Count > 0) return;
+
+        //    await _lock.WaitAsync(token);
+        //    try
+        //    {
+        //        // Double-check inside lock
+        //        if (_cachedYear == year && _cache.Count > 0) return;
+
+        //        var teams = await _uow.Team.GetTeamDictionaryAsync(token);
+        //        var allGames = await _uow.Game.GetByYearAsync(year, token);
+        //        var maxWeek = allGames.Max(g => g.Week);
+        //        // Filter to regular season only
+        //        var regularSeasonGames = allGames.Where(g => g.Week < maxWeek).ToList();
+
+        //        // Build matchup requests for ALL games (played and unplayed)
+        //        var matchupRequests = regularSeasonGames
+        //            .Where(g => teams.ContainsKey(g.WinnerId) && teams.ContainsKey(g.LoserId))
+        //            .Select(g => new MatchupRequest
+        //            {
+        //                TeamName = teams[g.WinnerId].TeamName,
+        //                OpponentName = teams[g.LoserId].TeamName,
+        //                Location = g.Location,
+        //                Week = g.Week
+        //            })
+        //            .ToList();
+
+        //        var predictions = await _predictionService.PredictMatchups(
+        //            year, matchupRequests, token);
+
+        //        // Key predictions by GameId using team name matching
+        //        var newCache = new Dictionary<int, GamePrediction>();
+
+        //        foreach (var g in regularSeasonGames)
+        //        {
+        //            if (!teams.TryGetValue(g.WinnerId, out var wTeam)) continue;
+        //            if (!teams.TryGetValue(g.LoserId, out var lTeam)) continue;
+
+        //            var pred = predictions.FirstOrDefault(p =>
+        //                p.TeamName == wTeam.TeamName &&
+        //                p.OpponentName == lTeam.TeamName);
+
+        //            if (pred != null)
+        //                newCache[g.Id] = pred;
+        //        }
+
+        //        _cache = newCache;
+        //        _cachedYear = year;
+        //    }
+        //    finally
+        //    {
+        //        _lock.Release();
+        //    }
+        //}
     }
 }

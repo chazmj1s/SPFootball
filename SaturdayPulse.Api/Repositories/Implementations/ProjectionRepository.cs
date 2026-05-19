@@ -18,8 +18,12 @@ namespace SaturdayPulse.Repositories
 
         // ── Queries ───────────────────────────────────────────────────────────────
 
-        public Task<List<Projection>> GetByYearAndWeekAsync(
-            int year, int week, CancellationToken token = default)
+        public Task<List<Projection>> GetByYearAsync(int year, CancellationToken token = default)
+            => _ctx.Projections
+                   .Where(p => p.Year == year)
+                   .ToListAsync(token);
+
+        public Task<List<Projection>> GetByYearAndWeekAsync(int year, int week, CancellationToken token = default)
             => _ctx.Projections
                    .Where(p => p.Year == year && p.Week == week)
                    .ToListAsync(token);

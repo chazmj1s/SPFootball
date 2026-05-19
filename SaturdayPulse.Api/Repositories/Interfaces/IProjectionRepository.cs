@@ -9,6 +9,8 @@ namespace SaturdayPulse.Contracts
     /// </summary>
     public interface IProjectionRepository
     {
+        Task<List<Projection>> GetByYearAsync(int year, CancellationToken token = default);
+
         /// <summary>
         /// Returns all projections for a given year/week combination.
         /// Used by schedule and standings endpoints to read the active snapshot.
