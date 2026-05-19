@@ -20,13 +20,13 @@ namespace SaturdayPulse.Models
         [Column("Year", TypeName = "smallint")]
         public short Year { get; set; }
 
-        [Column("Week", TypeName = "tinyint")]
+        [Column("Week", TypeName = "smallint")]
         public byte Week { get; set; }
 
-        [Column("Wins", TypeName = "tinyint")]
+        [Column("Wins", TypeName = "smallint")]
         public byte Wins { get; set; }
 
-        [Column("Losses", TypeName = "tinyint")]
+        [Column("Losses", TypeName = "smallint")]
         public byte Losses { get; set; }
 
         [Column("PointsFor")]
@@ -57,7 +57,7 @@ namespace SaturdayPulse.Models
         public int TierRank { get; set; }
 
         [ForeignKey("TeamID")]
-        public Team? Team { get; set; }
+        public Teams? Team { get; set; }
 
         [Column("AvgPointsScored", TypeName = "decimal(5,2)")]
         public decimal AvgPointsScored { get; set; }

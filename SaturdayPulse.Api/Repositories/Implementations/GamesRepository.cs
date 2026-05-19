@@ -46,6 +46,67 @@ namespace SaturdayPulse.Repositories.Implementations
                 .ThenBy(g => g.Week)
                 .ToListAsync(token);
         }
+
+        public Task<List<Games>> GetPlayedGamesSinceYearAsync(int fromYear, CancellationToken token = default)
+            => _context.Games
+                .Where(g => g.Year >= fromYear &&
+                            ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0))
+                .ToListAsync(token);
+
+        public Task<List<Games>> GetPlayedGamesByYearAndWeekAsync(int year, int week, CancellationToken token = default)
+            => _context.Games
+                .Where(g => g.Year == year &&
+                            g.Week <= week &&
+                            ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0))
+                .ToListAsync(token);
+
+        public Task<List<int>> GetPlayedWeeksByYearAsync(int year, CancellationToken token = default)
+            => _context.Games
+                .Where(g => g.Year == year &&
+                            ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0))
+                .Select(g => g.Week)
+                .Distinct()
+                .OrderBy(w => w)
+                .ToListAsync(token);
+
+        public async Task<List<GameParticipant>> GetGameParticipantsAsync(
+            int year, CancellationToken token = default)
+        {
+            var fromHome = from g in _context.Games
+                where g.Year == year
+                join t   in _context.Teams on g.HomeId equals t.TeamId
+                join opp in _context.Teams on g.AwayId equals opp.TeamId
+                select new GameParticipant
+                {
+                    TeamId           = g.HomeId ?? 0,
+                    TeamDivision     = t.Division,
+                    OpponentId       = g.AwayId ?? 0,
+                    OpponentDivision = opp.Division,
+                    TeamPoints       = g.HomePoints ?? 0,
+                    OpponentPoints   = g.AwayPoints ?? 0,
+                    Location         = g.NeutralSite == true ? 'N' : 'W',
+                    IsHomeTeam       = true
+                };
+
+            var fromAway = from g in _context.Games
+                where g.Year == year
+                join t   in _context.Teams on g.AwayId equals t.TeamId
+                join opp in _context.Teams on g.HomeId equals opp.TeamId
+                select new GameParticipant
+                {
+                    TeamId           = g.AwayId ?? 0,
+                    TeamDivision     = t.Division,
+                    OpponentId       = g.HomeId ?? 0,
+                    OpponentDivision = opp.Division,
+                    TeamPoints       = g.AwayPoints ?? 0,
+                    OpponentPoints   = g.HomePoints ?? 0,
+                    Location         = g.NeutralSite == true ? 'N' : 'L',
+                    IsHomeTeam       = false
+                };
+
+            return await fromHome.Union(fromAway).ToListAsync(token);
+        }
+
         public async Task UpsertRangeAsync(IEnumerable<Games> games, CancellationToken token = default)
         {
             var incoming    = games.ToList();

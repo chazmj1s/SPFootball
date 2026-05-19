@@ -16,5 +16,8 @@ namespace SaturdayPulse.Models
         public string? Division { get; set; }
         public int? ConferenceId { get; set; }
         public string? ShortName { get; set; }
+
+        [ForeignKey("ConferenceID")]
+        public Conference? Conference { get; set; }
     }
 }

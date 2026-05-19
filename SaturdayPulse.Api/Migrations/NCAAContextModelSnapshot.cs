@@ -291,6 +291,41 @@ namespace SaturdayPulse.Api.Migrations
                     b.ToTable("MatchupHistory");
                 });
 
+            modelBuilder.Entity("SaturdayPulse.Models.Projection", b =>
+                {
+                    b.Property<int>("ProjectionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AwayTeamId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GameId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("HomeTeamId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("HomeWinProbability")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PredictedSpread")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PredictedTotal")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Week")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProjectionId");
+
+                    b.ToTable("Projections");
+                });
+
             modelBuilder.Entity("SaturdayPulse.Models.Team", b =>
                 {
                     b.Property<int>("TeamID")
@@ -399,7 +434,7 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnName("DefensiveZScore");
 
                     b.Property<byte>("Losses")
-                        .HasColumnType("tinyint")
+                        .HasColumnType("smallint")
                         .HasColumnName("Losses");
 
                     b.Property<int>("OffensiveRank")
@@ -447,7 +482,7 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnName("TrendRating");
 
                     b.Property<byte>("Wins")
-                        .HasColumnType("tinyint")
+                        .HasColumnType("smallint")
                         .HasColumnName("Wins");
 
                     b.Property<short>("Year")
@@ -473,6 +508,9 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<string>("Alias")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("ConferenceID")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("ConferenceId")
                         .HasColumnType("INTEGER");
 
@@ -493,6 +531,8 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConferenceID");
 
                     b.HasIndex("TeamId")
                         .IsUnique()
@@ -560,7 +600,7 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnName("DefensiveZScore");
 
                     b.Property<byte>("Losses")
-                        .HasColumnType("tinyint")
+                        .HasColumnType("smallint")
                         .HasColumnName("Losses");
 
                     b.Property<int>("OffensiveRank")
@@ -604,11 +644,11 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnName("TierRank");
 
                     b.Property<byte>("Week")
-                        .HasColumnType("tinyint")
+                        .HasColumnType("smallint")
                         .HasColumnName("Week");
 
                     b.Property<byte>("Wins")
-                        .HasColumnType("tinyint")
+                        .HasColumnType("smallint")
                         .HasColumnName("Wins");
 
                     b.Property<short>("Year")
@@ -617,15 +657,14 @@ namespace SaturdayPulse.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TeamID", "Year", "Week")
-                        .IsUnique();
+                    b.HasIndex("TeamID");
 
                     b.ToTable("WeeklyRankings");
                 });
 
             modelBuilder.Entity("SaturdayPulse.Models.TeamConferenceHistory", b =>
                 {
-                    b.HasOne("SaturdayPulse.Models.Team", "Team")
+                    b.HasOne("SaturdayPulse.Models.Teams", "Team")
                         .WithMany()
                         .HasForeignKey("TeamID")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -636,18 +675,27 @@ namespace SaturdayPulse.Api.Migrations
 
             modelBuilder.Entity("SaturdayPulse.Models.TeamRecord", b =>
                 {
-                    b.HasOne("SaturdayPulse.Models.Team", "Team")
+                    b.HasOne("SaturdayPulse.Models.Teams", "Teams")
                         .WithMany()
                         .HasForeignKey("TeamID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Team");
+                    b.Navigation("Teams");
+                });
+
+            modelBuilder.Entity("SaturdayPulse.Models.Teams", b =>
+                {
+                    b.HasOne("SaturdayPulse.Models.Conference", "Conference")
+                        .WithMany()
+                        .HasForeignKey("ConferenceID");
+
+                    b.Navigation("Conference");
                 });
 
             modelBuilder.Entity("SaturdayPulse.Models.WeeklyRanking", b =>
                 {
-                    b.HasOne("SaturdayPulse.Models.Team", "Team")
+                    b.HasOne("SaturdayPulse.Models.Teams", "Team")
                         .WithMany()
                         .HasForeignKey("TeamID")
                         .OnDelete(DeleteBehavior.Cascade)

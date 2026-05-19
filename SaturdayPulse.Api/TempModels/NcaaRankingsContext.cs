@@ -43,13 +43,13 @@ public partial class NcaaRankingsContext : DbContext
             entity.Property(e => e.CombinedSos)
                 .HasColumnType("REAL (8, 4)")
                 .HasColumnName("CombinedSOS");
-            entity.Property(e => e.Losses).HasColumnType("tinyint");
+            entity.Property(e => e.Losses).HasColumnType("smallint");
             entity.Property(e => e.PowerRating).HasColumnType("decimal(10,4)");
             entity.Property(e => e.SubSos)
                 .HasColumnType("REAL (8, 4)")
                 .HasColumnName("SubSOS");
             entity.Property(e => e.TeamId).HasColumnName("TeamID");
-            entity.Property(e => e.Wins).HasColumnType("tinyint");
+            entity.Property(e => e.Wins).HasColumnType("smallint");
             entity.Property(e => e.Year).HasColumnType("smallint");
 
             entity.HasOne(d => d.Team).WithMany(p => p.TeamRecords).HasForeignKey(d => d.TeamId);

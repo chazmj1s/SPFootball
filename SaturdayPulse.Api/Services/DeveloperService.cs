@@ -126,6 +126,12 @@ namespace SaturdayPulse.Services
         public Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default)
             => _gameDataService.LoadTeamsBulkAsync(startYear, token);
 
+        public Task<int> AssignPostseasonWeeksAsync(int year, CancellationToken token = default)
+            => _gameDataService.AssignPostseasonWeeksAsync(year, token);
+
+        public Task<int> AssignPostseasonWeeksBulkAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.AssignPostseasonWeeksBulkAsync(startYear, token);
+
         public Task<int> LoadGamesAsync(int year, int? week, CancellationToken token = default)
             => _gameDataService.LoadGamesAsync(year, week, token);
 
@@ -275,7 +281,7 @@ namespace SaturdayPulse.Services
                 .Take(10)
                 .Select(tr => (object)new
                 {
-                    tr.Year, TeamName = tr.Team?.TeamName, Record = $"{tr.Wins}-{tr.Losses}",
+                    tr.Year, TeamName = tr.Teams?.TeamName, Record = $"{tr.Wins}-{tr.Losses}",
                     tr.CombinedSOS, tr.PowerRating,
                     Overperformance = tr.Wins - (tr.CombinedSOS ?? 0) * 12
                 });
@@ -286,7 +292,7 @@ namespace SaturdayPulse.Services
                 .Take(10)
                 .Select(tr => (object)new
                 {
-                    tr.Year, TeamName = tr.Team?.TeamName, Record = $"{tr.Wins}-{tr.Losses}",
+                    tr.Year, TeamName = tr.Teams?.TeamName, Record = $"{tr.Wins}-{tr.Losses}",
                     tr.CombinedSOS, tr.PowerRating,
                     Underperformance = (tr.CombinedSOS ?? 0) * 12 - tr.Wins
                 });
@@ -390,7 +396,7 @@ namespace SaturdayPulse.Services
 
             var trends = records.Select(tr => (object)new
             {
-                TeamId                = tr.TeamID, TeamName = tr.Team?.TeamName,
+                TeamId                = tr.TeamID, TeamName = tr.Teams?.TeamName,
                 tr.Year, Record       = $"{tr.Wins}-{tr.Losses}",
                 tr.PowerRating, tr.CombinedSOS, tr.Ranking,
                 WinPercentage         = (decimal)tr.Wins / (tr.Wins + tr.Losses),
@@ -445,7 +451,7 @@ namespace SaturdayPulse.Services
         public async Task<WeeklyRankingsBackfillResult> BackfillWeeklyRankingsAsync(int? startYear, CancellationToken token)
         {
             var fromYear = startYear ?? 1960;
-            var allGames = await _uow.Game.GetPlayedGamesSinceYearAsync(fromYear, token);
+            var allGames = await _uow.Games.GetPlayedGamesSinceYearAsync(fromYear, token);
 
             var yearWeeks = allGames
                 .Select(g => new { g.Year, g.Week })
@@ -522,7 +528,7 @@ namespace SaturdayPulse.Services
                     $"No WeeklyRankings data found from {effectiveStart} onward.");
 
             // Cache data that doesn't change across the loop.
-            var teamsById = await _uow.Team.GetTeamDictionaryAsync(token);
+            var teamsById   = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var teamsByName = teamsById.Values.ToDictionary(t => t.TeamName);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var rivalries = await _uow.Lookups.GetMatchupHistoriesAsync(token);
@@ -534,7 +540,7 @@ namespace SaturdayPulse.Services
                 token.ThrowIfCancellationRequested();
 
                 // All regular-season games for this year.
-                var allGames = await _uow.Game.GetByYearAsync(snapshotYear, token);
+                var allGames = await _uow.Games.GetByYearAsync(snapshotYear, token);
 
                 // "Remaining" from this snapshot's perspective = weeks after the snapshot.
                 // For a historical backfill every game in week > snapshotWeek is "unplayed".
@@ -545,29 +551,30 @@ namespace SaturdayPulse.Services
 
                 if (remainingGames.Count == 0) continue;
 
-                // Fetch the power ratings as they stood at this snapshot.
                 var weeklyRankings = await _uow.WeeklyRankings
                     .GetByYearAndWeekAsync(snapshotYear, snapshotWeek, token);
 
-                // Build a PowerRating lookup by TeamId for this snapshot.
                 var powerByTeamId = weeklyRankings
                     .Where(wr => wr.PowerRating.HasValue)
                     .ToDictionary(wr => wr.TeamID, wr => wr.PowerRating!.Value);
 
-                // Build MatchupRequests, injecting snapshot power ratings.
                 var matchupRequests = new List<MatchupRequest>(remainingGames.Count);
 
                 foreach (var g in remainingGames)
                 {
-                    if (!teamsById.TryGetValue(g.WinnerId, out var homeTeam)) continue;
-                    if (!teamsById.TryGetValue(g.LoserId, out var awayTeam)) continue;
+                    var homeId = g.HomeId ?? 0;
+                    var awayId = g.AwayId ?? 0;
+                    if (!teamsById.TryGetValue(homeId, out var homeTeam)) continue;
+                    if (!teamsById.TryGetValue(awayId, out var awayTeam)) continue;
+
+                    char location = g.NeutralSite == true ? 'N' : 'W';
 
                     matchupRequests.Add(new MatchupRequest
                     {
-                        TeamName = homeTeam.TeamName,
+                        TeamName     = homeTeam.TeamName,
                         OpponentName = awayTeam.TeamName,
-                        Location = g.Location,
-                        Week = g.Week
+                        Location     = location,
+                        Week         = g.Week
                     });
                 }
 
@@ -588,8 +595,8 @@ namespace SaturdayPulse.Services
                     if (teamsByName.TryGetValue(p.TeamName, out var t) &&
                         teamsByName.TryGetValue(p.OpponentName, out var opp))
                     {
-                        var teamPR = powerByTeamId.GetValueOrDefault(t.TeamID, 0m);
-                        var oppPR = powerByTeamId.GetValueOrDefault(opp.TeamID, 0m);
+                        var teamPR = powerByTeamId.GetValueOrDefault(t.TeamId, 0m);
+                        var oppPR  = powerByTeamId.GetValueOrDefault(opp.TeamId, 0m);
 
                         // Re-apply the power rating delta on top of the existing margin.
                         // This matches the adjustment in GamePredictionService.CalculatePrediction.
@@ -602,8 +609,10 @@ namespace SaturdayPulse.Services
 
                 foreach (var g in remainingGames)
                 {
-                    if (!teamsById.TryGetValue(g.WinnerId, out var homeTeam)) continue;
-                    if (!teamsById.TryGetValue(g.LoserId,  out var awayTeam)) continue;
+                    var homeId = g.HomeId ?? 0;
+                    var awayId = g.AwayId ?? 0;
+                    if (!teamsById.TryGetValue(homeId, out var homeTeam)) continue;
+                    if (!teamsById.TryGetValue(awayId, out var awayTeam)) continue;
 
                     var pred = predictions.FirstOrDefault(p =>
                         p.TeamName     == homeTeam.TeamName &&
@@ -614,11 +623,11 @@ namespace SaturdayPulse.Services
 
                     projections.Add(GamePredictionService.BuildProjection(
                         prediction: pred,
-                        gameId:     g.Id,
+                        gameId:     g.GameId,
                         year:       snapshotYear,
                         week:       snapshotWeek,
-                        homeTeamId: g.WinnerId,
-                        awayTeamId: g.LoserId));
+                        homeTeamId: homeId,
+                        awayTeamId: awayId));
                 }
 
                 await _uow.Projections.UpsertManyAsync(projections, token);

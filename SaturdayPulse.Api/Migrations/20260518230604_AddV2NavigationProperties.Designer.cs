@@ -10,8 +10,8 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    [Migration("20260516224637_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260518230604_AddV2NavigationProperties")]
+    partial class AddV2NavigationProperties
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -294,6 +294,44 @@ namespace SaturdayPulse.Api.Migrations
                     b.ToTable("MatchupHistory");
                 });
 
+            modelBuilder.Entity("SaturdayPulse.Models.Projection", b =>
+                {
+                    b.Property<int>("ProjectionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AwayTeamId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GameId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("HomeTeamId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("HomeWinProbability")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PredictedSpread")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PredictedTotal")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Week")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProjectionId");
+
+                    b.ToTable("Projections", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
             modelBuilder.Entity("SaturdayPulse.Models.Team", b =>
                 {
                     b.Property<int>("TeamID")
@@ -476,6 +514,9 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<string>("Alias")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("ConferenceID")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("ConferenceId")
                         .HasColumnType("INTEGER");
 
@@ -496,6 +537,8 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConferenceID");
 
                     b.HasIndex("TeamId")
                         .IsUnique()
@@ -620,10 +663,12 @@ namespace SaturdayPulse.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TeamID", "Year", "Week")
-                        .IsUnique();
+                    b.HasIndex("TeamID");
 
-                    b.ToTable("WeeklyRankings");
+                    b.ToTable("WeeklyRankings", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
                 });
 
             modelBuilder.Entity("SaturdayPulse.Models.TeamConferenceHistory", b =>
@@ -639,13 +684,22 @@ namespace SaturdayPulse.Api.Migrations
 
             modelBuilder.Entity("SaturdayPulse.Models.TeamRecord", b =>
                 {
-                    b.HasOne("SaturdayPulse.Models.Team", "Team")
+                    b.HasOne("SaturdayPulse.Models.Teams", "Team")
                         .WithMany()
                         .HasForeignKey("TeamID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("SaturdayPulse.Models.Teams", b =>
+                {
+                    b.HasOne("SaturdayPulse.Models.Conference", "Conference")
+                        .WithMany()
+                        .HasForeignKey("ConferenceID");
+
+                    b.Navigation("Conference");
                 });
 
             modelBuilder.Entity("SaturdayPulse.Models.WeeklyRanking", b =>

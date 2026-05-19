@@ -224,6 +224,80 @@ namespace SaturdayPulse.Controllers
         #region Rankings
 
         /// <summary>
+        /// V2: Power rankings from Teams + Conferences (CFBD-sourced).
+        /// Example: GET /api/productiongamedata/powerrankings/v2?year=2025&throughWeek=10
+        /// </summary>
+        [HttpGet("powerrankings/v2")]
+        public async Task<IActionResult> GetPowerRankingsV2(
+            [FromQuery] int? year,
+            [FromQuery] int? throughWeek,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetPowerRankingsV2Async(year, throughWeek, token);
+                logger.LogInformation("V2: Returned {Count} rankings for {Year}{Week}",
+                    result.Rankings.Count, year ?? DateTime.Now.Year,
+                    throughWeek.HasValue ? $" week {throughWeek}" : "");
+                return Ok(result.Rankings);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 power rankings");
+                return StatusCode(500, "An error occurred while retrieving power rankings.");
+            }
+        }
+
+        /// <summary>
+        /// V2: Seed/Trend/Pedigree ratings for a single team — team lookup via Teams.
+        /// Example: GET /api/productiongamedata/rollingAverages/team/v2?teamId=123
+        /// </summary>
+        [HttpGet("rollingAverages/team/v2")]
+        public async Task<IActionResult> GetTeamRollingAveragesV2(
+            [FromQuery] int teamId,
+            [FromQuery] int? startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetTeamRollingAveragesV2Async(teamId, startYear, token);
+                return Ok(new
+                {
+                    teamId     = result.TeamId,
+                    teamName   = result.TeamName,
+                    conference = result.Conference,
+                    history    = result.History
+                });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error fetching V2 rolling averages for teamId={TeamId}", teamId);
+                return StatusCode(500, "An error occurred fetching team rolling averages.");
+            }
+        }
+
+        /// <summary>
+        /// V2: Named rivalries — team names resolved via Teams.
+        /// Example: GET /api/productiongamedata/rivalries/named/v2
+        /// </summary>
+        [HttpGet("rivalries/named/v2")]
+        public async Task<IActionResult> GetNamedRivalriesV2(CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetNamedRivalriesV2Async(token);
+                return Ok(result.Rivalries);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 named rivalries");
+                return StatusCode(500, "An error occurred while retrieving named rivalries.");
+            }
+        }
+
+        /// <summary>
         /// Query matchup histories and detected rivalries.
         /// Example: GET /api/productiongamedata/rivalries?tier=EPIC&minGames=50
         /// </summary>
@@ -293,6 +367,52 @@ namespace SaturdayPulse.Controllers
         #region Schedule
 
         /// <summary>
+        /// V2: Full season schedule for a single team from Games + Teams tables.
+        /// Example: GET /api/productiongamedata/teamSchedule/v2?teamId=123&year=2025
+        /// </summary>
+        [HttpGet("teamSchedule/v2")]
+        public async Task<IActionResult> GetTeamScheduleV2(
+            [FromQuery] int teamId,
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var result     = await gameDataService.GetTeamScheduleV2Async(teamId, targetYear, token);
+                return Ok(new { summary = result.Summary, games = result.Games });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 team schedule for {TeamId}", teamId);
+                return StatusCode(500, "An error occurred while retrieving the team schedule.");
+            }
+        }
+
+        /// <summary>
+        /// V2: Full season schedule from Games table (CFBD-sourced).
+        /// Example: GET /api/productiongamedata/schedule/v2?year=2025
+        /// </summary>
+        [HttpGet("schedule/v2")]
+        public async Task<IActionResult> GetScheduleV2(
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetScheduleV2Async(year, token);
+                return Ok(result.Games);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 schedule");
+                return StatusCode(500, "An error occurred while retrieving the schedule.");
+            }
+        }
+
+
+        /// <summary>
         /// Get the full schedule for a season with actual and projected scores/O-U.
         /// Example: GET /api/productiongamedata/schedule?year=2025
         /// </summary>
@@ -316,6 +436,26 @@ namespace SaturdayPulse.Controllers
         #endregion
 
         #region Teams and Rivalries
+
+        /// <summary>
+        /// V2: All FBS teams from Teams + Conferences tables (CFBD-sourced).
+        /// Example: GET /api/productiongamedata/teams/v2
+        /// </summary>
+        [HttpGet("teams/v2")]
+        public async Task<IActionResult> GetTeamsV2(CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetTeamsV2Async(token);
+                return Ok(result.Teams);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 teams");
+                return StatusCode(500, "An error occurred while retrieving teams.");
+            }
+        }
+
 
         /// <summary>
         /// Returns all FBS teams with id, name, short name, conference, and tier.

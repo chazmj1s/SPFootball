@@ -37,8 +37,8 @@ namespace SaturdayPulse.Data
             modelBuilder.Entity<MatchupHistory>()
                 .HasKey(m => new { m.Team1Id, m.Team2Id });
 
-            modelBuilder.Entity<Projection>().ToTable("Projections", t => t.ExcludeFromMigrations());
-            modelBuilder.Entity<WeeklyRanking>().ToTable("WeeklyRankings", t => t.ExcludeFromMigrations());
+            //modelBuilder.Entity<Projection>().ToTable("Projections", t => t.ExcludeFromMigrations());
+            //modelBuilder.Entity<WeeklyRanking>().ToTable("WeeklyRankings", t => t.ExcludeFromMigrations());
             
             modelBuilder.Entity<TeamConferenceHistory>(entity =>
             {

@@ -28,4 +28,5 @@ namespace SaturdayPulse.Contracts.Responses
         IReadOnlyList<object> History, object? CurrentYearProjection);
 
     public record ChampionshipQualifiersResult(IReadOnlyList<object> Conferences);
+    public record TeamScheduleV2Result(object? Summary, IReadOnlyList<object> Games);
 }

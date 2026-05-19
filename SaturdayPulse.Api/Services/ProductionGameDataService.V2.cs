@@ -1,6 +1,7 @@
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Models;
 using SaturdayPulse.Utilities;
+using System.Diagnostics;
 
 namespace SaturdayPulse.Services
 {
@@ -27,13 +28,13 @@ namespace SaturdayPulse.Services
         {
             var targetYear = year ?? DateTime.Now.Year;
 
-            var games = await _uow.GamesV2.GetByYearAsync(targetYear, token);
+            var games = await _uow.Games.GetByYearAsync(targetYear, token);
             games = games.OrderBy(g => g.Week).ToList();
 
             if (games.Count == 0) return new ScheduleResult(Array.Empty<object>());
 
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
-            var teamsV2    = await _uow.TeamsV2.GetDictionaryByTeamIdAsync(token);
+            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
 
             string GetConfAbbr(Teams? t)
             {
@@ -53,8 +54,8 @@ namespace SaturdayPulse.Services
 
             var results = games.Select(g =>
             {
-                teamsV2.TryGetValue(g.HomeId ?? 0, out var homeTeam);
-                teamsV2.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+                Teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+                Teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
 
                 bool homeWon   = (g.HomePoints ?? 0) >= (g.AwayPoints ?? 0);
                 var winnerId   = homeWon ? g.HomeId    : g.AwayId;
@@ -88,13 +89,13 @@ namespace SaturdayPulse.Services
                     GameDate        = g.GameDate,
                     GameDay         = g.GameDay,
                     WinnerName      = winnerName,
-                    WinnerShortName = winnerTeam?.Abbreviation ?? winnerName,
+                    WinnerShortName = winnerName,
                     WinnerId        = winnerId,
                     WinnerConf      = GetConfAbbr(winnerTeam),
                     WinnerTier      = RatingCalculator.GetConferenceTier(GetConfName(winnerTeam), winnerName),
                     WPoints         = wPoints,
                     LoserName       = loserName,
-                    LoserShortName  = loserTeam?.Abbreviation ?? loserName,
+                    LoserShortName  = loserName,
                     LoserId         = loserId,
                     LoserConf       = GetConfAbbr(loserTeam),
                     LoserTier       = RatingCalculator.GetConferenceTier(GetConfName(loserTeam), loserName),
@@ -121,7 +122,7 @@ namespace SaturdayPulse.Services
         /// V2: reads rivalry game history from Games table (CFBD-sourced).
         /// Legacy equivalent: GetRivalryHistoryAsync() which reads from Game table.
         ///
-        /// Team lookup via TeamsV2 + Conferences instead of Team.
+        /// Team lookup via Teams + Conferences instead of Team.
         /// Winner/loser derived from home/away points; home team defaults for unplayed.
         /// Projection and rivalry metadata (MatchupHistory, AvgScoreDeltas) unchanged —
         /// those tables are shared and will be rebuilt via Developer backfill.
@@ -129,12 +130,12 @@ namespace SaturdayPulse.Services
         public async Task<RivalryHistoryResult> GetRivalryHistoryV2Async(
             int team1Id, int team2Id, int years, CancellationToken token = default)
         {
-            var teamsV2    = await _uow.TeamsV2.GetDictionaryByTeamIdAsync(token);
+            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
 
-            if (!teamsV2.TryGetValue(team1Id, out var team1))
+            if (!Teams.TryGetValue(team1Id, out var team1))
                 throw new KeyNotFoundException($"Team {team1Id} not found.");
-            if (!teamsV2.TryGetValue(team2Id, out var team2))
+            if (!Teams.TryGetValue(team2Id, out var team2))
                 throw new KeyNotFoundException($"Team {team2Id} not found.");
 
             string ConfAbbr(Teams? t)
@@ -145,7 +146,7 @@ namespace SaturdayPulse.Services
             }
 
             var cutoffYear     = DateTime.Now.Year - years;
-            var games          = await _uow.GamesV2.GetRivalryHistoryAsync(team1Id, team2Id, cutoffYear, token);
+            var games          = await _uow.Games.GetRivalryHistoryAsync(team1Id, team2Id, cutoffYear, token);
             var rivalry        = await _uow.Lookups.GetMatchupHistoryAsync(team1Id, team2Id, token);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
 
@@ -232,7 +233,7 @@ namespace SaturdayPulse.Services
         /// </summary>
         public async Task<TeamsResult> GetTeamsV2Async(CancellationToken token = default)
         {
-            var teams      = await _uow.TeamsV2.GetAllAsync(token);
+            var teams      = await _uow.Teams.GetAllAsync(token);
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
 
             var result = teams
@@ -297,7 +298,7 @@ namespace SaturdayPulse.Services
             int? year, int? throughWeek, string? conference, CancellationToken token = default)
         {
             var targetYear = year ?? DateTime.Now.Year;
-            var teamsV2    = await _uow.TeamsV2.GetDictionaryByTeamIdAsync(token);
+            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
             var confByYear = await _uow.TeamsConferenceHistory.GetConferenceIdsByYearAsync(targetYear, token);
 
@@ -309,7 +310,7 @@ namespace SaturdayPulse.Services
                 return conf?.Abbreviation ?? string.Empty;
             }
 
-            var allGames = await _uow.GamesV2.GetByYearAsync(targetYear, token);
+            var allGames = await _uow.Games.GetByYearAsync(targetYear, token);
 
             if (allGames.Any())
             {
@@ -321,7 +322,7 @@ namespace SaturdayPulse.Services
 
             // Target teams: FBS, has a conference assignment this year, not IND/Pac-12,
             // optionally filtered by conference param
-            var targetTeams = teamsV2.Values
+            var targetTeams = Teams.Values
                 .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase)
                          && confByYear.ContainsKey(t.TeamId))
                 .Select(t => new { Team = t, ConfAbbr = ConfAbbrForYear(t.TeamId) })
@@ -350,7 +351,7 @@ namespace SaturdayPulse.Services
                 {
                     bool isHome   = g.HomeId == team.TeamId;
                     var oppId     = isHome ? (g.AwayId ?? 0) : (g.HomeId ?? 0);
-                    teamsV2.TryGetValue(oppId, out var opp);
+                    Teams.TryGetValue(oppId, out var opp);
                     var oppName   = opp?.Abbreviation ?? opp?.TeamName ?? "Unknown";
 
                     bool isPlayed = ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0) &&
@@ -435,18 +436,18 @@ namespace SaturdayPulse.Services
         private async Task<Dictionary<string, List<ConferenceStanding>>> BuildConferenceStandingsV2Async(
             int year, CancellationToken token)
         {
-            var teamsV2    = await _uow.TeamsV2.GetDictionaryByTeamIdAsync(token);
+            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
             var confByYear = await _uow.TeamsConferenceHistory.GetConferenceIdsByYearAsync(year, token);
             var records    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordById = records.ToDictionary(tr => tr.TeamID);
 
-            var fbsTeamsThisYear = teamsV2.Values
+            var fbsTeamsThisYear = Teams.Values
                 .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase)
                          && confByYear.ContainsKey(t.TeamId))
                 .ToList();
 
-            var allGames  = await _uow.GamesV2.GetByYearAsync(year, token);
+            var allGames  = await _uow.Games.GetByYearAsync(year, token);
             var confGames = allGames.Where(g => g.ConferenceGame == true).ToList();
 
             var confStandings = fbsTeamsThisYear.Select(t =>
@@ -507,18 +508,18 @@ namespace SaturdayPulse.Services
         private async Task<Dictionary<string, List<ConferenceStanding>>> BuildProjectedConferenceStandingsV2Async(
             int year, int? throughWeek, CancellationToken token)
         {
-            var teamsV2    = await _uow.TeamsV2.GetDictionaryByTeamIdAsync(token);
+            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
             var confByYear = await _uow.TeamsConferenceHistory.GetConferenceIdsByYearAsync(year, token);
             var records    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordById = records.ToDictionary(tr => tr.TeamID);
 
-            var fbsTeamsThisYear = teamsV2.Values
+            var fbsTeamsThisYear = Teams.Values
                 .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase)
                          && confByYear.ContainsKey(t.TeamId))
                 .ToList();
 
-            var allGames = await _uow.GamesV2.GetByYearAsync(year, token);
+            var allGames = await _uow.Games.GetByYearAsync(year, token);
 
             if (allGames.Any())
             {
@@ -623,6 +624,343 @@ namespace SaturdayPulse.Services
                          && s.Conference != "Pac-12")
                 .GroupBy(s => s.Conference)
                 .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        // ── Power Rankings ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// V2: reads team metadata from Teams + Conferences instead of Team.
+        /// WeeklyRankings and TeamRecords are shared tables — unchanged.
+        /// </summary>
+        public async Task<PowerRankingsResult> GetPowerRankingsV2Async(
+            int? year, int? throughWeek, CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var Teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+                var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+
+                string ConfName(Teams? t)
+                {
+                    if (t?.ConferenceId == null) return string.Empty;
+                    confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                    return conf?.Name ?? string.Empty;
+                }
+
+                string ConfAbbr(Teams? t)
+                {
+                    if (t?.ConferenceId == null) return string.Empty;
+                    confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                    return conf?.Abbreviation ?? string.Empty;
+                }
+
+                if (throughWeek.HasValue)
+                {
+                    var weekly = await _uow.WeeklyRankings.GetByYearAndWeekAsync(
+                        targetYear, throughWeek.Value, token);
+
+                    if (!weekly.Any())
+                        throw new KeyNotFoundException(
+                            $"No weekly rankings found for year {targetYear} week {throughWeek}.");
+
+                    var currentRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
+                    var currentRecordLookup = currentRecords.ToDictionary(r => r.TeamID);
+                    var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(
+                        targetYear - 10, targetYear, token);
+                    var historyByTeam = historicalRecords
+                        .GroupBy(tr => tr.TeamID)
+                        .ToDictionary(g => g.Key, g => g.OrderBy(r => r.Year).ToList());
+
+                    var sample = currentRecords.FirstOrDefault();
+                    Debug.WriteLine($"Sample TrendRating: {sample?.TrendRating}, Pedigree: {sample?.PedigreeRating}, Seed: {sample?.SeedRating}");
+
+                    var result = weekly
+                        .Where(wr => wr.Ranking.HasValue)
+                        .Where(wr => currentRecordLookup.ContainsKey(wr.TeamID))
+                        .OrderBy(wr => wr.OverallRank)
+                        .Select(wr =>
+                        {
+                            Teams.TryGetValue(wr.TeamID, out var t);
+                            currentRecordLookup.TryGetValue(wr.TeamID, out var currentRecord);
+                            historyByTeam.TryGetValue(wr.TeamID, out var history);
+                            history ??= [];
+
+                            var confName = ConfName(t);
+                            var confAbbr = ConfAbbr(t);
+
+                            return new PowerRankingRowResponse
+                            {
+                                TeamID = wr.TeamID,
+                                TeamName = t?.TeamName,
+                                Conference = confName,
+                                ConferenceAbbr = confAbbr,
+                                Division = t?.Division,
+                                Tier = RatingCalculator.GetConferenceTier(confName, t?.TeamName),
+                                OverallRank = wr.OverallRank,
+                                TierRank = wr.TierRank,
+                                Ranking = (double?)wr.Ranking,
+                                PowerRating = (double?)wr.PowerRating,
+                                Year = (int)wr.Year,
+                                Wins = wr.Wins,
+                                Losses = wr.Losses,
+                                BaseSOS = (double?)wr.BaseSOS,
+                                CombinedSOS = (double?)wr.CombinedSOS,
+                                AvgPointsScored = (double?)wr.AvgPointsScored,
+                                AvgPointsAllowed = (double?)wr.AvgPointsAllowed,
+                                OffensiveZScore = (double?)wr.OffensiveZScore,
+                                DefensiveZScore = (double?)wr.DefensiveZScore,
+                                OffensiveRank = wr.OffensiveRank,
+                                DefensiveRank = wr.DefensiveRank,
+                                TrendRating = (double?)(currentRecord?.TrendRating),
+                                PedigreeRating = (double?)currentRecord?.PedigreeRating,
+                                SeedRating = (double?)currentRecord?.SeedRating,
+                                TrendHistory = history
+                                    .Select(h => (double)(h.TrendRating ?? 0m)).ToList(),
+                                PedigreeHistory = history
+                                    .Select(h => (double)(h.PedigreeRating ?? 0m)).ToList()
+                            };
+                        }).ToList();
+
+                    var sample2 = result.FirstOrDefault();
+                    Debug.WriteLine($"Response TrendRating: {sample2?.TrendRating}, Pedigree: {sample2?.PedigreeRating}, Seed: {sample2?.SeedRating}");
+
+                    return new PowerRankingsResult(true, result);
+                }
+                else
+                {
+                    var teamRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(targetYear, token);
+                    var ranked = teamRecords.Where(tr => tr.Ranking.HasValue).ToList();
+
+                    var withTiers = ranked
+                        .Select(tr =>
+                        {
+                            Teams.TryGetValue(tr.TeamID, out var t);
+                            var confName = ConfName(t);
+                            var confAbbr = ConfAbbr(t);
+                            return new
+                            {
+                                TeamRecord = tr,
+                                Team = t,
+                                ConfName = confName,
+                                ConfAbbr = confAbbr,
+                                Tier = RatingCalculator.GetConferenceTier(confName, t?.TeamName)
+                            };
+                        })
+                        .OrderByDescending(t => t.TeamRecord.Ranking)
+                        .ToList();
+
+                    var withOverallRank = withTiers
+                        .Select((t, i) => new { t.TeamRecord, t.Team, t.ConfName, t.ConfAbbr, t.Tier, OverallRank = i + 1 })
+                        .ToList();
+
+                    var tierRankLookup = new Dictionary<int, int>();
+                    foreach (var tierGroup in withOverallRank.GroupBy(t => t.Tier))
+                    {
+                        var tieredTeams = tierGroup
+                            .OrderByDescending(t => t.TeamRecord.Ranking)
+                            .Select((t, i) => new { t.TeamRecord.TeamID, TierRank = i + 1 })
+                            .ToList();
+                        foreach (var team in tieredTeams)
+                            tierRankLookup[team.TeamID] = team.TierRank;
+                    }
+
+                    var rankings = withOverallRank
+                        .Select(t => new PowerRankingRowResponse
+                        {
+                            TeamID = t.TeamRecord.TeamID,
+                            TeamName = t.Team?.TeamName ?? t.TeamRecord.Teams?.TeamName,
+                            Conference = t.ConfName,
+                            ConferenceAbbr = t.ConfAbbr,
+                            Division = t.Team?.Division,
+                            Tier = t.Tier,
+                            OverallRank = t.OverallRank,
+                            TierRank = tierRankLookup[t.TeamRecord.TeamID],
+                            Ranking = (double?)t.TeamRecord.Ranking,
+                            Year = t.TeamRecord.Year,
+                            Wins = t.TeamRecord.Wins,
+                            Losses = t.TeamRecord.Losses,
+                            BaseSOS = (double?)t.TeamRecord.BaseSOS,
+                            CombinedSOS = (double?)t.TeamRecord.CombinedSOS
+                        }).ToList();
+
+                    return new PowerRankingsResult(false, rankings);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}");
+            }
+                return new PowerRankingsResult(false, new List<PowerRankingRowResponse>());
+            }
+
+        // ── Rolling Averages ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// V2: team lookup via Teams + Conferences instead of Team.
+        /// TeamRecords and RollingAverageService are shared — unchanged.
+        /// </summary>
+        public async Task<TeamRollingAveragesResult> GetTeamRollingAveragesV2Async(
+            int teamId, int? startYear, CancellationToken token = default)
+        {
+            var Teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            if (!Teams.TryGetValue(teamId, out var team))
+                throw new KeyNotFoundException($"Team {teamId} not found.");
+
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+            string confAbbr = string.Empty;
+            if (team.ConferenceId.HasValue && confLookup.TryGetValue(team.ConferenceId.Value, out var conf))
+                confAbbr = conf.Abbreviation ?? string.Empty;
+
+            var allRecords = await _uow.TeamRecords.GetByTeamAllYearsAsync(teamId, token);
+            if (!allRecords.Any())
+                throw new KeyNotFoundException($"No records found for team {teamId}.");
+
+            var history       = allRecords.OrderByDescending(r => r.Year).ToList();
+            var targetRecords = startYear.HasValue
+                ? allRecords.Where(r => r.Year >= startYear.Value).ToList()
+                : allRecords;
+
+            var results = targetRecords.Select(r =>
+            {
+                var priorRecords = history.Where(h => h.Year < r.Year).Take(10).ToList();
+                var avg = _rollingAverageService.Compute(r, priorRecords, useLiveSwap: false);
+                return (object)new
+                {
+                    year = (int)r.Year, wins = (int)r.Wins, losses = (int)r.Losses,
+                    seedRating = avg.SeedRating, trendRating = avg.TrendRating,
+                    trendHistory = avg.TrendHistory, pedigreeRating = avg.PedigreeRating,
+                    pedigreeHistory = avg.PedigreeHistory
+                };
+            }).ToList();
+
+            return new TeamRollingAveragesResult(team.TeamId, team.TeamName, confAbbr, results);
+        }
+
+        // ── Named Rivalries ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// V2: team name lookup via Teams instead of Team.
+        /// MatchupHistory table is shared — unchanged.
+        /// </summary>
+        public async Task<NamedRivalriesResult> GetNamedRivalriesV2Async(CancellationToken token = default)
+        {
+            var rivalries = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            rivalries = rivalries
+                .Where(m => m.RivalryName != null)
+                .OrderBy(m => m.RivalryTier).ThenBy(m => m.RivalryName)
+                .ToList();
+
+            var Teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+
+            var result = rivalries.Select(r =>
+            {
+                Teams.TryGetValue(r.Team1Id, out var t1);
+                Teams.TryGetValue(r.Team2Id, out var t2);
+                return (object)new
+                {
+                    r.Team1Id,
+                    Team1Name      = t1?.TeamName ?? "Unknown",
+                    Team1ShortName = t1?.Abbreviation ?? t1?.TeamName ?? "Unknown",
+                    r.Team2Id,
+                    Team2Name      = t2?.TeamName ?? "Unknown",
+                    Team2ShortName = t2?.Abbreviation ?? t2?.TeamName ?? "Unknown",
+                    r.RivalryName, r.RivalryTier, r.GamesPlayed,
+                    r.AvgMargin, r.StDevMargin, r.UpsetRate, r.FirstPlayed, r.LastPlayed
+                };
+            }).ToList();
+
+            return new NamedRivalriesResult(result);
+        }
+
+        // ── Team Schedule ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// V2: reads from Games + Teams + Conferences tables (CFBD-sourced).
+        /// Legacy equivalent: GetTeamScheduleAsJsonAsync() which reads from Game + Team.
+        /// Returns the full season schedule for a single team with actual and projected scores.
+        /// </summary>
+        public async Task<TeamScheduleV2Result> GetTeamScheduleV2Async(
+            int teamId, int year, CancellationToken token = default)
+        {
+            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+
+            if (!Teams.TryGetValue(teamId, out var team))
+                throw new KeyNotFoundException($"Team {teamId} not found.");
+
+            string ConfAbbr(Teams? t)
+            {
+                if (t?.ConferenceId == null) return string.Empty;
+                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                return conf?.Abbreviation ?? string.Empty;
+            }
+
+            var teamRecord = await _uow.TeamRecords.GetByTeamAndYearAsync(teamId, (short)year, token);
+            var allGames   = await _uow.Games.GetByYearAsync(year, token);
+
+            var teamGames = allGames
+                .Where(g => g.HomeId == teamId || g.AwayId == teamId)
+                .OrderBy(g => g.Week)
+                .ToList();
+
+            var allProjections = await _projectionCache.GetAllProjections(year, token);
+
+            var games = teamGames.Select(g =>
+            {
+                bool isHome  = g.HomeId == teamId;
+                var oppId    = isHome ? (g.AwayId ?? 0) : (g.HomeId ?? 0);
+                Teams.TryGetValue(oppId, out var opp);
+                var oppAbbr  = opp?.Abbreviation ?? opp?.TeamName ?? "Unknown";
+                var oppConf  = ConfAbbr(opp);
+
+                bool isPlayed = (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0;
+
+                int myPts  = isHome ? (g.HomePoints ?? 0) : (g.AwayPoints ?? 0);
+                int oppPts = isHome ? (g.AwayPoints ?? 0) : (g.HomePoints ?? 0);
+                bool won   = myPts > oppPts;
+
+                double? projMy = null, projOpp = null;
+                string confidence = "Unknown";
+                if (allProjections.TryGetValue(g.GameId, out var pred))
+                {
+                    projMy   = isHome ? pred.PredictedTeamScore : pred.PredictedOpponentScore;
+                    projOpp  = isHome ? pred.PredictedOpponentScore : pred.PredictedTeamScore;
+                    confidence = pred.Confidence ?? "Unknown";
+                }
+
+                return (object)new
+                {
+                    g.Week,
+                    GameDate   = g.GameDate,
+                    GameDay    = g.GameDay,
+                    Opponent   = oppAbbr,
+                    OpponentId = oppId,
+                    OpponentConf = oppConf,
+                    Location   = isHome ? "vs" : "@",
+                    NeutralSite = g.NeutralSite == true,
+                    Result     = isPlayed ? (won ? "W" : "L") : (string?)null,
+                    Score      = isPlayed ? $"{myPts}-{oppPts}" : null,
+                    ProjScore  = projMy.HasValue
+                        ? $"{(int)Math.Round(projMy.Value)}-{(int)Math.Round(projOpp!.Value)}" : null,
+                    Confidence = isPlayed ? null : confidence,
+                    Type       = isPlayed ? "Actual" : "Projected",
+                    SeasonType = g.SeasonType
+                };
+            }).ToList();
+
+            var summary = teamRecord != null ? (object)new
+            {
+                Year          = year,
+                TeamName      = team.TeamName,
+                Conference    = ConfAbbr(team),
+                Wins          = (int)teamRecord.Wins,
+                Losses        = (int)teamRecord.Losses,
+                PointsFor     = teamRecord.PointsFor,
+                PointsAgainst = teamRecord.PointsAgainst
+            } : null;
+
+            return new TeamScheduleV2Result(summary, games);
         }
 
         // ── Private helpers ───────────────────────────────────────────────────────

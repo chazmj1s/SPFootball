@@ -80,7 +80,7 @@ namespace SaturdayPulse.Services
                         return new
                         {
                             TeamID                   = g.Key,
-                            TeamName                 = g.First().Team?.TeamName ?? "Unknown",
+                            TeamName                 = g.First().Teams?.TeamName ?? "Unknown",
                             Years                    = records.Select(r => r.Year).ToList(),
                             NormalizedWinPercentages = normalizedPercentages,
                             WeightedAverage          = Math.Round(weightedAverage, 4),
@@ -141,7 +141,7 @@ namespace SaturdayPulse.Services
                 }
 
                 // ── Step 2: Game participants ─────────────────────────────────────
-                var gameParticipants = await _uow.Game.GetGameParticipantsAsync(targetYear, token);
+                var gameParticipants = await _uow.Games.GetGameParticipantsAsync(targetYear, token);
 
                 // ── Step 3: Annotate with wins/losses ─────────────────────────────
                 var withRecords = gameParticipants.Select(gp => new
@@ -237,9 +237,9 @@ namespace SaturdayPulse.Services
                 foreach (var record in teamRecordsToUpdate)
                 {
                     var sosData = combined.FirstOrDefault(c => c.TeamId == record.TeamID);
-                    if (record.Team?.Division == "FCS")
+                    if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase))
                     {
-                        record.BaseSOS = record.SubSOS = record.CombinedSOS = null;
+                        record.BaseSOS = record.SubSOS = record.CombinedSOS = 0;
                     }
                     else if (sosData != null)
                     {
@@ -264,7 +264,7 @@ namespace SaturdayPulse.Services
         {
             var targetYear = year ?? DateTime.Now.Year;
 
-            var gameParticipants = await _uow.Game.GetGameParticipantsAsync(targetYear, token);
+            var gameParticipants = await _uow.Games.GetGameParticipantsAsync(targetYear, token);
 
             var teamRecords  = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
             var winsLookup   = teamRecords.ToDictionary(tr => tr.TeamID, tr => (int)tr.Wins);
@@ -319,7 +319,7 @@ namespace SaturdayPulse.Services
 
             foreach (var record in teamRecordsForUpdate)
             {
-                if (record.Team?.Division == "FCS") { record.PowerRating = null; continue; }
+                if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase)) { record.PowerRating = 0; continue; }
 
                 var zData = zScores.FirstOrDefault(z => z.TeamId == record.TeamID);
                 if (zData != null)
@@ -340,7 +340,7 @@ namespace SaturdayPulse.Services
 
             foreach (var record in teamRecords)
             {
-                if (record.Team?.Division == "FCS") { record.Ranking = null; continue; }
+                if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase)) { record.Ranking = 0; continue; }
 
                 var totalGames = record.Wins + record.Losses;
                 if (totalGames > 0 && record.CombinedSOS.HasValue && record.PowerRating.HasValue)
@@ -350,7 +350,7 @@ namespace SaturdayPulse.Services
                 }
                 else
                 {
-                    record.Ranking = null;
+                    record.Ranking = 0;
                 }
             }
 

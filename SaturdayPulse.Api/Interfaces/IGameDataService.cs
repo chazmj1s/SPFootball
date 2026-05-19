@@ -22,11 +22,13 @@ namespace SaturdayPulse.Interfaces
         Task<int> LoadGamesAsync(int year, int? week = null, CancellationToken token = default);
         Task<int> LoadLinesAsync(int year, int week, CancellationToken token = default);
         Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default);
+        Task<int> AssignPostseasonWeeksAsync(int year, CancellationToken token = default);
 
         // ── CFBD V2 — Bulk load ───────────────────────────────────────────────
         Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default);
         Task<int> LoadGamesBulkAsync(int startYear, CancellationToken token = default);
         Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default);
         Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default);
+        Task<int> AssignPostseasonWeeksBulkAsync(int startYear, CancellationToken token = default);
     }
 }

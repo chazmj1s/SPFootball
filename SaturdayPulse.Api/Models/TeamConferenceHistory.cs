@@ -30,6 +30,6 @@ namespace SaturdayPulse.Models
 
         // Navigation
         [ForeignKey("TeamID")]
-        public Team? Team { get; set; }
+        public Teams? Team { get; set; }
     }
 }

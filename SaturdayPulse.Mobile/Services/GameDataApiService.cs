@@ -30,7 +30,7 @@ namespace SaturdayPulse.Services
                 System.Diagnostics.Debug.WriteLine($"[API] ========================================");
                 System.Diagnostics.Debug.WriteLine($"[API] Fetching power rankings for year {currentYear}, week {throughWeek?.ToString() ?? "all"}");
 
-                var url = $"powerrankings?year={currentYear}";
+                var url = $"powerrankings/v2?year={currentYear}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
                 System.Diagnostics.Debug.WriteLine($"[API] Full URL: {url}");
@@ -88,7 +88,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"rollingAverages/team?teamId={teamId}";
+                var url = $"rollingAverages/team/v2?teamId={teamId}";
                 if (startYear.HasValue)
                     url += $"&startYear={startYear.Value}";
 
@@ -118,7 +118,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"teams";
+                var url = $"teams/v2";
                 return await _httpClient.GetFromJsonAsync<List<Models.TeamInfo>>(url);
             }
             catch (Exception ex)
@@ -136,7 +136,7 @@ namespace SaturdayPulse.Services
             try
             {
                 var currentYear = year ?? DateTime.Now.Year;
-                var url = $"schedule?year={currentYear}";
+                var url = $"schedule/v2?year={currentYear}";
                 var schedule = await _httpClient.GetFromJsonAsync<List<Models.GameResult>>(url);
                 return schedule;
             }
@@ -154,7 +154,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"teamSchedule?teamId={teamId}&year={year}";
+                var url = $"teamSchedule/v2?teamId={teamId}&year={year}";
                 var response = await _httpClient.GetStringAsync(url);
                 return response;
             }
@@ -172,7 +172,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"rivalries/named";
+                var url = $"rivalries/named/v2";
                 return await _httpClient.GetFromJsonAsync<List<Models.RivalryInfo>>(url);
             }
             catch (Exception ex)
@@ -191,7 +191,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"rivalryhistory?team1Id={team1Id}&team2Id={team2Id}";
+                var url = $"rivalryhistory/v2?team1Id={team1Id}&team2Id={team2Id}";
                 var response = await _httpClient.GetAsync(url);
 
                 if (!response.IsSuccessStatusCode)
@@ -287,7 +287,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"projected-standings?year={year}";
+                var url = $"projected-standings/v2?year={year}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
 
@@ -339,7 +339,7 @@ namespace SaturdayPulse.Services
         {
             try
             {
-                var url = $"projected-championship-qualifiers?year={year}";
+                var url = $"projected-championship-qualifiers/v2?year={year}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
 
