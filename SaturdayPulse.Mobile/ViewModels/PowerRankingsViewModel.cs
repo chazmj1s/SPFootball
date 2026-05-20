@@ -12,10 +12,10 @@ namespace SaturdayPulse.ViewModels
         private readonly SharedNavigationStateService _navState;
         private List<TeamRanking> _allTeams = new();
         private ObservableCollection<TeamRanking> _filteredTeams = new();
-        private bool         _isBusy;
-        private RankingFilter _currentFilter        = RankingFilter.All;
-        private RankingSort   _currentSort          = RankingSort.PowerRating;
-        private bool          _isSortAscending      = false;
+        private bool          _isBusy;
+        private RankingFilter _currentFilter         = RankingFilter.All;
+        private RankingSort   _currentSort           = RankingSort.PowerRating;
+        private bool          _isSortAscending       = false;
         private string        _selectedFilterDisplay = "All";
 
         public PowerRankingsViewModel(
@@ -73,6 +73,22 @@ namespace SaturdayPulse.ViewModels
                 }
 
                 t.IsTrendExpanded = !t.IsTrendExpanded;
+            });
+
+            ToggleArcExpandCommand = new Command<TeamRanking>(async t =>
+            {
+                if (t == null) return;
+
+                if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
+                {
+                    var data = await _apiService.GetTeamSeasonArcAsync(
+                        t.TeamID, _navState.SelectedYear);
+
+                    if (data?.Weeks?.Count > 0)
+                        t.SeasonArcWeeks = data.Weeks;
+                }
+
+                t.IsArcExpanded = !t.IsArcExpanded;
             });
 
             // React to shared nav changes
@@ -145,6 +161,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand SelectFilterCommand      { get; }
         public ICommand ToggleStatsExpandCommand { get; }
         public ICommand ToggleTrendExpandCommand { get; }
+        public ICommand ToggleArcExpandCommand   { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 
@@ -346,8 +363,6 @@ namespace SaturdayPulse.ViewModels
             if (team != null)
             {
                 team.IsFollowed = isFollowed;
-
-                // Re-sort immediately if ShowFavoritesFirst is on
                 if (_navState.ShowFavoritesFirst)
                     MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
             }

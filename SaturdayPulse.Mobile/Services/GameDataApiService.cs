@@ -110,6 +110,28 @@ namespace SaturdayPulse.Services
             }
         }
 
+        /// <summary>
+        /// Gets week-by-week season arc data for a single team.
+        /// Maps to: GET /api/productiongamedata/teamseason?teamId=X&year=Y
+        /// </summary>
+        public async Task<TeamSeasonArcResponse?> GetTeamSeasonArcAsync(int teamId, int year)
+        {
+            try
+            {
+                var url = $"teamseason?teamId={teamId}&year={year}";
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching season arc: {url}");
+                var data = await _httpClient.GetFromJsonAsync<TeamSeasonArcResponse>(url);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Season arc for teamId={teamId}: {data?.Weeks?.Count ?? 0} week(s) returned");
+                return data;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Error fetching season arc for teamId={teamId}: {ex.Message}");
+                return null;
+            }
+        }
 
         /// <summary>
         /// Gets all FBS teams with id, name, conference, and tier.
