@@ -62,9 +62,7 @@ public class TeamRanking : INotifyPropertyChanged
         set
         {
             if (SetProperty(ref _trendHistory, value))
-            {
                 OnPropertyChanged(nameof(HasTrendData));
-            }
         }
     }
 
@@ -76,9 +74,7 @@ public class TeamRanking : INotifyPropertyChanged
         set
         {
             if (SetProperty(ref _pedigreeHistory, value))
-            {
                 OnPropertyChanged(nameof(HasTrendData));
-            }
         }
     }
 
@@ -143,8 +139,7 @@ public class TeamRanking : INotifyPropertyChanged
     // =========================================================
 
     public bool HasOffenseDefenseData =>
-        AvgPointsScored > 0 &&
-        OffensiveRank > 0;
+        AvgPointsScored > 0 && OffensiveRank > 0;
 
     public string StatsExpandIcon =>
         IsStatsExpanded ? "▲" : "▼";
@@ -166,8 +161,7 @@ public class TeamRanking : INotifyPropertyChanged
     // =========================================================
 
     public bool HasTrendData =>
-        TrendHistory?.Count > 0 ||
-        PedigreeHistory?.Count > 0;
+        TrendHistory?.Count > 0 || PedigreeHistory?.Count > 0;
 
     public string TrendExpandIcon =>
         IsTrendExpanded ? "▲" : "▼";
@@ -179,69 +173,116 @@ public class TeamRanking : INotifyPropertyChanged
         get => _isTrendExpanded;
         set
         {
-            if (!SetProperty(ref _isTrendExpanded, value))
-                return;
-
+            if (!SetProperty(ref _isTrendExpanded, value)) return;
             OnPropertyChanged(nameof(TrendExpandIcon));
-            
-            // Crucial: Notify that HasTrendData has changed
             OnPropertyChanged(nameof(HasTrendData));
-
-            if (_isTrendExpanded)
-                EnsureChartDataLoaded();
+            if (_isTrendExpanded) EnsureTrendChartDataLoaded();
         }
     }
 
     // =========================================================
-    // Chart Data
+    // Season Arc Expansion
     // =========================================================
 
-    public ObservableCollection<ChartPoint> TrendPoints { get; } = new();
+    public bool HasArcData => SeasonArcWeeks?.Count > 0;
 
-    public ObservableCollection<ChartPoint> PedigreePoints { get; } = new();
+    public string ArcExpandIcon => IsArcExpanded ? "▲" : "▼";
 
-    private bool _chartDataLoaded;
+    private bool _isArcExpanded;
 
-    private void EnsureChartDataLoaded()
+    public bool IsArcExpanded
     {
-        if (_chartDataLoaded)
-            return;
-
-        LoadChartPoints();
-
-        _chartDataLoaded = true;
+        get => _isArcExpanded;
+        set
+        {
+            if (!SetProperty(ref _isArcExpanded, value)) return;
+            OnPropertyChanged(nameof(ArcExpandIcon));
+            if (_isArcExpanded) EnsureArcChartDataLoaded();
+        }
     }
 
-    public void LoadChartPoints()
+    private List<TeamSeasonWeek>? _seasonArcWeeks;
+
+    public List<TeamSeasonWeek>? SeasonArcWeeks
+    {
+        get => _seasonArcWeeks;
+        set
+        {
+            if (SetProperty(ref _seasonArcWeeks, value))
+            {
+                OnPropertyChanged(nameof(HasArcData));
+                _arcChartDataLoaded = false;
+                if (_isArcExpanded) EnsureArcChartDataLoaded();
+            }
+        }
+    }
+
+    // =========================================================
+    // Trend / Pedigree Chart Data
+    // =========================================================
+
+    public ObservableCollection<ChartPoint> TrendPoints    { get; } = new();
+    public ObservableCollection<ChartPoint> PedigreePoints { get; } = new();
+
+    private bool _trendChartDataLoaded;
+
+    private void EnsureTrendChartDataLoaded()
+    {
+        if (_trendChartDataLoaded) return;
+        LoadTrendChartPoints();
+        _trendChartDataLoaded = true;
+    }
+
+    public void LoadTrendChartPoints()
     {
         TrendPoints.Clear();
         PedigreePoints.Clear();
 
         if (TrendHistory != null)
-        {
             for (int i = 0; i < TrendHistory.Count; i++)
-            {
-                TrendPoints.Add(new ChartPoint
-                {
-                    Index = i + 1,
-                    Value = TrendHistory[i]
-                });
-            }
-        }
+                TrendPoints.Add(new ChartPoint { Index = i + 1, Value = TrendHistory[i] });
 
         if (PedigreeHistory != null)
-        {
             for (int i = 0; i < PedigreeHistory.Count; i++)
-            {
-                PedigreePoints.Add(new ChartPoint
-                {
-                    Index = i + 1,
-                    Value = PedigreeHistory[i]
-                });
-            }
-        }
+                PedigreePoints.Add(new ChartPoint { Index = i + 1, Value = PedigreeHistory[i] });
 
         OnPropertyChanged(nameof(HasTrendData));
+    }
+
+    // keep old name as alias so existing callers don't break
+    public void LoadChartPoints() => LoadTrendChartPoints();
+
+    // =========================================================
+    // Season Arc Chart Data
+    // =========================================================
+
+    public ObservableCollection<ChartPoint> ArcRankingPoints { get; } = new();
+    public ObservableCollection<ChartPoint> ArcSosPoints     { get; } = new();
+    public ObservableCollection<ChartPoint> ArcWinPctPoints  { get; } = new();
+
+    private bool _arcChartDataLoaded;
+
+    private void EnsureArcChartDataLoaded()
+    {
+        if (_arcChartDataLoaded || SeasonArcWeeks == null) return;
+        LoadArcChartPoints();
+        _arcChartDataLoaded = true;
+    }
+
+    private void LoadArcChartPoints()
+    {
+        ArcRankingPoints.Clear();
+        ArcSosPoints.Clear();
+        ArcWinPctPoints.Clear();
+
+        if (SeasonArcWeeks == null) return;
+
+        foreach (var w in SeasonArcWeeks)
+        {
+            ArcRankingPoints.Add(new ChartPoint { Index = w.Week, Value = w.Ranking  ?? 0 });
+            ArcSosPoints    .Add(new ChartPoint { Index = w.Week, Value = (w.CombinedSOS-1)*10 ?? 0 });
+            ArcWinPctPoints .Add(new ChartPoint { Index = w.Week, Value = w.WinPct });
+        }
     }
 
     // =========================================================
@@ -250,26 +291,16 @@ public class TeamRanking : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected void OnPropertyChanged(
-        [CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(
-            this,
-            new PropertyChangedEventArgs(propertyName));
-    }
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
     protected bool SetProperty<T>(
-        ref T backingStore,
-        T value,
+        ref T backingStore, T value,
         [CallerMemberName] string? propertyName = null)
     {
-        if (EqualityComparer<T>.Default.Equals(backingStore, value))
-            return false;
-
+        if (EqualityComparer<T>.Default.Equals(backingStore, value)) return false;
         backingStore = value;
-
         OnPropertyChanged(propertyName);
-
         return true;
     }
 }
