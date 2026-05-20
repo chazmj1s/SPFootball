@@ -1,295 +1,47 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
-    <ContainerRuntimeIdentifier>win-x64</ContainerRuntimeIdentifier>
-    <EnableSdkContainerDebugging>True</EnableSdkContainerDebugging>
-    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:9.0-nanoserver-1809</ContainerBaseImage>
-    <UserSecretsId>c2e69bfd-745e-417e-80f7-f70fe94eaa0b</UserSecretsId>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>c2e69bfd-745e-417e-80f7-f70fe94eaa0b</UserSecretsId>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <NoWarn>1701;1702;1591</NoWarn>
-  </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+        <NoWarn>1701;1702;1591</NoWarn>
+    </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <NoWarn>1701;1702;1591</NoWarn>
-  </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+        <NoWarn>1701;1702;1591</NoWarn>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <None Remove="NCAA Raw Game Data\1965.txt" />
-    <None Remove="NCAA Raw Game Data\1966.txt" />
-    <None Remove="NCAA Raw Game Data\1967.txt" />
-    <None Remove="NCAA Raw Game Data\1968.txt" />
-    <None Remove="NCAA Raw Game Data\1969.txt" />
-    <None Remove="NCAA Raw Game Data\1970.txt" />
-    <None Remove="NCAA Raw Game Data\1971.txt" />
-    <None Remove="NCAA Raw Game Data\1972.txt" />
-    <None Remove="NCAA Raw Game Data\1973.txt" />
-    <None Remove="NCAA Raw Game Data\1974.txt" />
-    <None Remove="NCAA Raw Game Data\1975.txt" />
-    <None Remove="NCAA Raw Game Data\1976.txt" />
-    <None Remove="NCAA Raw Game Data\1977.txt" />
-    <None Remove="NCAA Raw Game Data\1978.txt" />
-    <None Remove="NCAA Raw Game Data\1979.txt" />
-    <None Remove="NCAA Raw Game Data\1980.txt" />
-    <None Remove="NCAA Raw Game Data\1981.txt" />
-    <None Remove="NCAA Raw Game Data\1982.txt" />
-    <None Remove="NCAA Raw Game Data\1983.txt" />
-    <None Remove="NCAA Raw Game Data\1984.txt" />
-    <None Remove="NCAA Raw Game Data\1985.txt" />
-    <None Remove="NCAA Raw Game Data\1986.txt" />
-    <None Remove="NCAA Raw Game Data\1987.txt" />
-    <None Remove="NCAA Raw Game Data\1988.txt" />
-    <None Remove="NCAA Raw Game Data\1989.txt" />
-    <None Remove="NCAA Raw Game Data\1990.txt" />
-    <None Remove="NCAA Raw Game Data\1991.txt" />
-    <None Remove="NCAA Raw Game Data\1992.txt" />
-    <None Remove="NCAA Raw Game Data\1993.txt" />
-    <None Remove="NCAA Raw Game Data\1994.txt" />
-    <None Remove="NCAA Raw Game Data\1995.txt" />
-    <None Remove="NCAA Raw Game Data\1996.txt" />
-    <None Remove="NCAA Raw Game Data\1997.txt" />
-    <None Remove="NCAA Raw Game Data\1998.txt" />
-    <None Remove="NCAA Raw Game Data\1999.txt" />
-    <None Remove="NCAA Raw Game Data\2000.txt" />
-    <None Remove="NCAA Raw Game Data\2001.txt" />
-    <None Remove="NCAA Raw Game Data\2002.txt" />
-    <None Remove="NCAA Raw Game Data\2003.txt" />
-    <None Remove="NCAA Raw Game Data\2004.txt" />
-    <None Remove="NCAA Raw Game Data\2005.txt" />
-    <None Remove="NCAA Raw Game Data\2006.txt" />
-    <None Remove="NCAA Raw Game Data\2007.txt" />
-    <None Remove="NCAA Raw Game Data\2008.txt" />
-    <None Remove="NCAA Raw Game Data\2009.txt" />
-    <None Remove="NCAA Raw Game Data\2010.txt" />
-    <None Remove="NCAA Raw Game Data\2011.txt" />
-    <None Remove="NCAA Raw Game Data\2012.txt" />
-    <None Remove="NCAA Raw Game Data\2013.txt" />
-    <None Remove="NCAA Raw Game Data\2014.txt" />
-    <None Remove="NCAA Raw Game Data\2015.txt" />
-    <None Remove="NCAA Raw Game Data\2016.txt" />
-    <None Remove="NCAA Raw Game Data\2017.txt" />
-    <None Remove="NCAA Raw Game Data\2018.txt" />
-    <None Remove="NCAA Raw Game Data\2019.txt" />
-    <None Remove="NCAA Raw Game Data\2020.txt" />
-    <None Remove="NCAA Raw Game Data\2021.txt" />
-    <None Remove="NCAA Raw Game Data\2022.txt" />
-    <None Remove="NCAA Raw Game Data\2023.txt" />
-    <None Remove="NCAA Raw Game Data\2024.txt" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.16" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.16">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.16" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.16">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.2" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <ContainerPort Include="8081" />
-  </ItemGroup>
+    <ItemGroup>
+        <Content Include="SaturdayPulse.db">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="NCAA Raw Game Data\1965.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1966.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1967.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1968.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1969.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1970.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1971.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1972.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1973.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1974.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1975.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1976.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1977.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1978.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1979.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1980.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1981.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1982.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1983.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1984.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1985.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1986.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1987.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1988.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1989.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1990.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1991.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1992.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1993.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1994.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1995.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1996.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1997.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1998.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\1999.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2000.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2001.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2002.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2003.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2004.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2005.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2006.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2007.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2008.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2009.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2010.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2011.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2012.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2013.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2014.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2015.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2016.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2017.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2018.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2019.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2020.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2021.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2022.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2023.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="NCAA Raw Game Data\2024.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.16" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.16">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.16" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.16" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.16">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Migrations\" />
-    <Folder Include="Application\" />
-    <Folder Include="SQL\" />
-  </ItemGroup>
+    <ItemGroup>
+        <Folder Include="Migrations\" />
+        <Folder Include="Application\" />
+        <Folder Include="SQL\" />
+    </ItemGroup>
 
 </Project>
