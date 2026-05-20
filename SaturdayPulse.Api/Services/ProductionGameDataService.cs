@@ -441,7 +441,7 @@ namespace SaturdayPulse.Services
         public async Task<TeamHistoryResult> GetTeamHistoryAsync(
             int teamId, int years, CancellationToken token = default)
         {
-            var team = await _uow.Team.GetByIdAsync(teamId, token)
+            var team = await _uow.Teams.GetByTeamIdAsync(teamId, token)
                        ?? throw new KeyNotFoundException($"Team {teamId} not found.");
 
             var cutoffYear = (short)(DateTime.Now.Year - years);
@@ -463,10 +463,10 @@ namespace SaturdayPulse.Services
                 Year = (int)r.Year, r.Wins, r.Losses, Record = $"{r.Wins}-{r.Losses}",
                 PowerRating = r.Ranking, BaseSOS = r.BaseSOS, CombinedSOS = r.CombinedSOS,
                 OverallRank = ranksByYear.GetValueOrDefault(r.Year, 0),
-                Tier = RatingCalculator.GetConferenceTier(team.Conference, team.TeamName)
+                Tier = RatingCalculator.GetConferenceTier(team.Conference?.Name, team.TeamName)
             }).ToList();
 
-            return new TeamHistoryResult(teamId, team.TeamName, team.ShortName ?? team.TeamName, team.ConferenceAbbr, history);
+            return new TeamHistoryResult(teamId, team.TeamName, team.ShortName ?? team.TeamName, team.Conference?.Abbreviation, history);
         }
 
         public async Task<RivalryHistoryResult> GetRivalryHistoryAsync(

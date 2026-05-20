@@ -60,12 +60,14 @@ namespace SaturdayPulse.Repositories.Implementations
                 .OrderBy(tr => tr.Year)
                 .ToListAsync(token);
 
-        public Task<List<TeamRecord>> GetRankedByYearAsync(
-            int year, CancellationToken token = default)
-            => _context.TeamRecords
+        public async Task<List<TeamRecord>> GetRankedByYearAsync(int year, CancellationToken token = default)
+        {
+            var records = await _context.TeamRecords
                 .Where(tr => tr.Year == year && tr.Ranking.HasValue)
-                .OrderByDescending(tr => tr.Ranking)
                 .ToListAsync(token);
+
+            return records.OrderByDescending(tr => tr.Ranking).ToList();
+        }
 
         /// <summary>
         /// Aggregates wins/losses/points from the Games table (CFBD V2, home/away model)
