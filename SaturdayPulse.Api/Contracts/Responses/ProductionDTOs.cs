@@ -11,6 +11,7 @@ namespace SaturdayPulse.Contracts.Responses
     public record TeamsResult(IReadOnlyList<object> Teams);
     public record NamedRivalriesResult(IReadOnlyList<object> Rivalries);
     public record TeamHistoryResult(int TeamId, string TeamName, string ShortName, string? ConferenceAbbr, IReadOnlyList<object> History);
+    public record TeamSeasonArcResult(int TeamId, string TeamName, int Year, IReadOnlyList<object> Weeks);
     public record DiagnosticInfo(
         string Database,
         int TotalTeams,

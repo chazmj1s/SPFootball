@@ -38,5 +38,10 @@ namespace SaturdayPulse.Repositories
         {
             await _ctx.WeeklyRankings.AddAsync(ranking, token);
         }
+        public Task<List<WeeklyRanking>> GetByTeamAndYearAsync(int teamId, int year, CancellationToken token = default)
+            => _ctx.WeeklyRankings
+                   .Where(wr => wr.TeamID == teamId && wr.Year == (short)year)
+                   .OrderBy(wr => wr.Week)
+                   .ToListAsync(token);
     }
 }

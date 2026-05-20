@@ -794,6 +794,29 @@ namespace SaturdayPulse.Services
                 return new PowerRankingsResult(false, new List<PowerRankingRowResponse>());
             }
 
+        public async Task<TeamSeasonArcResult> GetTeamSeasonArcAsync(
+            int teamId, int year, CancellationToken token = default)
+        {
+            var team = await _uow.Teams.GetByTeamIdAsync(teamId, token)
+                       ?? throw new KeyNotFoundException($"Team {teamId} not found.");
+
+            var weeks = await _uow.WeeklyRankings.GetByTeamAndYearAsync(teamId, year, token);
+
+            if (!weeks.Any())
+                throw new KeyNotFoundException($"No weekly rankings found for team {teamId} in {year}.");
+
+            var arc = weeks.Select(wr => (object)new
+            {
+                Week = (int)wr.Week,
+                Ranking = (double?)wr.Ranking,
+                CombinedSOS = (double?)wr.CombinedSOS,
+                WinPct = wr.Wins + wr.Losses > 0
+                  ? Math.Round((double)wr.Wins / (wr.Wins + wr.Losses), 3) : 0.0
+            }).ToList();
+
+            return new TeamSeasonArcResult(teamId, team.TeamName, year, arc);
+        }
+
         // ── Rolling Averages ─────────────────────────────────────────────────────
 
         /// <summary>
