@@ -13,17 +13,10 @@ using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var cs = builder.Configuration.GetConnectionString("DefaultConnection");
-Console.WriteLine($"CONNECTION: {cs}");
-
 // ── Database ──────────────────────────────────────────────────────────────────
+var dbPath = Path.Combine(builder.Environment.ContentRootPath, "SaturdayPulse.db");
 builder.Services.AddDbContext<NCAAContext>(options =>
-{
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
-    if (builder.Environment.IsDevelopment())
-        options.EnableSensitiveDataLogging();
-}, contextLifetime: ServiceLifetime.Scoped,
-   optionsLifetime: ServiceLifetime.Singleton);
+    options.UseSqlite($"Data Source={dbPath}"));
 
 // ── CFBD HTTP Client ──────────────────────────────────────────────────────────
 builder.Services.Configure<CfbdApiSettings>(

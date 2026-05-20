@@ -11,18 +11,19 @@ namespace SaturdayPulse.Helpers
         public static readonly IReadOnlyList<(string Display, string Abbr)> OrderedConferences =
         [
             // P4
-            ("ACC",          "ACC"),
-            ("Big 12",       "Big 12"),
-            ("Big Ten",      "Big Ten"),
-            ("SEC",          "SEC"),
+            ("ACC",                 "ACC"),
+            ("Big 12",              "B12"),
+            ("Big Ten",             "B1G"),
+            ("SEC",                 "SEC"),
             // G5
-            ("AAC",          "AAC"),
-            ("Conf USA",     "C-USA"),
-            ("MAC",          "MAC"),
-            ("Mtn West",     "Mountain West"),
-            ("Sun Belt",     "Sun Belt"),
+            ("AAC",                 "AAC"),
+            ("Conference USA",      "CUSA"),
+            ("Mid-American",        "MAC"),
+            ("Mountain West",       "MWC"),
+            ("Sun Belt",            "SBC"),
             // Independent / Other
-            ("Independent",  "Independent"),
+            ("FBS Independents",    "Ind"),
+            ("Pac-12",              "PAC")
         ];
 
         /// <summary>Flat display-name list prefixed with "All", for Pickers.</summary>
