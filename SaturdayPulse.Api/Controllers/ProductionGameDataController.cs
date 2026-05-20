@@ -512,6 +512,31 @@ namespace SaturdayPulse.Controllers
         #endregion
 
         #region Team History
+        [HttpGet("teamseason")]
+        public async Task<IActionResult> GetTeamSeasonArc(
+            [FromQuery] int teamId,
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var result = await gameDataService.GetTeamSeasonArcAsync(teamId, targetYear, token);
+                return Ok(new
+                {
+                    teamId = result.TeamId,
+                    teamName = result.TeamName,
+                    year = result.Year,
+                    weeks = result.Weeks
+                });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving season arc for {TeamId}", teamId);
+                return StatusCode(500, "An error occurred retrieving the team season arc.");
+            }
+        }
 
         /// <summary>
         /// Returns yearly rank/rating/SOS history for a team.
