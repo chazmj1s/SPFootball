@@ -15,9 +15,7 @@ namespace SaturdayPulse.Infrastructure
         private readonly NCAAContext _context;
 
         // ── Legacy repositories ───────────────────────────────────────────────
-        public ITeamRepository       Team       { get; }
         public ITeamRecordRepository TeamRecords { get; }
-        public IGameRepository       Game       { get; }
         public ILookupRepository     Lookups     { get; }
 
         // ── CFBD V2 repositories ──────────────────────────────────────────────
@@ -33,13 +31,8 @@ namespace SaturdayPulse.Infrastructure
         {
             _context    = context;
 
-            // Legacy
-            Team       = new TeamRepository(_context);
             TeamRecords = new TeamRecordRepository(_context);
-            Game       = new GameRepository(_context);
             Lookups     = new LookupRepository(_context);
-
-            // CFBD V2
             Conferences = new ConferenceRepository(_context);
             Teams     = new TeamsRepository(_context);
             Games     = new GamesRepository(_context);
