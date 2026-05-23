@@ -33,7 +33,7 @@ namespace SaturdayPulse.ViewModels
 
             SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var years = Enumerable.Range(1965, 2025 - 1965 + 1)
+                var years = Enumerable.Range(1965, DateTime.Now.Year - 1965 + 1)
                     .Select(y => y.ToString())
                     .Reverse()
                     .ToArray();

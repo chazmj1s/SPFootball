@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Models;
 using SaturdayPulse.Utilities;
@@ -51,10 +52,19 @@ namespace SaturdayPulse.Services
             }
 
             var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
+            Console.WriteLine($"GetScheduleV2Async:{targetYear}: Projections - {allProjections.Count()}");
+
+            var firstGame = games.FirstOrDefault();
+            if (firstGame != null)
+            {
+                var found = allProjections.TryGetValue(firstGame.GameId, out _);
+
+                Console.WriteLine($"First GameId: {firstGame.GameId}, Found: {found}, Cache sample: {string.Join(", ", allProjections.Keys.Take(5))}");
+            }
 
             var results = games.Select(g =>
             {
-                Teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+                Teams.TryGetValue(g.HomeId ?? 0, out var homeTeam); 
                 Teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
 
                 bool homeWon   = (g.HomePoints ?? 0) >= (g.AwayPoints ?? 0);
