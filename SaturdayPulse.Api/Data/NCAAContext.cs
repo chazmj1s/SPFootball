@@ -5,16 +5,10 @@ namespace SaturdayPulse.Data
 {
     public class NCAAContext(DbContextOptions<NCAAContext> options) : DbContext(options)
     {
-        // ── Legacy ────────────────────────────────────────────────────────────
-        public DbSet<Game>                  Game                  { get; set; }
-        public DbSet<Team>                  Team                  { get; set; }
         public DbSet<AvgScoreDelta>         AvgScoreDeltas        { get; set; }
         public DbSet<TeamRecord>            TeamRecords           { get; set; }
         public DbSet<MatchupHistory>        MatchupHistories      { get; set; }
         public DbSet<WeeklyRanking>         WeeklyRankings        { get; set; }
-        public DbSet<TeamConferenceHistory> TeamConferenceHistory { get; set; }
-
-        // ── CFBD V2 ───────────────────────────────────────────────────────────
         public DbSet<Conference>             Conferences             { get; set; }
         public DbSet<Teams>                  Teams                   { get; set; }
         public DbSet<Games>                  Games                   { get; set; }
@@ -26,31 +20,9 @@ namespace SaturdayPulse.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // ── Legacy ────────────────────────────────────────────────────────
-
-            modelBuilder.Entity<Game>()
-                .Property(g => g.Id)
-                .ValueGeneratedNever();
-
-            modelBuilder.Entity<Game>().Ignore(e => e.Spread);
-
             modelBuilder.Entity<MatchupHistory>()
                 .HasKey(m => new { m.Team1Id, m.Team2Id });
-
-            //modelBuilder.Entity<Projection>().ToTable("Projections", t => t.ExcludeFromMigrations());
-            //modelBuilder.Entity<WeeklyRanking>().ToTable("WeeklyRankings", t => t.ExcludeFromMigrations());
-            
-            modelBuilder.Entity<TeamConferenceHistory>(entity =>
-            {
-                entity.HasIndex(e => new { e.TeamID, e.StartYear })
-                      .IsUnique()
-                      .HasDatabaseName("IX_TeamConferenceHistory_TeamID_StartYear");
-
-                entity.HasIndex(e => new { e.TeamID, e.EndYear })
-                      .HasDatabaseName("IX_TeamConferenceHistory_TeamID_EndYear");
-            });
-
-            // ── CFBD V2 ───────────────────────────────────────────────────────
+           
 
             modelBuilder.Entity<Conference>()
                 .HasIndex(c => c.ConferenceId)

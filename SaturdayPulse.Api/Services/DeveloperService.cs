@@ -52,71 +52,6 @@ namespace SaturdayPulse.Services
             _logger                   = logger;
         }
 
-        // ── Legacy Data Loading ───────────────────────────────────────────────────
-        // TODO: Remove this entire section once CFBD V2 load is validated.
-
-        public Task<List<Game>> ExtractGameDataHistoryAsync(int? startYear)
-            => _gameDataService.ExtractGameDataHistoryAsync(startYear);
-
-        public async Task<int> LoadGameHistoryFromFilesAsync()
-            => await _gameDataService.LoadGameHistoryFromFiles();
-
-        public Task<int> ProcessSingleFileAsync(string filePath, CancellationToken token)
-            => _gameDataService.ProcessSingleFileAsync(filePath, token);
-
-        public async Task<object> UpdateWeekGamesFromFileAsync(int year, int week, CancellationToken token)
-        {
-            var fileName = $"{year}.txt";
-            var dataDir  = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "NCAA Raw Game Data");
-            var filePath = System.IO.Path.Combine(dataDir, fileName);
-
-            if (!System.IO.File.Exists(filePath))
-                throw new System.IO.FileNotFoundException($"File '{fileName}' not found in NCAA Raw Game Data directory.");
-
-            var gamesProcessed = await _gameDataService.UpdateGameDataFromFileAsync(filePath, year, week, token);
-            await _gameDataService.UpdateTeamRecordsAsync(year);
-            await RecalculateMetricsAsync(year, week);
-
-            return new
-            {
-                message           = $"Successfully processed games for {year} week {week} from file",
-                gamesProcessed, metricsCalculated = "TeamRecords, SOS, PowerRating, and Ranking recalculated",
-                year, week, sourceFile = fileName
-            };
-        }
-
-        public async Task<object> UpdateWeekGamesAsync(int year, int week)
-        {
-            var gamesProcessed = await _gameDataService.UpdateGameDataForYearAndWeekAsync(year, week);
-            await _gameDataService.UpdateTeamRecordsAsync(year);
-            await RecalculateMetricsAsync(year, week);
-            return new { message = $"Successfully updated games for {year} week {week}", gamesProcessed, year, week };
-        }
-
-        public AvailableFilesResult ListAvailableFiles()
-        {
-            var dataDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "NCAA Raw Game Data");
-            if (!System.IO.Directory.Exists(dataDir))
-                throw new System.IO.DirectoryNotFoundException("NCAA Raw Game Data directory not found.");
-
-            var files = System.IO.Directory.GetFiles(dataDir, "*.txt")
-                .Select(f => (object)new
-                {
-                    fileName     = System.IO.Path.GetFileName(f),
-                    fullPath     = f,
-                    size         = new System.IO.FileInfo(f).Length,
-                    lastModified = System.IO.File.GetLastWriteTime(f)
-                })
-                .OrderBy(f => ((dynamic)f).fileName)
-                .ToList();
-
-            return new AvailableFilesResult(dataDir, files.Count, files);
-        }
-
-        // ── CFBD V2 — Load ────────────────────────────────────────────────────────
-        // NOTE: These methods call through to GameDataService. If IGameDataService does not yet
-        // declare these members, cast to GameDataService directly (or add them to the interface).
-
         public Task<int> LoadConferencesAsync(CancellationToken token = default)
             => _gameDataService.LoadConferencesAsync(token);
 
@@ -148,14 +83,6 @@ namespace SaturdayPulse.Services
 
         public Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
             => _gameDataService.WeeklyRefreshAsync(year, week, token);
-
-        // ── CFBD V2 — Preview (non-destructive) ──────────────────────────────────
-
-        public Task<List<CfbdTeamDto>> PreviewCfbdTeamsAsync(int? year, CancellationToken token)
-            => _gameDataService.PreviewCfbdTeamsAsync(year, token);
-
-        public Task<List<CfbdGameDto>> PreviewCfbdGamesAsync(int year, int? week, CancellationToken token)
-            => _gameDataService.PreviewCfbdGamesAsync(year, week, token);
 
         // ── Rolling Averages ──────────────────────────────────────────────────────
 
@@ -308,9 +235,9 @@ namespace SaturdayPulse.Services
         public async Task<TeamGameAnalysisResult> AnalyzeTeamGamesAsync(int teamId, int? year, CancellationToken token)
         {
             var targetYear     = year ?? DateTime.Now.Year;
-            var allGames       = await _uow.Game.GetByYearAsync(targetYear, token);
+            var allGames       = await _uow.Games.GetByYearAsync(targetYear, token);
             var teamGames      = allGames
-                .Where(g => g.WinnerId == teamId || g.LoserId == teamId)
+                .Where(g => g.HomeId == teamId || g.AwayId== teamId)
                 .OrderBy(g => g.Week).ToList();
 
             var teamRecords    = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
@@ -321,20 +248,20 @@ namespace SaturdayPulse.Services
 
             var analysis = teamGames.Select(g =>
             {
-                bool isWinner       = g.WinnerId == teamId;
-                var teamPoints      = isWinner ? g.WPoints : g.LPoints;
-                var oppPoints       = isWinner ? g.LPoints : g.WPoints;
-                var oppId           = isWinner ? g.LoserId : g.WinnerId;
+                bool isWinner       = g.HomeId == teamId && g.HomePoints > g.AwayPoints;
+                var teamPoints      = g.HomeId == teamId ? g.HomePoints : g.AwayPoints;
+                var oppPoints       = g.HomeId == teamId ? g.AwayPoints : g.HomePoints;
+                var oppId           = g.HomeId == teamId ? g.AwayId : g.HomeId;
                 var delta           = teamPoints - oppPoints;
-                bool isHomeTeam     = isWinner ? g.Location == 'W' : g.Location == 'L';
-                var locationDisplay = isHomeTeam ? "Home" : g.Location == 'N' ? "Neutral" : "Away";
+                bool isHomeTeam     = g.HomeId == teamId;
+                var locationDisplay = isHomeTeam ? "Home" : g.NeutralSite ? "Neutral" : "Away";
                 var result          = isWinner ? "W" : "L";
-                var opponentName    = isWinner ? g.LoserName : g.WinnerName;
+                var opponentName    = isWinner ? g.AwayName : g.HomeName;
 
                 var teamWins   = winsLookup.GetValueOrDefault(teamId, 0);
                 var teamLosses = lossesLookup.GetValueOrDefault(teamId, 0);
-                var oppWins    = winsLookup.GetValueOrDefault(oppId,   0);
-                var oppLosses  = lossesLookup.GetValueOrDefault(oppId, 0);
+                var oppWins    = winsLookup.GetValueOrDefault((int)oppId,   0);
+                var oppLosses  = lossesLookup.GetValueOrDefault((int)oppId, 0);
 
                 var teamWinPct = RatingCalculator.BucketWinPct(teamWins, teamWins + teamLosses);
                 var oppWinPct  = RatingCalculator.BucketWinPct(oppWins,  oppWins  + oppLosses);
@@ -351,9 +278,9 @@ namespace SaturdayPulse.Services
                     var expectedFromTeam = RatingCalculator.ExpectedFromPerspective(expectedDelta, teamWinPct, oppWinPct);
 
                     if (isHomeTeam)             { expectedFromTeam += hfa; homeAdjustment =  hfa; }
-                    else if (g.Location != 'N') { expectedFromTeam -= hfa; homeAdjustment = -hfa; }
+                    else if (g.NeutralSite) { expectedFromTeam -= hfa; homeAdjustment = -hfa; }
 
-                    zScore = (delta - expectedFromTeam) / (double)asd.StDevP;
+                    zScore = (double)((delta - expectedFromTeam) / (double)asd.StDevP);
                 }
 
                 var baseExpected     = teamWins >= oppWins ? expectedDelta : -expectedDelta;
@@ -367,7 +294,7 @@ namespace SaturdayPulse.Services
                     HomeAdjustment        = Math.Round(homeAdjustment,   1),
                     AdjustedExpectedDelta = Math.Round(adjustedExpected, 1),
                     ActualDelta           = delta,
-                    Difference            = Math.Round(delta - adjustedExpected, 1),
+                    Difference            = Math.Round((double)delta - adjustedExpected, 1),
                     ZScore                = Math.Round(zScore, 3),
                     Performance           = zScore > _config.DominantPerformanceThreshold ? "Dominant"
                                           : zScore > _config.UnderperformedThreshold ? "Expected"
@@ -407,43 +334,6 @@ namespace SaturdayPulse.Services
             }).ToList();
 
             return new TrendsResult(targetYear, trends.Count, trends);
-        }
-
-        public async Task<DiagnosticScoreDeltaResult> DiagnosticScoreDeltasAsync(int? year, CancellationToken token)
-        {
-            var targetYear  = year ?? DateTime.Now.Year;
-            var games       = await _uow.Game.GetByYearAsync(targetYear, token);
-            var teamRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
-            var recordById  = teamRecords.ToDictionary(tr => tr.TeamID);
-
-            var results = games.Select(g =>
-            {
-                var winnerRecord = recordById.GetValueOrDefault(g.WinnerId);
-                var loserRecord  = recordById.GetValueOrDefault(g.LoserId);
-                var winnerWins   = winnerRecord?.Wins ?? 0;
-                var loserWins    = loserRecord?.Wins  ?? 0;
-
-                return (object)new
-                {
-                    g.WinnerName, WinnerWins = winnerWins, WinnerPoints = g.WPoints,
-                    g.LoserName,  LoserWins  = loserWins,  LoserPoints  = g.LPoints,
-                    IsUpset   = winnerWins < loserWins,
-                    Team1Wins = winnerWins >= loserWins ? winnerWins : loserWins,
-                    Team2Wins = winnerWins >= loserWins ? loserWins  : winnerWins,
-                    Delta     = winnerWins >= loserWins ? g.WPoints - g.LPoints : g.LPoints - g.WPoints,
-                    Explanation = winnerWins >= loserWins
-                        ? $"Normal: {winnerWins}-win team beat {loserWins}-win team by {g.WPoints - g.LPoints}"
-                        : $"UPSET: {winnerWins}-win team beat {loserWins}-win team, delta = {g.LPoints - g.WPoints}"
-                };
-            }).ToList();
-
-            var upsetCount    = results.Count(r => ((dynamic)r).IsUpset);
-            var negativeCount = results.Count(r => ((dynamic)r).Delta < 0);
-
-            return new DiagnosticScoreDeltaResult(
-                targetYear, results.Count, upsetCount, negativeCount, upsetCount > 0,
-                upsetCount > 0 && negativeCount == 0 ? "Logic error: upsets exist but no negative deltas!" : null,
-                results.Take(20));
         }
 
         // ── Weekly Rankings ───────────────────────────────────────────────────────

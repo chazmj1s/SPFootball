@@ -46,7 +46,7 @@ namespace SaturdayPulse.Utilities
                 })
                 .ToList();
 
-            var teamMapping = await _uow.Team.GetAllAsync(cancellationToken);
+            var teamMapping = await _uow.Teams.GetAllAsync(cancellationToken);
 
             // Pre-load win totals for upset rate calculation — eliminates N+1 query
             var allRecords = await _uow.TeamRecords.GetHistoricalAsync(1, 9999, cancellationToken);
@@ -61,11 +61,11 @@ namespace SaturdayPulse.Utilities
                 // Find team IDs (check both TeamName and Alias)
                 var team1Id = teamMapping.FirstOrDefault(t =>
                     t.TeamName.Equals(rivalry.Team1Name, StringComparison.OrdinalIgnoreCase) ||
-                    (t.Alias != null && t.Alias.Equals(rivalry.Team1Name, StringComparison.OrdinalIgnoreCase)))?.TeamID;
+                    (t.Alias != null && t.Alias.Equals(rivalry.Team1Name, StringComparison.OrdinalIgnoreCase)))?.TeamId;
 
                 var team2Id = teamMapping.FirstOrDefault(t =>
                     t.TeamName.Equals(rivalry.Team2Name, StringComparison.OrdinalIgnoreCase) ||
-                    (t.Alias != null && t.Alias.Equals(rivalry.Team2Name, StringComparison.OrdinalIgnoreCase)))?.TeamID;
+                    (t.Alias != null && t.Alias.Equals(rivalry.Team2Name, StringComparison.OrdinalIgnoreCase)))?.TeamId;
 
                 if (team1Id == null || team2Id == null)
                 {

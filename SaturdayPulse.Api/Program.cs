@@ -36,7 +36,6 @@ var testSettings = builder.Configuration.GetSection("CfbdApi").Get<CfbdApiSettin
 Console.WriteLine($"DEBUG CfbdApi — BaseUrl: '{testSettings?.BaseUrl}' BearerToken empty: {string.IsNullOrEmpty(testSettings?.BearerToken)}");
 
 // ── Services ──────────────────────────────────────────────────────────────────
-builder.Services.AddScoped<RecordProcessor>();
 builder.Services.AddScoped<ScoreDeltaCalculator>();
 builder.Services.AddScoped<MatchupHistoryCalculator>();
 builder.Services.AddScoped<TeamMetricsService>();

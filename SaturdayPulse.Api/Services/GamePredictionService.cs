@@ -30,16 +30,16 @@ namespace SaturdayPulse.Services
             int year, string teamName, string opponentName,
             char location, int week = 0, CancellationToken token = default)
         {
-            var team     = await _uow.Team.GetByNameAsync(teamName, token)
+            var team     = await _uow.Teams.GetByNameAsync(teamName, token)
                            ?? throw new ArgumentException($"Team not found: {teamName}");
-            var opponent = await _uow.Team.GetByNameAsync(opponentName, token)
+            var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
                            ?? throw new ArgumentException($"Team not found: {opponentName}");
 
             var teamRecords = await _uow.TeamRecords.GetByTeamsAndYearAsync(
-                new[] { team.TeamID, opponent.TeamID }, year, token);
+                new[] { team.TeamId, opponent.TeamId }, year, token);
 
-            if (!teamRecords.TryGetValue(team.TeamID,     out var teamRecord) ||
-                !teamRecords.TryGetValue(opponent.TeamID, out var oppRecord))
+            if (!teamRecords.TryGetValue(team.TeamId,     out var teamRecord) ||
+                !teamRecords.TryGetValue(opponent.TeamId, out var oppRecord))
                 throw new ArgumentException("Team records not found for specified year.");
 
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
@@ -55,7 +55,7 @@ namespace SaturdayPulse.Services
         public async Task<List<GamePrediction>> PredictMatchups(
             int year, List<MatchupRequest> matchups, CancellationToken token = default)
         {
-            var teams          = await _uow.Team.GetTeamDictionaryByNameAsync(token);
+            var teams          = await _uow.Teams.GetDictionaryByNameAsync(token);
             var teamRecords    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordsById    = teamRecords.ToDictionary(tr => tr.TeamID);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
@@ -69,8 +69,8 @@ namespace SaturdayPulse.Services
                 if (!teams.TryGetValue(matchup.TeamName,     out var team)      ||
                     !teams.TryGetValue(matchup.OpponentName, out var opponent))  continue;
 
-                if (!recordsById.TryGetValue(team.TeamID,     out var teamRecord) ||
-                    !recordsById.TryGetValue(opponent.TeamID, out var oppRecord))  continue;
+                if (!recordsById.TryGetValue(team.TeamId,     out var teamRecord) ||
+                    !recordsById.TryGetValue(opponent.TeamId, out var oppRecord))  continue;
 
                 predictions.Add(CalculatePrediction(
                     teamRecord, oppRecord, team, opponent, matchup.Location,
@@ -126,7 +126,7 @@ namespace SaturdayPulse.Services
 
         private GamePrediction CalculatePrediction(
             TeamRecord teamRecord, TeamRecord oppRecord,
-            Team team, Team opponent,
+            Teams team, Teams opponent,
             char location,
             List<AvgScoreDelta> avgScoreDeltas,
             List<MatchupHistory> rivalries,
@@ -159,8 +159,8 @@ namespace SaturdayPulse.Services
             if (teamRecord.PowerRating.HasValue && oppRecord.PowerRating.HasValue)
                 expectedFromTeam += (double)(teamRecord.PowerRating.Value - oppRecord.PowerRating.Value) * 10.0;
 
-            var normalizedT1 = Math.Min(team.TeamID, opponent.TeamID);
-            var normalizedT2 = Math.Max(team.TeamID, opponent.TeamID);
+            var normalizedT1 = Math.Min(team.TeamId, opponent.TeamId);
+            var normalizedT2 = Math.Max(team.TeamId, opponent.TeamId);
             var rivalry      = rivalries.FirstOrDefault(
                 r => r.Team1Id == normalizedT1 && r.Team2Id == normalizedT2);
 
