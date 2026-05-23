@@ -4,6 +4,7 @@ namespace SaturdayPulse.Repositories.Interfaces
 {
     public interface IGamesRepository
     {
+        Task<List<int>> GetUnplayedYearDistinct(int year, CancellationToken token = default);
         Task<List<Games>> GetByYearAsync(int year, CancellationToken token = default);
         Task<List<Games>> GetByYearAndWeekAsync(int year, int week, CancellationToken token = default);
         Task<Games?> GetByGameIdAsync(int gameId, CancellationToken token = default);

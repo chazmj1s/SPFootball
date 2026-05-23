@@ -58,12 +58,6 @@ namespace SaturdayPulse.Services
         public void Invalidate() => _cachedYear = null;
 
         // ── Private ───────────────────────────────────────────────────────────────
-
-        public ProjectionCacheService(IUnitOfWork uow)
-        {
-            _uow = uow;
-        }
-
         private async Task EnsureCacheAsync(int year, CancellationToken token)
         {
             if (_cachedYear == year && _cache.Count > 0) return;
@@ -100,6 +94,7 @@ namespace SaturdayPulse.Services
 
                 _cache = newCache;
                 _cachedYear = year;
+                Console.WriteLine($"Cache:{year}: {newCache.Count()}");
             }
             finally
             {

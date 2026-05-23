@@ -220,11 +220,11 @@ namespace SaturdayPulse.Services
             if (_cachedAvgTeamScore.HasValue) return _cachedAvgTeamScore.Value;
 
             var cutoffYear = year - RecentYearsForAverage;
-            var games      = await _uow.Game.GetPlayedGamesSinceYearAsync(cutoffYear, token);
+            var games      = await _uow.Games.GetPlayedGamesSinceYearAsync(cutoffYear, token);
 
             _cachedAvgTeamScore = games.Count == 0
                 ? 28.0
-                : (games.Average(g => g.WPoints) + games.Average(g => g.LPoints)) / 2.0;
+                : (games.Average(g => g.HomePoints) + games.Average(g => g.AwayPoints)) / 2.0;
 
             return _cachedAvgTeamScore.Value;
         }

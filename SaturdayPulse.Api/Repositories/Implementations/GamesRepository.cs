@@ -10,9 +10,16 @@ namespace SaturdayPulse.Repositories.Implementations
         private readonly NCAAContext _context;
         public GamesRepository(NCAAContext context) => _context = context;
 
+        public async Task<List<int>> GetUnplayedYearDistinct(int year, CancellationToken token = default)
+            => await _context.Games
+                .Where(g => g.Year >= year && g.HomePoints == null && g.AwayPoints == null)
+                .Select(wr => wr.Year)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToListAsync(token);
+
         public Task<List<Games>> GetByYearAsync(int year, CancellationToken token = default)
             => _context.Games.Where(g => g.Year == year).OrderBy(g => g.Week).ToListAsync(token);
-
         public Task<List<Games>> GetByYearAndWeekAsync(int year, int week, CancellationToken token = default)
             => _context.Games.Where(g => g.Year == year && g.Week == week).ToListAsync(token);
 

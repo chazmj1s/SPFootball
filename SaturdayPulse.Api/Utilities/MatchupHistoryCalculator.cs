@@ -14,12 +14,12 @@ namespace SaturdayPulse.Utilities
     {
         private class GameData
         {
-            public int Team1    { get; set; }
-            public int Team2    { get; set; }
-            public int Margin   { get; set; }
-            public int Year     { get; set; }
-            public int WinnerId { get; set; }
-            public int LoserId  { get; set; }
+            public int? Team1    { get; set; }
+            public int? Team2    { get; set; }
+            public int? Margin   { get; set; }
+            public int? Year     { get; set; }
+            public int? WinnerId { get; set; }
+            public int? LoserId  { get; set; }
         }
 
         /// <summary>
@@ -34,15 +34,15 @@ namespace SaturdayPulse.Utilities
             _logger.LogInformation("Found {Count} rivalries to process", rivalryMetadata.Count);
 
             // Load all games, teams, and records into memory for efficient processing
-            var allGames = (await _uow.Game.GetPlayedGamesSinceYearAsync(1, cancellationToken))
+            var allGames = (await _uow.Games.GetPlayedGamesSinceYearAsync(1, cancellationToken))
                 .Select(g => new GameData
                 {
-                    Team1    = g.WinnerId < g.LoserId ? g.WinnerId : g.LoserId,
-                    Team2    = g.WinnerId < g.LoserId ? g.LoserId  : g.WinnerId,
-                    Margin   = g.WPoints - g.LPoints,
+                    Team1    = g.HomeId,
+                    Team2    = g.AwayId,
+                    Margin   = g.HomePoints - g.AwayPoints,
                     Year     = g.Year,
-                    WinnerId = g.WinnerId,
-                    LoserId  = g.LoserId
+                    WinnerId = g.HomePoints > g.AwayPoints ? g.HomeId : g.AwayId,
+                    LoserId  = g.HomePoints < g.AwayPoints ? g.HomeId : g.AwayId
                 })
                 .ToList();
 
@@ -92,9 +92,9 @@ namespace SaturdayPulse.Utilities
                 var gameCount = games.Count;
 
                 // Average margin and standard deviation
-                var margins   = games.Select(g => Math.Abs(g.Margin)).ToList();
+                var margins   = games.Select(g => Math.Abs((decimal)g.Margin)).ToList();
                 var avgMargin = margins.Average();
-                var variance  = margins.Sum(m => Math.Pow(m - avgMargin, 2)) / gameCount;
+                var variance  = margins.Sum(m => Math.Pow((double)(m - avgMargin), 2)) / gameCount;
                 var stDev     = Math.Sqrt(variance);
 
                 // Upset rate calculated in memory using pre-loaded wins lookup
@@ -108,8 +108,8 @@ namespace SaturdayPulse.Utilities
                     AvgMargin   = (decimal)avgMargin,
                     StDevMargin = (decimal)stDev,
                     UpsetRate   = (decimal)upsets,
-                    FirstPlayed = games.Min(g => g.Year),
-                    LastPlayed  = games.Max(g => g.Year),
+                    FirstPlayed = (int)games.Min(g => g.Year),
+                    LastPlayed  = (int)games.Max(g => g.Year),
                     RivalryName = rivalry.RivalryName,
                     RivalryTier = rivalry.Tier
                 });
@@ -137,8 +137,8 @@ namespace SaturdayPulse.Utilities
 
             foreach (var game in games)
             {
-                winsLookup.TryGetValue((game.WinnerId, game.Year), out var winnerWins);
-                winsLookup.TryGetValue((game.LoserId,  game.Year), out var loserWins);
+                winsLookup.TryGetValue(((int teamId, int year))(game.WinnerId, game.Year), out var winnerWins);
+                winsLookup.TryGetValue(((int teamId, int year))(game.LoserId, game.Year), out var loserWins);
 
                 if (loserWins > winnerWins)
                     upsetCount++;
