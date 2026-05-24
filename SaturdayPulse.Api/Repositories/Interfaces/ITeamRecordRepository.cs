@@ -50,6 +50,8 @@ namespace SaturdayPulse.Repositories.Interfaces
         /// </summary>
         Task UpsertFromGamesAsync(int? targetYear = null, CancellationToken token = default);
 
+        Task UpsertFromWeeklyRankingsAsync(int? targetYear = null, CancellationToken token = default);
+
         Task<List<TeamRecord>> QueryAsync(
             int? wins = null,
             int? losses = null,

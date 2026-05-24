@@ -54,6 +54,11 @@ namespace SaturdayPulse.Repositories.Implementations
                 .ToListAsync(token);
         }
 
+        public Task<List<Games>> GetGamesSinceYearAsync(int fromYear, CancellationToken token = default)
+            => _context.Games
+                .Where(g => g.Year >= fromYear)
+                .ToListAsync(token);
+
         public Task<List<Games>> GetPlayedGamesSinceYearAsync(int fromYear, CancellationToken token = default)
             => _context.Games
                 .Where(g => g.Year >= fromYear &&

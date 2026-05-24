@@ -519,6 +519,73 @@ namespace SaturdayPulse.Controllers
 
         #endregion
 
+        #region Season Initialization
+
+        /// <summary>
+        /// Initializes a new season by creating a week 0 WeeklyRankings snapshot
+        /// seeded from the prior year's final week. Provides the preseason baseline
+        /// for week 1 projections and initial TeamRecords.
+        /// Safe to run multiple times — skips if week 0 already exists.
+        /// Example: POST /api/developer/initializeSeason?year=2026
+        /// </summary>
+        [HttpPost("initializeSeason")]
+        [Tags("Season Initialization")]
+        public async Task<IActionResult> InitializeSeason(
+            [FromQuery] int year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.InitializeSeasonAsync(year, token);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error initializing season {Year}", year);
+                return StatusCode(500, "An error occurred while initializing the season.");
+            }
+        }
+
+        /// <summary>
+        /// Backfills week 0 snapshots for all years missing one.
+        /// Safe to run multiple times — skips already-initialized years.
+        /// Run before backfillWeeklyRankings.
+        /// Example: POST /api/developer/backfillInitializeSeasons
+        /// Example: POST /api/developer/backfillInitializeSeasons?startYear=2020
+        /// </summary>
+        [HttpPost("backfillInitializeSeasons")]
+        [Tags("Season Initialization")]
+        public async Task<IActionResult> BackfillInitializeSeasons(
+            [FromQuery] int? startYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.BackfillInitializeSeasonsAsync(startYear, token);
+                return Ok(new
+                {
+                    message   = result.Message,
+                    processed = result.Processed,
+                    startYear = result.StartYear
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during season initialization backfill");
+                return StatusCode(500, "An error occurred during season initialization backfill.");
+            }
+        }
+
+        #endregion
+
         #region Analytics and Diagnostics
 
         /// <summary>

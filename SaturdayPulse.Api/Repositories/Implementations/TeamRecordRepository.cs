@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SaturdayPulse.Data;
 using SaturdayPulse.Models;
 using SaturdayPulse.Repositories.Interfaces;
+using SaturdayPulse.Extensions;
 
 namespace SaturdayPulse.Repositories.Implementations
 {
@@ -69,20 +70,91 @@ namespace SaturdayPulse.Repositories.Implementations
             return records.OrderByDescending(tr => tr.Ranking).ToList();
         }
 
+        public async Task UpsertFromWeeklyRankingsAsync(int? targetYear = null, CancellationToken token = default)
+        {
+            var maxWeek = await _context.WeeklyRankings
+                .Where(wr => wr.Year == targetYear)
+                .MaxAsync(x => x.Week, token);
+
+            var rankings = await _context.WeeklyRankings
+                .Where(wr => wr.Year == targetYear && wr.Week == maxWeek)
+                .ToListAsync(token);
+
+            var existing = await _context.TeamRecords
+                .Where(tr => tr.Year == targetYear)
+                .ToDictionaryAsync(tr => tr.TeamID, token);
+
+            rankings.UpdateTeamRecords(existing);
+
+            var newRecords = rankings
+                .Where(r => !existing.ContainsKey(r.TeamID))
+                .ToTeamRecords();
+
+            await _context.TeamRecords.AddRangeAsync(newRecords, token);
+
+            await _context.SaveChangesAsync(token);
+        }
+
         /// <summary>
-        /// Aggregates wins/losses/points from the Games table (CFBD V2, home/away model)
-        /// and upserts into TeamRecords.
+        /// Upserts TeamRecords from the Games table.
+        ///
+        /// For played games, actual scores are used directly.
+        /// For unplayed games (scores null or 0), projected scores are automatically
+        /// substituted from the Projections table using the freshest available snapshot.
+        /// Games with no projection are excluded.
+        ///
+        /// Synthetic scores are never written to the Games table — they flow only into
+        /// TeamRecords and are overwritten when actuals arrive.
         /// </summary>
         public async Task UpsertFromGamesAsync(int? targetYear = null, CancellationToken token = default)
         {
-            var query = _context.Games
-                .Where(g => g.Year > 0 &&
-                            ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0));
+            var query = _context.Games.Where(g => g.Year > 0);
 
             if (targetYear.HasValue)
                 query = query.Where(g => g.Year == targetYear.Value);
 
-            var homeTeams = query
+            var games = await query.ToListAsync(token);
+
+            // For unplayed games, substitute projected scores from the Projections table.
+            var unplayedGameIds = games
+                .Where(g => (g.HomePoints ?? 0) == 0 && (g.AwayPoints ?? 0) == 0)
+                .Select(g => g.GameId)
+                .ToList();
+
+            if (unplayedGameIds.Any())
+            {
+                // Pick the freshest projection (highest snapshot week) per game.
+                var projections = await _context.Projections
+                    .Where(p => unplayedGameIds.Contains(p.GameId))
+                    .GroupBy(p => p.GameId)
+                    .Select(grp => grp.OrderByDescending(p => p.Week).First())
+                    .ToListAsync(token);
+
+                var projByGameId = projections.ToDictionary(p => p.GameId);
+
+                foreach (var g in games.Where(g =>
+                    (g.HomePoints ?? 0) == 0 && (g.AwayPoints ?? 0) == 0))
+                {
+                    if (!projByGameId.TryGetValue(g.GameId, out var proj)) continue;
+
+                    // Derive home/away scores from spread and total.
+                    // PredictedSpread is home-relative (positive = home favored).
+                    g.HomePoints = (int)Math.Round(
+                        (double)(proj.PredictedTotal + proj.PredictedSpread) / 2.0);
+                    g.AwayPoints = (int)Math.Round(
+                        (double)(proj.PredictedTotal - proj.PredictedSpread) / 2.0);
+
+                    // Avoid 0-0 results which are indistinguishable from unplayed.
+                    if (g.HomePoints == 0 && g.AwayPoints == 0) g.HomePoints = 14;
+                }
+
+                // Drop games that still have no scores (no projection found).
+                games = games
+                    .Where(g => (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0)
+                    .ToList();
+            }
+
+            var homeTeams = games
                 .Where(g => g.HomeId != null)
                 .Select(g => new
                 {
@@ -94,7 +166,7 @@ namespace SaturdayPulse.Repositories.Implementations
                     PointsAgainst = g.AwayPoints ?? 0
                 });
 
-            var awayTeams = query
+            var awayTeams = games
                 .Where(g => g.AwayId != null)
                 .Select(g => new
                 {
@@ -106,7 +178,7 @@ namespace SaturdayPulse.Repositories.Implementations
                     PointsAgainst = g.HomePoints ?? 0
                 });
 
-            var grouped = await homeTeams.Concat(awayTeams)
+            var grouped = homeTeams.Concat(awayTeams)
                 .GroupBy(x => new { x.Year, x.TeamId })
                 .Select(g => new
                 {
@@ -117,7 +189,7 @@ namespace SaturdayPulse.Repositories.Implementations
                     PointsFor     = g.Sum(x => x.PointsFor),
                     PointsAgainst = g.Sum(x => x.PointsAgainst)
                 })
-                .ToListAsync(token);
+                .ToList();
 
             if (grouped.Count == 0) return;
 
@@ -160,18 +232,6 @@ namespace SaturdayPulse.Repositories.Implementations
                     _context.TeamRecords.Add(rec);
                 }
             }
-
-            // Debug — log what EF is tracking before save
-            var tracked = _context.ChangeTracker.Entries()
-                .Where(e => e.State != Microsoft.EntityFrameworkCore.EntityState.Unchanged)
-                .Select(e => new { Type = e.Entity.GetType().Name, e.State })
-                .ToList();
-
-            foreach (var t in tracked)
-                Console.WriteLine($"Tracked: {t.Type} - {t.State}");
-
-            // SaveChanges called through IUnitOfWork.SaveChangesAsync — not here.
-            // SaveChanges called through IUnitOfWork.SaveChangesAsync — not here.
         }
 
         public async Task<List<TeamRecord>> QueryAsync(
@@ -186,14 +246,14 @@ namespace SaturdayPulse.Repositories.Implementations
                 .Where(tr => tr.PowerRating != null)
                 .AsQueryable();
 
-            if (wins.HasValue)           query = query.Where(tr => tr.Wins   == wins.Value);
-            if (losses.HasValue)         query = query.Where(tr => tr.Losses == losses.Value);
-            if (minWins.HasValue)        query = query.Where(tr => tr.Wins   >= minWins.Value);
-            if (maxWins.HasValue)        query = query.Where(tr => tr.Wins   <= maxWins.Value);
-            if (startYear.HasValue)      query = query.Where(tr => tr.Year   >= startYear.Value);
-            if (endYear.HasValue)        query = query.Where(tr => tr.Year   <= endYear.Value);
-            if (minPowerRating.HasValue) query = query.Where(tr => tr.PowerRating >= minPowerRating.Value);
-            if (maxPowerRating.HasValue) query = query.Where(tr => tr.PowerRating <= maxPowerRating.Value);
+            if (wins.HasValue)           query = query.Where(tr => tr.Wins          == wins.Value);
+            if (losses.HasValue)         query = query.Where(tr => tr.Losses        == losses.Value);
+            if (minWins.HasValue)        query = query.Where(tr => tr.Wins          >= minWins.Value);
+            if (maxWins.HasValue)        query = query.Where(tr => tr.Wins          <= maxWins.Value);
+            if (startYear.HasValue)      query = query.Where(tr => tr.Year          >= startYear.Value);
+            if (endYear.HasValue)        query = query.Where(tr => tr.Year          <= endYear.Value);
+            if (minPowerRating.HasValue) query = query.Where(tr => tr.PowerRating   >= minPowerRating.Value);
+            if (maxPowerRating.HasValue) query = query.Where(tr => tr.PowerRating   <= maxPowerRating.Value);
 
             return await query
                 .OrderByDescending(tr => tr.Year)

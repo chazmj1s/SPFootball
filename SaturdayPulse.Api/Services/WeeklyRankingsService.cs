@@ -11,29 +11,54 @@ namespace SaturdayPulse.Services
     /// Mirrors the TeamMetricsService pipeline (SOS → PowerRating → Ranking) but
     /// scoped to games played through the specified week.
     /// Also computes per-team offensive and defensive Z-scores.
+    ///
+    /// Single source of truth pipeline:
+    ///   Steps 1-13 : compute all metrics in memory
+    ///   Step 14    : write WeeklyRankings snapshot (authoritative)
+    ///   Step 15    : UpsertFromWeeklyRankingsAsync → TeamRecords synced from WR
+    ///   Step 16    : RollingAverageService → Seed/Trend/Pedigree (skippable for backfill)
+    ///   Step 17    : write Projections for remaining unplayed games
+    ///
+    /// For years with unplayed games (e.g. a future season), projected scores are
+    /// substituted for missing actuals so the full pipeline can run meaningfully.
+    /// Synthetic scores are never written to the Games table.
+    /// WeeklyRankings and TeamRecords are overwritten by actuals as the season progresses.
+    ///
+    /// Season bootstrap: call DeveloperService.InitializeSeasonAsync before running
+    /// the first week of a new season. This creates a week 0 snapshot from the prior
+    /// year's final ratings, seeding TeamRecords and Projections correctly.
     /// </summary>
     public class WeeklyRankingsService
     {
-        private readonly IUnitOfWork          _uow;
-        private readonly MetricsConfiguration _config;
-        private readonly GamePredictionService _predictionService;
+        private readonly IUnitOfWork            _uow;
+        private readonly MetricsConfiguration   _config;
+        private readonly GamePredictionService  _predictionService;
+        private readonly RollingAverageService  _rollingAverageService;
 
         public WeeklyRankingsService(
-            IUnitOfWork uow, 
+            IUnitOfWork uow,
             GamePredictionService predictionService,
+            RollingAverageService rollingAverageService,
             IOptions<MetricsConfiguration> config)
         {
-            _uow    = uow;
-            _config = config.Value;
-            _predictionService = predictionService;
+            _uow                   = uow;
+            _config                = config.Value;
+            _predictionService     = predictionService;
+            _rollingAverageService = rollingAverageService;
         }
 
         /// <summary>
         /// Runs the full SOS → PowerRating → Ranking → Offense/Defense pipeline
         /// for all FBS teams through the specified week, then upserts into WeeklyRankings.
-        /// V2: reads from Teams (CFBD) and Games (CFBD home/away model).
+        ///
+        /// computeRollingAverages: set false during bulk backfill — BackfillWeeklyRankingsAsync
+        /// runs RollingAverageService once per year instead of once per week for performance.
+        /// Default is true so production weekly calls always compute rolling averages.
         /// </summary>
-        public async Task ComputeAndSaveAsync(int year, int week, CancellationToken token = default)
+        public async Task ComputeAndSaveAsync(
+            int year, int week,
+            CancellationToken token = default,
+            bool computeRollingAverages = true)
         {
             // ── 1. Load reference data ────────────────────────────────────────────
             var allTeams         = await _uow.Teams.GetAllAsync(token);
@@ -45,6 +70,76 @@ namespace SaturdayPulse.Services
 
             // ── 2. Played games through this week ─────────────────────────────────
             var games = await _uow.Games.GetPlayedGamesByYearAndWeekAsync(year, week, token);
+
+            // ── 2a. Load all games for the year — used in steps 2b and 17 ─────────
+            var allYearGames = await _uow.Games.GetByYearAsync(year, token);
+            var teamsDict    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+
+            // ── 2b. Substitute projected scores for unplayed games ────────────────
+            //
+            // For future seasons GetPlayedGamesByYearAndWeekAsync returns nothing.
+            // We synthesize scores from PredictMatchups so steps 3-14 have data.
+            // With InitializeSeasonAsync creating a week 0 snapshot, TeamRecords
+            // exist from day one. The predictionYear fallback is a safety net.
+            var unplayedThisWeek = allYearGames
+                .Where(g => g.Week <= week &&
+                            (g.HomePoints ?? 0) == 0 &&
+                            (g.AwayPoints ?? 0) == 0 &&
+                            g.HomeId.HasValue && g.AwayId.HasValue &&
+                            teamsDict.ContainsKey(g.HomeId.Value) &&
+                            teamsDict.ContainsKey(g.AwayId.Value))
+                .ToList();
+
+            if (unplayedThisWeek.Count > 0)
+            {
+                var currentYearRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
+                var predictionYear     = currentYearRecords.Any() ? year : year - 1;
+
+                var matchupRequests = unplayedThisWeek
+                    .Select(g => new MatchupRequest
+                    {
+                        TeamName     = teamsDict[g.HomeId!.Value].TeamName,
+                        OpponentName = teamsDict[g.AwayId!.Value].TeamName,
+                        Location     = g.NeutralSite == true ? 'N' : 'W',
+                        Week         = g.Week
+                    })
+                    .ToList();
+
+                var predictions = await _predictionService.PredictMatchups(
+                    predictionYear, matchupRequests, token);
+
+                foreach (var g in unplayedThisWeek)
+                {
+                    var homeName = teamsDict[g.HomeId!.Value].TeamName;
+                    var awayName = teamsDict[g.AwayId!.Value].TeamName;
+
+                    var pred = predictions.FirstOrDefault(p =>
+                        p.TeamName     == homeName &&
+                        p.OpponentName == awayName &&
+                        p.Week         == g.Week);
+
+                    if (pred == null) continue;
+
+                    var homePoints = (int)Math.Round(pred.PredictedTeamScore);
+                    var awayPoints = (int)Math.Round(pred.PredictedOpponentScore);
+
+                    if (homePoints == 0 && awayPoints == 0) homePoints = 14;
+
+                    games.Add(new Games
+                    {
+                        GameId      = g.GameId,
+                        HomeId      = g.HomeId,
+                        AwayId      = g.AwayId,
+                        HomeName    = g.HomeName,
+                        AwayName    = g.AwayName,
+                        HomePoints  = homePoints,
+                        AwayPoints  = awayPoints,
+                        NeutralSite = g.NeutralSite,
+                        Week        = g.Week,
+                        Year        = g.Year
+                    });
+                }
+            }
 
             // ── 3. Raw stats per team [wins, losses, pf, pa] ──────────────────────
             var rawStats = fbsTeams.ToDictionary(t => t.TeamId, _ => new int[4]);
@@ -122,9 +217,9 @@ namespace SaturdayPulse.Services
 
             var withZScores = gameParticipants.Select(gp =>
             {
-                var teamWins   = winsLookup.GetValueOrDefault(gp.TeamId,     0);
-                var teamLosses = lossesLookup.GetValueOrDefault(gp.TeamId,   0);
-                var oppWins    = winsLookup.GetValueOrDefault(gp.OpponentId, 0);
+                var teamWins   = winsLookup.GetValueOrDefault(gp.TeamId,       0);
+                var teamLosses = lossesLookup.GetValueOrDefault(gp.TeamId,     0);
+                var oppWins    = winsLookup.GetValueOrDefault(gp.OpponentId,   0);
                 var oppLosses  = lossesLookup.GetValueOrDefault(gp.OpponentId, 0);
 
                 var teamWinPct = RatingCalculator.BucketWinPct(teamWins, teamWins + teamLosses);
@@ -274,7 +369,7 @@ namespace SaturdayPulse.Services
                 .ToDictionary(x => x.TeamId, x => x.Rank);
 
             // ── 14. Upsert WeeklyRankings ─────────────────────────────────────────
-            var existingRows = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, week, token);
+            var existingRows   = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, week, token);
             var existingByTeam = existingRows.ToDictionary(r => r.TeamID);
 
             foreach (var t in fbsTeams)
@@ -340,58 +435,54 @@ namespace SaturdayPulse.Services
 
             await _uow.SaveChangesAsync(token);
 
-            // ── 15. Update TeamRecord with latest scoring stats ───────────────────
-            var teamRecords = await _uow.TeamRecords.GetByTeamsAndYearAsync(fbsIds, year, token);
+            // ── 15. Sync TeamRecords from WeeklyRankings ──────────────────────────
+            //
+            // WeeklyRankings is the single source of truth for all metrics.
+            // UpsertFromWeeklyRankingsAsync reads the last snapshot for this year
+            // and writes all fields to TeamRecords, creating rows if they don't exist.
+            await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
 
-            foreach (var t in fbsTeams)
-            {
-                if (!teamRecords.TryGetValue(t.TeamId, out var record)) continue;
+            // ── 16. Compute Seed/Trend/Pedigree rolling averages ──────────────────
+            //
+            // Skipped during bulk backfill (computeRollingAverages = false).
+            // BackfillWeeklyRankingsAsync runs this once per year for performance.
+            // Must run after step 15 so TeamRecords has current data.
+            // Pass the current week so the Seed live swap activates at week 6.
+            if (computeRollingAverages)
+                await _rollingAverageService.ComputeAndPersistAsync(year, week, token);
 
-                var s           = rawStats[t.TeamId];
-                var gamesPlayed = s[0] + s[1];
-                if (gamesPlayed == 0) continue;
+            await _uow.SaveChangesAsync(token);
 
-                record.AvgPointsScored  = Math.Round((decimal)s[2] / gamesPlayed, 2);
-                record.AvgPointsAllowed = Math.Round((decimal)s[3] / gamesPlayed, 2);
-                record.OffensiveZScore  = (decimal)Math.Round(offensiveZScores.GetValueOrDefault(t.TeamId, 0.0), 4);
-                record.DefensiveZScore  = (decimal)Math.Round(defensiveZScores.GetValueOrDefault(t.TeamId, 0.0), 4);
-                record.OffensiveRank    = offensiveRanks.GetValueOrDefault(t.TeamId, 0);
-                record.DefensiveRank    = defensiveRanks.GetValueOrDefault(t.TeamId, 0);
-            }
-
-            // ── 16. Compute and persist projections for remaining schedule ─────────
-            var allGames    = await _uow.Games.GetByYearAsync(year, token);
-            var teamsV2Dict = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
-
-            var maxWeek        = allGames.Max(g => g.Week);
-            var remainingGames = allGames
-                .Where(g => g.Week > week && g.Week <= maxWeek &&
-                            (g.HomePoints ?? 0) == 0 && (g.AwayPoints ?? 0) == 0)
+            // ── 17. Compute and persist projections for remaining unplayed games ───
+            var remainingGames = allYearGames
+                .Where(g => g.Week > week &&
+                            (g.HomePoints ?? 0) == 0 &&
+                            (g.AwayPoints ?? 0) == 0)
                 .ToList();
 
-            var matchupRequests = remainingGames
+            var matchupRequestsStep17 = remainingGames
                 .Where(g => g.HomeId.HasValue && g.AwayId.HasValue &&
-                            teamsV2Dict.ContainsKey(g.HomeId.Value) &&
-                            teamsV2Dict.ContainsKey(g.AwayId.Value))
+                            teamsDict.ContainsKey(g.HomeId.Value) &&
+                            teamsDict.ContainsKey(g.AwayId.Value))
                 .Select(g => new MatchupRequest
                 {
-                    TeamName     = teamsV2Dict[g.HomeId!.Value].TeamName,
-                    OpponentName = teamsV2Dict[g.AwayId!.Value].TeamName,
+                    TeamName     = teamsDict[g.HomeId!.Value].TeamName,
+                    OpponentName = teamsDict[g.AwayId!.Value].TeamName,
                     Location     = g.NeutralSite == true ? 'N' : 'W',
                     Week         = g.Week
                 })
                 .ToList();
 
-            if (matchupRequests.Count > 0)
+            if (matchupRequestsStep17.Count > 0)
             {
-                var predictions = await _predictionService.PredictMatchups(year, matchupRequests, token);
+                var predictions = await _predictionService.PredictMatchups(year, matchupRequestsStep17, token);
                 var projections = new List<Projection>(remainingGames.Count);
 
                 foreach (var g in remainingGames)
                 {
                     if (!g.HomeId.HasValue || !g.AwayId.HasValue) continue;
-                    if (!teamsV2Dict.TryGetValue(g.HomeId.Value, out var homeTeam)) continue;
-                    if (!teamsV2Dict.TryGetValue(g.AwayId.Value, out var awayTeam)) continue;
+                    if (!teamsDict.TryGetValue(g.HomeId.Value,  out var homeTeam)) continue;
+                    if (!teamsDict.TryGetValue(g.AwayId.Value,  out var awayTeam)) continue;
 
                     var pred = predictions.FirstOrDefault(p =>
                         p.TeamName     == homeTeam.TeamName &&
@@ -411,20 +502,26 @@ namespace SaturdayPulse.Services
 
                 await _uow.Projections.UpsertManyAsync(projections, token);
             }
-
-            await _uow.SaveChangesAsync(token);
         }
 
         /// <summary>
         /// Backfills all weeks for a given year in chronological order.
-        /// V2: uses Games for played weeks.
+        /// Runs rolling averages once at year end rather than per week.
         /// </summary>
         public async Task BackfillYearAsync(int year, CancellationToken token = default)
         {
-            var playedWeeks = await _uow.Games.GetPlayedWeeksByYearAsync(year, token);
+            var allGames = await _uow.Games.GetByYearAsync(year, token);
+            var weeks    = allGames
+                .Select(g => g.Week)
+                .Distinct()
+                .OrderBy(w => w)
+                .ToList();
 
-            foreach (var week in playedWeeks)
-                await ComputeAndSaveAsync(year, week, token);
+            foreach (var week in weeks)
+                await ComputeAndSaveAsync(year, week, token, computeRollingAverages: false);
+
+            await _rollingAverageService.ComputeAndPersistAsync(year, null, token);
+            await _uow.SaveChangesAsync(token);
         }
     }
 }
