@@ -1,3 +1,5 @@
+using SaturdayPulse.Models;
+
 namespace SaturdayPulse.Contracts.Responses
 {
     /// <summary>
@@ -43,7 +45,7 @@ namespace SaturdayPulse.Contracts.Responses
         {
             get
             {
-                var sigma = Math.Max(RawStdDev, 7.0);
+                var sigma = Math.Max(RawStdDev, AvgScoreDelta.DefaultAverageScoreDelta);
                 return NormalCdf(ExpectedMargin / sigma);
             }
         }

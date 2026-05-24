@@ -24,5 +24,22 @@ namespace SaturdayPulse.Models
 
         [Column("SampleSize")]
         public int? SampleSize { get; set; }
+        
+        [NotMapped]
+        public double ReliabilityWeight 
+            => Math.Min(1.0, (double)SampleSize / ReliabilityThreshold);
+
+        [NotMapped]
+        public double WeightedAverageScoreDelta 
+            => (ReliabilityWeight * (double)AverageScoreDelta) + ((1.0 - ReliabilityWeight) * DefaultAverageScoreDelta);
+
+        [NotMapped]
+        public double WeightedStdDev 
+            => (ReliabilityWeight * (double)StDevP) + ((1.0 - ReliabilityWeight) * DefaultStdDev);
+
+        //---Constants--//
+        public const double DefaultAverageScoreDelta = 7.0;
+        public const double DefaultStdDev = 14.0;
+        public const int ReliabilityThreshold = 50;
     }
 }
