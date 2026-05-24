@@ -78,8 +78,9 @@ namespace SaturdayPulse.Services
 
         public Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default)
             => _gameDataService.LoadLinesBulkAsync(startYear, token);
+
         public Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
-    => _gameDataService.BuildTeamsConferenceHistoryAsync(startYear, token);
+            => _gameDataService.BuildTeamsConferenceHistoryAsync(startYear, token);
 
         public Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
             => _gameDataService.WeeklyRefreshAsync(year, week, token);
@@ -178,9 +179,7 @@ namespace SaturdayPulse.Services
         {
             await _uow.Lookups.ClearAvgScoreDeltasAsync(token);
             _logger.LogInformation("AvgScoreDeltas table cleared");
-
             await _scoreDeltaCalculator.UpdateAvgScoreDeltasTableAsync();
-
             var deltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             return new RecreateTableResult("AvgScoreDeltas table recreated successfully", deltas.Count, "Table cleared and repopulated");
         }
@@ -237,7 +236,7 @@ namespace SaturdayPulse.Services
             var targetYear     = year ?? DateTime.Now.Year;
             var allGames       = await _uow.Games.GetByYearAsync(targetYear, token);
             var teamGames      = allGames
-                .Where(g => g.HomeId == teamId || g.AwayId== teamId)
+                .Where(g => g.HomeId == teamId || g.AwayId == teamId)
                 .OrderBy(g => g.Week).ToList();
 
             var teamRecords    = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
@@ -277,7 +276,7 @@ namespace SaturdayPulse.Services
                     expectedDelta = (double)asd.AverageScoreDelta;
                     var expectedFromTeam = RatingCalculator.ExpectedFromPerspective(expectedDelta, teamWinPct, oppWinPct);
 
-                    if (isHomeTeam)             { expectedFromTeam += hfa; homeAdjustment =  hfa; }
+                    if (isHomeTeam)         { expectedFromTeam += hfa; homeAdjustment =  hfa; }
                     else if (g.NeutralSite) { expectedFromTeam -= hfa; homeAdjustment = -hfa; }
 
                     zScore = (double)((delta - expectedFromTeam) / (double)asd.StDevP);
@@ -336,12 +335,181 @@ namespace SaturdayPulse.Services
             return new TrendsResult(targetYear, trends.Count, trends);
         }
 
+        // ── Season Initialization ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// Initializes a new season by creating a week 0 WeeklyRankings snapshot
+        /// copied from the prior year's final week. This seeds the new year with
+        /// meaningful power ratings before any games are played.
+        ///
+        /// Week 0 serves as the preseason baseline:
+        ///   • Projections for week 1 games use the week 0 snapshot (0 &lt; 1)
+        ///   • TeamRecords are created from week 0 so PredictMatchups works from day one
+        ///   • Seed/Trend/Pedigree are computed from the new TeamRecords
+        ///
+        /// Safe to call multiple times — skips if week 0 already exists for the year.
+        ///
+        /// Future enhancement: after copying the snapshot, apply portal strength
+        /// adjustments and draft score adjustments before writing the week 0 snapshot.
+        /// </summary>
+        public async Task<object> InitializeSeasonAsync(int year, CancellationToken token = default)
+        {
+            // Check if week 0 already exists for this year.
+            var existing = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, 0, token);
+            if (existing.Any())
+            {
+                _logger.LogInformation("Season {Year} already initialized — week 0 exists.", year);
+                return new { message = $"Season {year} already initialized.", year, week = 0 };
+            }
+
+            // Find the last snapshot from the prior year.
+            var snapshots    = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
+            var lastSnapshot = snapshots
+                .Where(s => s.Year == year - 1)
+                .OrderByDescending(s => s.Week)
+                .FirstOrDefault();
+
+            if (lastSnapshot == default)
+                throw new InvalidOperationException(
+                    $"No WeeklyRankings found for {year - 1}. Run backfillWeeklyRankings first.");
+
+            _logger.LogInformation(
+                "Initializing season {Year} from {PriorYear} week {PriorWeek} snapshot.",
+                year, lastSnapshot.Year, lastSnapshot.Week);
+
+            var priorRankings = await _uow.WeeklyRankings
+                .GetByYearAndWeekAsync(lastSnapshot.Year, lastSnapshot.Week, token);
+
+            // ── TODO: Apply portal strength adjustments here ──────────────────────
+            // For each team, compute net portal gain/loss weighted by star rating
+            // and position tier, then adjust PowerRating accordingly.
+            // Load from PortalStrength table once that pipeline is built.
+            // ─────────────────────────────────────────────────────────────────────
+
+            // ── TODO: Apply draft score adjustments here ──────────────────────────
+            // For each team, incorporate draft pick history into the Pedigree
+            // component. Load from DraftScore table once that pipeline is built.
+            // ─────────────────────────────────────────────────────────────────────
+
+            // Copy prior snapshot into week 0 of the new year.
+            int copied = 0;
+            foreach (var wr in priorRankings)
+            {
+                await _uow.WeeklyRankings.AddAsync(new WeeklyRanking
+                {
+                    TeamID           = wr.TeamID,
+                    Year             = (short)year,
+                    Week             = 0,
+                    Wins             = wr.Wins,
+                    Losses           = wr.Losses,
+                    PointsFor        = wr.PointsFor,
+                    PointsAgainst    = wr.PointsAgainst,
+                    BaseSOS          = wr.BaseSOS,
+                    SubSOS           = wr.SubSOS,
+                    CombinedSOS      = wr.CombinedSOS,
+                    PowerRating      = wr.PowerRating,
+                    Ranking          = wr.Ranking,
+                    OverallRank      = wr.OverallRank,
+                    TierRank         = wr.TierRank,
+                    AvgPointsScored  = wr.AvgPointsScored,
+                    AvgPointsAllowed = wr.AvgPointsAllowed,
+                    OffensiveZScore  = wr.OffensiveZScore,
+                    DefensiveZScore  = wr.DefensiveZScore,
+                    OffensiveRank    = wr.OffensiveRank,
+                    DefensiveRank    = wr.DefensiveRank
+                }, token);
+                copied++;
+            }
+
+            await _uow.SaveChangesAsync(token);
+
+            // Seed TeamRecords from week 0 snapshot.
+            await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
+
+            // Compute Seed/Trend/Pedigree. Pass week 0 — live swap will not activate.
+            await _rollingAverageService.ComputeAndPersistAsync(year, 0, token);
+            await _uow.SaveChangesAsync(token);
+
+            _logger.LogInformation(
+                "Season {Year} initialized — {Count} teams seeded from {PriorYear} week {PriorWeek}.",
+                year, copied, lastSnapshot.Year, lastSnapshot.Week);
+
+            return new
+            {
+                message     = $"Season {year} initialized successfully.",
+                year,
+                week        = 0,
+                teamsSeeded = copied,
+                seededFrom  = new { year = lastSnapshot.Year, week = lastSnapshot.Week }
+            };
+        }
+
+        /// <summary>
+        /// Backfills week 0 snapshots for all years that have WeeklyRankings data
+        /// but no week 0 entry. Safe to run multiple times — skips already-initialized years.
+        ///
+        /// Run once after the initial data load, before backfillWeeklyRankings.
+        /// </summary>
+        public async Task<BackfillResult> BackfillInitializeSeasonsAsync(
+            int? startYear, CancellationToken token = default)
+        {
+            var allSnapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
+
+            var yearsWithData = allSnapshots
+                .Select(s => (int)s.Year)
+                .Distinct()
+                .OrderBy(y => y)
+                .ToList();
+
+            if (startYear.HasValue)
+                yearsWithData = yearsWithData.Where(y => y >= startYear.Value).ToList();
+
+            var yearsWithWeek0 = allSnapshots
+                .Where(s => s.Week == 0)
+                .Select(s => (int)s.Year)
+                .ToHashSet();
+
+            // Only process years missing week 0 that have a prior year to seed from.
+            var yearsToInitialize = yearsWithData
+                .Where(y => !yearsWithWeek0.Contains(y) && yearsWithData.Contains(y - 1))
+                .ToList();
+
+            if (!yearsToInitialize.Any())
+                return new BackfillResult("All seasons already initialized.", 0, startYear);
+
+            _logger.LogInformation(
+                "Backfilling season initialization for {Count} years...", yearsToInitialize.Count);
+
+            int processed = 0;
+            foreach (var year in yearsToInitialize)
+            {
+                token.ThrowIfCancellationRequested();
+                await InitializeSeasonAsync(year, token);
+                processed++;
+                _logger.LogInformation(
+                    "Initialized season {Year} ({Done}/{Total})",
+                    year, processed, yearsToInitialize.Count);
+            }
+
+            return new BackfillResult(
+                $"Season initialization backfill complete — {processed} seasons initialized.",
+                processed,
+                startYear);
+        }
+
         // ── Weekly Rankings ───────────────────────────────────────────────────────
 
-        public async Task<WeeklyRankingsBackfillResult> BackfillWeeklyRankingsAsync(int? startYear, CancellationToken token)
+        /// <summary>
+        /// Backfills WeeklyRankings for all year/week combinations from startYear onward.
+        /// Includes both historical years (played games) and future years (unplayed games).
+        /// Rolling averages run once per year for performance rather than once per week.
+        /// </summary>
+        public async Task<WeeklyRankingsBackfillResult> BackfillWeeklyRankingsAsync(
+            int? startYear, CancellationToken token)
         {
             var fromYear = startYear ?? 1960;
-            var allGames = await _uow.Games.GetPlayedGamesSinceYearAsync(fromYear, token);
+
+            var allGames = await _uow.Games.GetGamesSinceYearAsync(fromYear, token);
 
             var yearWeeks = allGames
                 .Select(g => new { g.Year, g.Week })
@@ -350,22 +518,48 @@ namespace SaturdayPulse.Services
                 .ToList();
 
             if (!yearWeeks.Any())
-                throw new InvalidOperationException("No played games found matching the criteria.");
+                throw new InvalidOperationException("No games found matching the criteria.");
 
-            _logger.LogInformation("Backfilling WeeklyRankings for {Count} year/week combinations...", yearWeeks.Count);
+            _logger.LogInformation(
+                "Backfilling WeeklyRankings for {Count} year/week combinations...", yearWeeks.Count);
 
-            int processed = 0;
+            int  processed  = 0;
+            int? priorYear  = null;
+
             foreach (var yw in yearWeeks)
             {
-                await _weeklyRankingsService.ComputeAndSaveAsync(yw.Year, yw.Week, token);
+                // Skip rolling averages per-week during backfill — run once per year below.
+                await _weeklyRankingsService.ComputeAndSaveAsync(
+                    yw.Year, yw.Week, token, computeRollingAverages: false);
+
                 processed++;
-                _logger.LogInformation("Completed {Year} week {Week} ({Done}/{Total})", yw.Year, yw.Week, processed, yearWeeks.Count);
+
+                // When the year rolls over, run rolling averages once for the completed year.
+                if (priorYear.HasValue && yw.Year != priorYear.Value)
+                {
+                    await _rollingAverageService.ComputeAndPersistAsync(priorYear.Value, null, token);
+                    _logger.LogInformation("Rolling averages complete for {Year}", priorYear.Value);
+                }
+
+                priorYear = yw.Year;
+
+                _logger.LogInformation(
+                    "Completed {Year} week {Week} ({Done}/{Total})",
+                    yw.Year, yw.Week, processed, yearWeeks.Count);
+            }
+
+            // Run rolling averages for the final year.
+            if (priorYear.HasValue)
+            {
+                await _rollingAverageService.ComputeAndPersistAsync(priorYear.Value, null, token);
+                _logger.LogInformation("Rolling averages complete for {Year}", priorYear.Value);
             }
 
             return new WeeklyRankingsBackfillResult("Backfill complete.", processed, startYear);
         }
 
-        public async Task<ComputeWeeklyResult> ComputeWeeklyAsync(int? year, int? week, bool backfill, CancellationToken token)
+        public async Task<ComputeWeeklyResult> ComputeWeeklyAsync(
+            int? year, int? week, bool backfill, CancellationToken token)
         {
             var targetYear = year ?? DateTime.Now.Year;
 
@@ -379,34 +573,20 @@ namespace SaturdayPulse.Services
                 throw new ArgumentException("Provide week=N or backfill=true.");
 
             await _weeklyRankingsService.ComputeAndSaveAsync(targetYear, week.Value, token);
-            return new ComputeWeeklyResult($"Computed weekly rankings for {targetYear} week {week.Value}.", targetYear, week.Value);
+            return new ComputeWeeklyResult(
+                $"Computed weekly rankings for {targetYear} week {week.Value}.", targetYear, week.Value);
         }
 
         /// <summary>
         /// Backfills the Projections table for every year/week in the database.
-        ///
-        /// Strategy mirrors BackfillWeeklyRankingsAsync:
-        ///   • Discover all distinct (Year, Week) snapshots from WeeklyRankings
-        ///     (guarantees ratings exist for each slot we try to project from).
-        ///   • For each snapshot, fetch unplayed games in that season from that
-        ///     week onward, run predictions using that snapshot's power ratings,
-        ///     and upsert into Projections.
-        ///
-        /// "Unplayed at week W" = regular-season games with Week > snapshotWeek
-        /// that have no recorded score yet (or equivalently, all future-week games
-        /// relative to the snapshot — historical backfill treats every game after
-        /// the snapshot week as "remaining").
         /// </summary>
         public async Task<BackfillResult> BackfillProjectionsAsync(
             int? startYear, CancellationToken token = default)
         {
-            const int firstYear = 1965;
-            var effectiveStart = startYear ?? firstYear;
+            const int firstYear   = 1965;
+            var effectiveStart    = startYear ?? firstYear;
 
-            // All distinct (Year, Week) pairs that have WeeklyRankings data,
-            // filtered by startYear, ordered chronologically.
-            var snapshots = await _uow.WeeklyRankings
-                .GetDistinctYearWeeksAsync(token);               // returns List<(int Year, int Week)>
+            var snapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
 
             snapshots = snapshots
                 .Where(s => s.Year >= effectiveStart)
@@ -417,11 +597,10 @@ namespace SaturdayPulse.Services
                 throw new InvalidOperationException(
                     $"No WeeklyRankings data found from {effectiveStart} onward.");
 
-            // Cache data that doesn't change across the loop.
-            var teamsById   = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
-            var teamsByName = teamsById.Values.ToDictionary(t => t.TeamName);
+            var teamsById      = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var teamsByName    = teamsById.Values.ToDictionary(t => t.TeamName);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
-            var rivalries = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
 
             int processed = 0;
 
@@ -429,12 +608,9 @@ namespace SaturdayPulse.Services
             {
                 token.ThrowIfCancellationRequested();
 
-                // All regular-season games for this year.
                 var allGames = await _uow.Games.GetByYearAsync(snapshotYear, token);
 
-                // "Remaining" from this snapshot's perspective = weeks after the snapshot.
-                // For a historical backfill every game in week > snapshotWeek is "unplayed".
-                var maxWeek = allGames.Max(g => g.Week); 
+                var maxWeek        = allGames.Max(g => g.Week);
                 var remainingGames = allGames
                     .Where(g => g.Week > snapshotWeek && g.Week <= maxWeek)
                     .ToList();
@@ -457,40 +633,29 @@ namespace SaturdayPulse.Services
                     if (!teamsById.TryGetValue(homeId, out var homeTeam)) continue;
                     if (!teamsById.TryGetValue(awayId, out var awayTeam)) continue;
 
-                    char location = g.NeutralSite == true ? 'N' : 'W';
-
                     matchupRequests.Add(new MatchupRequest
                     {
                         TeamName     = homeTeam.TeamName,
                         OpponentName = awayTeam.TeamName,
-                        Location     = location,
+                        Location     = g.NeutralSite == true ? 'N' : 'W',
                         Week         = g.Week
                     });
                 }
 
                 if (matchupRequests.Count == 0) continue;
 
-                // PredictMatchups uses current TeamRecords for W/L and PPG,
-                // but power ratings in TeamRecord.PowerRating reflect the
-                // end-of-season values. For historical fidelity we override
-                // power ratings from the weekly snapshot after prediction.
                 var predictions = await _predictionService.PredictMatchups(
                     snapshotYear, matchupRequests, token);
 
-                // Override power ratings with snapshot values so spread
-                // reflects what the model knew at snapshotWeek, not season-end.
                 for (int i = 0; i < predictions.Count; i++)
                 {
                     var p = predictions[i];
-                    if (teamsByName.TryGetValue(p.TeamName, out var t) &&
+                    if (teamsByName.TryGetValue(p.TeamName,     out var t) &&
                         teamsByName.TryGetValue(p.OpponentName, out var opp))
                     {
-                        var teamPR = powerByTeamId.GetValueOrDefault(t.TeamId, 0m);
+                        var teamPR = powerByTeamId.GetValueOrDefault(t.TeamId,   0m);
                         var oppPR  = powerByTeamId.GetValueOrDefault(opp.TeamId, 0m);
-
-                        // Re-apply the power rating delta on top of the existing margin.
-                        // This matches the adjustment in GamePredictionService.CalculatePrediction.
-                        var delta = (double)(teamPR - oppPR) * 10.0;
+                        var delta  = (double)(teamPR - oppPR) * 10.0;
                         p.ExpectedMargin = Math.Round(p.ExpectedMargin + delta, 1);
                     }
                 }
@@ -533,6 +698,5 @@ namespace SaturdayPulse.Services
                 processed,
                 effectiveStart);
         }
-
     }
 }

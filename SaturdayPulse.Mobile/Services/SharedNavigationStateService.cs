@@ -100,8 +100,7 @@ namespace SaturdayPulse.Services
         public void SetDefaultWeek(IEnumerable<int> playedWeeks)
         {
             var weeks = playedWeeks.ToList();
-            if (!weeks.Any()) return;
-            _selectedWeek = weeks.Max();
+            _selectedWeek = weeks.Any() ? weeks.Max() : 1;
             OnPropertyChanged(nameof(SelectedWeek));
             SyncWeekItems();
         }

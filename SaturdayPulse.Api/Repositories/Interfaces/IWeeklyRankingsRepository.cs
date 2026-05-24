@@ -12,16 +12,14 @@ namespace SaturdayPulse.Contracts
         /// Returns all WeeklyRankings rows for a specific year/week snapshot.
         /// Used by WeeklyRankingsService (step 14) and the projections backfill.
         /// </summary>
-        Task<List<WeeklyRanking>> GetByYearAndWeekAsync(
-            int year, int week, CancellationToken token = default);
+        Task<List<WeeklyRanking>> GetByYearAndWeekAsync(int year, int week, CancellationToken token = default);
 
         /// <summary>
         /// Returns all distinct (Year, Week) pairs that have WeeklyRankings rows,
         /// ordered chronologically. Used by the projections backfill to discover
         /// which snapshots exist.
         /// </summary>
-        Task<List<(int Year, int Week)>> GetDistinctYearWeeksAsync(
-            CancellationToken token = default);
+        Task<List<(int Year, int Week)>> GetDistinctYearWeeksAsync(CancellationToken token = default);
 
         /// <summary>
         /// Inserts a new WeeklyRanking row.
@@ -33,7 +31,6 @@ namespace SaturdayPulse.Contracts
         /// Returns all WeeklyRankings rows for a specific team and year,
         /// ordered by week. Used by the team season arc endpoint.
         /// </summary>
-        Task<List<WeeklyRanking>> GetByTeamAndYearAsync(
-            int teamId, int year, CancellationToken token = default);
+        Task<List<WeeklyRanking>> GetByTeamAndYearAsync(int teamId, int year, CancellationToken token = default);
     }
 }
