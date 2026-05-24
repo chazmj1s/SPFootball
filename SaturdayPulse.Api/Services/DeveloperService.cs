@@ -279,7 +279,7 @@ namespace SaturdayPulse.Services
                     if (isHomeTeam)         { expectedFromTeam += hfa; homeAdjustment =  hfa; }
                     else if (g.NeutralSite) { expectedFromTeam -= hfa; homeAdjustment = -hfa; }
 
-                    zScore = (double)((delta - expectedFromTeam) / (double)asd.StDevP);
+                    zScore = (double)((delta - expectedFromTeam) / (double)asd.WeightedStdDev);
                 }
 
                 var baseExpected     = teamWins >= oppWins ? expectedDelta : -expectedDelta;

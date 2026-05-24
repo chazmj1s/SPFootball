@@ -19,7 +19,8 @@ namespace SaturdayPulse.Services
         private readonly IUnitOfWork _uow;
         private const    double      HomeFieldAdvantage    = 2.5;
         private const    int         RecentYearsForAverage = 5;
-        private          double?     _cachedAvgTeamScore;
+        private double?             _cachedAvgTeamScore;
+        private int                 _cachedAvgTeamScoreYear = -1;
 
         public GamePredictionService(IUnitOfWork uow) => _uow = uow;
 
@@ -141,17 +142,17 @@ namespace SaturdayPulse.Services
             var maxWinPct  = Math.Max(teamWinPct, oppWinPct);
             var minWinPct  = Math.Min(teamWinPct, oppWinPct);
 
-            var asd = avgScoreDeltas.FirstOrDefault(
-                          a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct)
+            var asd = avgScoreDeltas.FirstOrDefault(a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct)
                       ?? new AvgScoreDelta
                          {
                              Team1WinPct       = maxWinPct,
                              Team2WinPct       = minWinPct,
-                             AverageScoreDelta = 7.0m,
-                             StDevP            = 14.0m
-                         };
+                             AverageScoreDelta = (decimal)AvgScoreDelta.DefaultAverageScoreDelta,
+                             StDevP            = (decimal)AvgScoreDelta.DefaultStdDev
+                      };
 
-            var rawExpected      = Math.Max(-35.0, Math.Min(35.0, (double)asd.AverageScoreDelta));
+
+            var rawExpected      = asd.WeightedAverageScoreDelta;
             var expectedFromTeam = RatingCalculator.ExpectedFromPerspective(rawExpected, teamWinPct, oppWinPct);
             expectedFromTeam     = RatingCalculator.ApplyHomeField(
                 expectedFromTeam, location == 'H', location == 'N', HomeFieldAdvantage);
@@ -189,8 +190,8 @@ namespace SaturdayPulse.Services
             predictedTeamScore = Math.Max(0, predictedTeamScore * scoringAdjustment);
             predictedOppScore  = Math.Max(0, predictedOppScore  * scoringAdjustment);
 
-            var stdDev        = (double)asd.StDevP * varianceMultiplier;
-            var marginOfError = Math.Min(Math.Max(stdDev, 7.0), 21.0);
+            var stdDev        = (double)asd.WeightedStdDev * varianceMultiplier;
+            var marginOfError = Math.Min(Math.Max(stdDev, AvgScoreDelta.DefaultAverageScoreDelta), 21.0);
 
             return new GamePrediction
             {
@@ -217,7 +218,12 @@ namespace SaturdayPulse.Services
 
         private async Task<double> GetAverageTeamScoreAsync(int year, CancellationToken token)
         {
-            if (_cachedAvgTeamScore.HasValue) return _cachedAvgTeamScore.Value;
+            if (_cachedAvgTeamScore.HasValue &&
+                _cachedAvgTeamScoreYear == year)
+            {
+                return _cachedAvgTeamScore.Value;
+            }
+
 
             var cutoffYear = year - RecentYearsForAverage;
             var games      = await _uow.Games.GetPlayedGamesSinceYearAsync(cutoffYear, token);
@@ -225,6 +231,8 @@ namespace SaturdayPulse.Services
             _cachedAvgTeamScore = games.Count == 0
                 ? 28.0
                 : (games.Average(g => g.HomePoints) + games.Average(g => g.AwayPoints)) / 2.0;
+            
+            _cachedAvgTeamScoreYear = year;
 
             return _cachedAvgTeamScore.Value;
         }

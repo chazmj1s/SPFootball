@@ -152,13 +152,13 @@ namespace SaturdayPulse.Services
             var asd = avgScoreDeltas.FirstOrDefault(
                 a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct);
 
-            if (asd == null || asd.StDevP == 0) return 0;
+            if (asd == null || asd.WeightedStdDev == 0) return 0;
 
             var rawExpected    = (double)asd.AverageScoreDelta;
             var expected       = ExpectedFromPerspective(rawExpected, teamWinPct, oppWinPct);
             expected           = ApplyHomeField(expected, isHomeTeam, isNeutralSite, homeFieldAdvantage);
 
-            var effectiveStDev = (double)asd.StDevP * RivalryVarianceMultiplier(rivalryTier);
+            var effectiveStDev = (double)asd.WeightedStdDev * RivalryVarianceMultiplier(rivalryTier);
             var delta          = teamPoints - opponentPoints;
 
             return DampenZScore((delta - expected) / effectiveStDev);

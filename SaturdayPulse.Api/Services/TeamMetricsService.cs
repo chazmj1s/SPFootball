@@ -178,8 +178,8 @@ namespace SaturdayPulse.Services
                     {
                         var expected       = RatingCalculator.ExpectedFromPerspective((double)asd.AverageScoreDelta, teamWinPct, oppWinPct);
                         expected           = RatingCalculator.ApplyHomeField(expected, r.IsHomeTeam, r.Location == 'N', hfa);
-                        var effectiveStDev = (double)asd.StDevP * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
-                        zValue             = (delta - expected) / effectiveStDev;
+                        var effectiveStDev = (double)asd.WeightedStdDev * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+                        zValue             = RatingCalculator.DampenZScore((delta - expected) / effectiveStDev);
                     }
 
                     return new
@@ -296,7 +296,7 @@ namespace SaturdayPulse.Services
                     {
                         var expected       = RatingCalculator.ExpectedFromPerspective((double)asd.AverageScoreDelta, teamWinPct, oppWinPct);
                         expected           = RatingCalculator.ApplyHomeField(expected, gp.IsHomeTeam, gp.Location == 'N', hfa);
-                        var effectiveStDev = (double)asd.StDevP * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+                        var effectiveStDev = (double)asd.WeightedStdDev * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
                         zScore             = RatingCalculator.DampenZScore((delta - expected) / effectiveStDev);
                     }
 
@@ -346,7 +346,7 @@ namespace SaturdayPulse.Services
                 if (totalGames > 0 && record.CombinedSOS.HasValue && record.PowerRating.HasValue)
                 {
                     var winPct = (decimal)record.Wins / totalGames;
-                    record.Ranking = Math.Round(winPct * record.CombinedSOS.Value * (1 + record.PowerRating.Value), 4);
+                    record.Ranking = Math.Round(winPct * (1 + record.PowerRating.Value), 4);
                 }
                 else
                 {

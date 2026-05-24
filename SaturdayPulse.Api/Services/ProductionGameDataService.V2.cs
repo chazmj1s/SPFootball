@@ -202,7 +202,7 @@ namespace SaturdayPulse.Services
                 var minPct      = Math.Min(t1WinPct, t2WinPct);
                 var asd         = avgScoreDeltas.FirstOrDefault(a => a.Team1WinPct == maxPct && a.Team2WinPct == minPct);
                 var delta       = asd != null && asd.SampleSize >= 10
-                    ? Math.Max(-35.0, Math.Min(35.0, (double)asd.AverageScoreDelta)) : 7.0;
+                    ? Math.Max(-35.0, Math.Min(35.0, (double)asd.AverageScoreDelta)) : AvgScoreDelta.DefaultAverageScoreDelta;
                 var deltaFromT1 = RatingCalculator.ExpectedFromPerspective(delta, t1WinPct, t2WinPct);
                 if (t1Record.Ranking.HasValue && t2Record.Ranking.HasValue)
                     deltaFromT1 += (double)(t1Record.Ranking.Value - t2Record.Ranking.Value) * 0.15;

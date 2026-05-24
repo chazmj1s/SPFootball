@@ -244,7 +244,7 @@ namespace SaturdayPulse.Services
                     var rivalryTier = matchupHistories.FirstOrDefault(
                         m => m.Team1Id == t1 && m.Team2Id == t2)?.RivalryTier;
 
-                    var effectiveStDev = (double)asd.StDevP *
+                    var effectiveStDev = (double)asd.WeightedStdDev *
                         RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
 
                     var delta = gp.TeamPoints - gp.OpponentPoints;
