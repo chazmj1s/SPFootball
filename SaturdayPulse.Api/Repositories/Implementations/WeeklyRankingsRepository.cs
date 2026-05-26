@@ -43,5 +43,13 @@ namespace SaturdayPulse.Repositories
                    .Where(wr => wr.TeamID == teamId && wr.Year == (short)year)
                    .OrderBy(wr => wr.Week)
                    .ToListAsync(token);
+        public async Task<Dictionary<int, WeeklyRanking>>
+    GetByTeamsAndYearAndWeekAsync(IEnumerable<int> teamIds, int year,int week, CancellationToken token = default)
+        {
+            return await _ctx.WeeklyRankings
+                .Where(wr => teamIds.Contains(wr.TeamID) &&
+                    wr.Year == (short)year && wr.Week == (short)week)
+                .ToDictionaryAsync( wr => wr.TeamID, token);
+        }
     }
 }

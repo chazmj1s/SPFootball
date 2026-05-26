@@ -32,5 +32,10 @@ namespace SaturdayPulse.Contracts
         /// ordered by week. Used by the team season arc endpoint.
         /// </summary>
         Task<List<WeeklyRanking>> GetByTeamAndYearAsync(int teamId, int year, CancellationToken token = default);
+        /// <summary>
+        /// Returns all WeeklyRankings rows for a specific team and year and week,
+        /// ordered by week. Used by the team season arc endpoint.
+        /// </summary>
+        Task<Dictionary<int, WeeklyRanking>> GetByTeamsAndYearAndWeekAsync(IEnumerable<int> teamIds, int year, int week, CancellationToken token = default);
     }
 }

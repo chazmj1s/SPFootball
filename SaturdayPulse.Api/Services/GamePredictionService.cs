@@ -1,3 +1,4 @@
+using SaturdayPulse.Interfaces;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Contracts.Responses;
@@ -16,13 +17,18 @@ namespace SaturdayPulse.Services
     /// </summary>
     public class GamePredictionService
     {
+        private readonly IAvgScoreDifferentialService _avgScoreDifferentialService;
         private readonly IUnitOfWork _uow;
         private const    double      HomeFieldAdvantage    = 2.5;
         private const    int         RecentYearsForAverage = 5;
         private double?             _cachedAvgTeamScore;
         private int                 _cachedAvgTeamScoreYear = -1;
 
-        public GamePredictionService(IUnitOfWork uow) => _uow = uow;
+        public GamePredictionService(IUnitOfWork uow, IAvgScoreDifferentialService avgScoreDifferentialService)
+        {
+            _uow = uow;
+            _avgScoreDifferentialService = avgScoreDifferentialService;
+        }
 
         // ── Public API ────────────────────────────────────────────────────────────
 
@@ -43,13 +49,12 @@ namespace SaturdayPulse.Services
                 !teamRecords.TryGetValue(opponent.TeamId, out var oppRecord))
                 throw new ArgumentException("Team records not found for specified year.");
 
-            var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore   = await GetAverageTeamScoreAsync(year, token);
 
             return CalculatePrediction(
                 teamRecord, oppRecord, team, opponent, location,
-                avgScoreDeltas, rivalries, avgTeamScore, year, week);
+                rivalries, avgTeamScore, year, week);
         }
 
         /// <summary>Predicts scores for multiple matchups in a single DB round-trip.</summary>
@@ -59,7 +64,6 @@ namespace SaturdayPulse.Services
             var teams          = await _uow.Teams.GetDictionaryByNameAsync(token);
             var teamRecords    = await _uow.TeamRecords.GetByYearAsync(year, token);
             var recordsById    = teamRecords.ToDictionary(tr => tr.TeamID);
-            var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore   = await GetAverageTeamScoreAsync(year, token);
 
@@ -75,7 +79,7 @@ namespace SaturdayPulse.Services
 
                 predictions.Add(CalculatePrediction(
                     teamRecord, oppRecord, team, opponent, matchup.Location,
-                    avgScoreDeltas, rivalries, avgTeamScore, year, matchup.Week));
+                    rivalries, avgTeamScore, year, matchup.Week));
             }
 
             return predictions.OrderByDescending(p => Math.Abs(p.ExpectedMargin)).ToList();
@@ -129,7 +133,6 @@ namespace SaturdayPulse.Services
             TeamRecord teamRecord, TeamRecord oppRecord,
             Teams team, Teams opponent,
             char location,
-            List<AvgScoreDelta> avgScoreDeltas,
             List<MatchupHistory> rivalries,
             double avgTeamScore,
             int year, int week)
@@ -142,18 +145,14 @@ namespace SaturdayPulse.Services
             var maxWinPct  = Math.Max(teamWinPct, oppWinPct);
             var minWinPct  = Math.Min(teamWinPct, oppWinPct);
 
-            var asd = avgScoreDeltas.FirstOrDefault(a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct)
-                      ?? new AvgScoreDelta
-                         {
-                             Team1WinPct       = maxWinPct,
-                             Team2WinPct       = minWinPct,
-                             AverageScoreDelta = (decimal)AvgScoreDelta.DefaultAverageScoreDelta,
-                             StDevP            = (decimal)AvgScoreDelta.DefaultStdDev
-                      };
+            var distribution =_avgScoreDifferentialService.GetExpectedDistribution((double)teamWinPct, (double)oppWinPct);
 
 
-            var rawExpected      = asd.WeightedAverageScoreDelta;
-            var expectedFromTeam = RatingCalculator.ExpectedFromPerspective(rawExpected, teamWinPct, oppWinPct);
+            //var rawExpected      = distribution.ExpectedMargin;
+            //var expectedFromTeam = RatingCalculator.ExpectedFromPerspective(rawExpected, teamWinPct, oppWinPct);
+
+            var expectedFromTeam = distribution.ExpectedMargin;
+
             expectedFromTeam     = RatingCalculator.ApplyHomeField(
                 expectedFromTeam, location == 'H', location == 'N', HomeFieldAdvantage);
 
@@ -190,7 +189,7 @@ namespace SaturdayPulse.Services
             predictedTeamScore = Math.Max(0, predictedTeamScore * scoringAdjustment);
             predictedOppScore  = Math.Max(0, predictedOppScore  * scoringAdjustment);
 
-            var stdDev        = (double)asd.WeightedStdDev * varianceMultiplier;
+            var stdDev        = distribution.StdDev * varianceMultiplier;
             var marginOfError = Math.Min(Math.Max(stdDev, AvgScoreDelta.DefaultAverageScoreDelta), 21.0);
 
             return new GamePrediction

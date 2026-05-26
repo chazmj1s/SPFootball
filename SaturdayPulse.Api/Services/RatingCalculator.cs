@@ -28,14 +28,55 @@ namespace SaturdayPulse.Services
         // ── Win-percentage bucketing ──────────────────────────────────────────────
 
         /// <summary>
-        /// Rounds a raw win percentage to the nearest 5% increment (0.00, 0.05 … 1.00).
+        /// Rounds a raw win percentage to the nearest 2.5% increment (0.00, 0.025, 0.05 … 1.00).
         /// Used to key into the AvgScoreDeltas table, which is bucketed at 5% intervals.
         /// </summary>
         public static decimal BucketWinPct(int wins, int gamesPlayed)
             => gamesPlayed > 0
-               ? Math.Round((decimal)wins / gamesPlayed * 20m, MidpointRounding.AwayFromZero) / 20m
+               ? Math.Round((decimal)wins / gamesPlayed * 40m, MidpointRounding.AwayFromZero) / 40m
                : 0m;
 
+        /// <summary>
+        /// Expands ranking differential space so extreme superiority relationships
+        /// separate more naturally.
+        ///
+        /// Example:
+        ///     0.50 -> 1.50
+        ///     1.00 -> 3.00
+        ///
+        /// This allows ASD to distinguish between:
+        ///     moderate mismatches,
+        ///     major mismatches,
+        ///     catastrophic mismatches.
+        ///
+        /// We preserve the existing ranking system and only expand the emitted
+        /// superiority space used by ASD and projections.
+        /// </summary>
+        public static decimal ExpandStrength(decimal ranking)
+        {
+            var sign = Math.Sign(ranking);
+
+            var expanded =
+                (decimal)Math.Pow(
+                    Math.Abs((double)ranking),
+                    1.35);
+
+            return Math.Round(sign * expanded, 4);
+        }
+
+
+        public static double GetSmoothedExpectedMargin(List<AvgScoreDifferential> buckets, decimal differential)
+        {
+            var closest = buckets
+                .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
+                .FirstOrDefault();
+
+            if (closest == null)
+                return 0d;
+
+            return Math.Round((double)closest.AverageMargin, 2);
+        }    
+        
         // ── Expected-margin helpers ───────────────────────────────────────────────
 
         /// <summary>
