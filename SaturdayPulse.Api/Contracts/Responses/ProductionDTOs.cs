@@ -30,4 +30,6 @@ namespace SaturdayPulse.Contracts.Responses
 
     public record ChampionshipQualifiersResult(IReadOnlyList<object> Conferences);
     public record TeamScheduleV2Result(object? Summary, IReadOnlyList<object> Games);
+    public record ExpectedGameDistribution(double ExpectedMargin, double StdDev, double Reliability, int SampleSize);
+
 }

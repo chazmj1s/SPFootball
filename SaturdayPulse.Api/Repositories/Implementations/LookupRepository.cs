@@ -36,5 +36,14 @@ namespace SaturdayPulse.Repositories.Implementations
         public Task AddMatchupHistoriesAsync(
             IEnumerable<MatchupHistory> histories, CancellationToken token = default)
             => _context.MatchupHistories.AddRangeAsync(histories, token);
+
+        public Task<List<AvgScoreDifferential>> GetAvgScoreDifferentialsAsync(CancellationToken token = default)
+            => _context.AvgScoreDifferentials.ToListAsync(token);
+
+        public Task AddAvgScoreDifferentialsAsync(IEnumerable<AvgScoreDifferential> differentials,CancellationToken token = default)
+            => _context.AvgScoreDifferentials.AddRangeAsync(differentials, token);
+
+        public Task ClearAvgScoreDifferentialsAsync(CancellationToken token = default)
+            => _context.Database.ExecuteSqlRawAsync("DELETE FROM AvgScoreDifferentials",token);
     }
 }

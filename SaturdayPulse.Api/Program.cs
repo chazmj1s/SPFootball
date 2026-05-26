@@ -47,6 +47,7 @@ builder.Services.AddScoped<RollingAverageService>();
 builder.Services.AddScoped<ProductionGameDataService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<DeveloperService>();
+builder.Services.AddScoped<IAvgScoreDifferentialService, AvgScoreDifferentialService>();
 
 // ── ASP.NET / Swagger ─────────────────────────────────────────────────────────
 builder.Services.AddControllersWithViews();

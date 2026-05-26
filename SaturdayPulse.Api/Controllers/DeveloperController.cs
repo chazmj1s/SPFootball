@@ -458,6 +458,44 @@ namespace SaturdayPulse.Controllers
         #region Score Delta and Rivalry Calculations
 
         /// <summary>
+        /// Rebuilds AvgScoreDifferentials using strength differential buckets.
+        /// Example:
+        /// POST /api/developer/buildAvgScoreDifferentials?startYear=2010
+        /// </summary>
+        [HttpPost("buildAvgScoreDifferentials")]
+        [Tags("Score Deltas and Rivalries")]
+        public async Task<IActionResult> BuildAvgScoreDifferentials(
+            [FromQuery] int startYear = 1965,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService
+                    .BuildAvgScoreDifferentialsAsync(
+                        startYear,
+                        token);
+
+                return Ok(new
+                {
+                    message = "AvgScoreDifferentials rebuilt successfully",
+                    startYear,
+                    rowsCreated = result
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Error rebuilding AvgScoreDifferentials from startYear={StartYear}",
+                    startYear);
+
+                return StatusCode(
+                    500,
+                    "An error occurred while rebuilding AvgScoreDifferentials.");
+            }
+        }
+
+        /// <summary>
         /// Recalculates the AvgScoreDeltas table using 5% win-percentage buckets.
         /// Example: POST /api/developer/recalculateScoreDeltas
         /// </summary>

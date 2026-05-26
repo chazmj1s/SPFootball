@@ -8,6 +8,7 @@ namespace SaturdayPulse.Interfaces
         Task UpdateTeamRecordsAsync(int? targetYear = null, CancellationToken token = default);
 
         // ── CFBD V2 — Single load ─────────────────────────────────────────────
+        Task<int> BuildAvgScoreDifferentialsAsync(int startYear, CancellationToken token = default);
         Task<int> LoadConferencesAsync(CancellationToken token = default);
         Task<int> LoadTeamsAsync(int? year = null, CancellationToken token = default);
         Task<int> LoadGamesAsync(int year, int? week = null, CancellationToken token = default);

@@ -6,6 +6,7 @@ namespace SaturdayPulse.Data
     public class NCAAContext(DbContextOptions<NCAAContext> options) : DbContext(options)
     {
         public DbSet<AvgScoreDelta>         AvgScoreDeltas        { get; set; }
+        public DbSet<AvgScoreDifferential>  AvgScoreDifferentials { get; set; }
         public DbSet<TeamRecord>            TeamRecords           { get; set; }
         public DbSet<MatchupHistory>        MatchupHistories      { get; set; }
         public DbSet<WeeklyRanking>         WeeklyRankings        { get; set; }
@@ -19,6 +20,10 @@ namespace SaturdayPulse.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<AvgScoreDifferential>()
+                .HasIndex(a => a.StrengthDifferential)
+                .IsUnique();
 
             modelBuilder.Entity<MatchupHistory>()
                 .HasKey(m => new { m.Team1Id, m.Team2Id });

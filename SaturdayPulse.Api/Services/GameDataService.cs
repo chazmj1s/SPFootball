@@ -1,7 +1,7 @@
 using HtmlAgilityPack;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using SaturdayPulse.Api.Contracts.Responses;
+using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Models;
@@ -15,8 +15,6 @@ namespace SaturdayPulse.Services
 {
     public class GameDataService(
         IUnitOfWork _uow,
-        ScoreDeltaCalculator _scoreDeltaCalc,
-        IConfiguration _configuration,
         IHttpClientFactory _httpClientFactory) : IGameDataService
     {
         // Resolved once and reused — named client carries the bearer token
@@ -40,6 +38,142 @@ namespace SaturdayPulse.Services
 
             Console.WriteLine($"LoadTeamsBulkAsync: {total} total team upserts from {startYear} to {currentYear}");
             return total;
+        }
+
+        public async Task<int> BuildAvgScoreDifferentialsAsync(int startYear, CancellationToken token = default)
+        {
+            // Clear existing V2 data
+            await _uow.Lookups.ClearAvgScoreDifferentialsAsync(token);
+
+            // Historical played games
+            var games = await _uow.Games
+                .GetPlayedGamesSinceYearAsync(startYear, token);
+
+            // FBS teams only
+            var teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+
+            // Differential bucket storage
+            var buckets = new Dictionary<double, List<(double Margin, double Total)>>();
+
+            foreach (var game in games)
+            {
+                if (!game.HomeId.HasValue || !game.AwayId.HasValue)
+                    continue;
+
+                if (!teams.TryGetValue(game.HomeId.Value, out var homeTeam) ||
+                    !teams.TryGetValue(game.AwayId.Value, out var awayTeam))
+                    continue;
+
+                // FBS only for now
+                if (!string.Equals(homeTeam.Division, "fbs", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(awayTeam.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Pregame records through previous week
+                var priorWeek = Math.Max(game.Week - 1, 0);
+
+                var records = await _uow.WeeklyRankings.GetByTeamsAndYearAndWeekAsync(
+                    new[] { homeTeam.TeamId, awayTeam.TeamId },
+                    game.Year,
+                    priorWeek,
+                    token);
+
+                if (!records.TryGetValue(homeTeam.TeamId, out var homeRecord) ||
+                    !records.TryGetValue(awayTeam.TeamId, out var awayRecord))
+                    continue;
+
+                // Strengths
+                // Strengths
+                var homeGamesPlayed = homeRecord.Wins + homeRecord.Losses;
+                var awayGamesPlayed = awayRecord.Wins + awayRecord.Losses;
+
+                // Existing normalized rankings
+                var homeWinPct = RatingCalculator.BucketWinPct(
+                    homeRecord.Wins,
+                    homeGamesPlayed);
+
+                var awayWinPct = RatingCalculator.BucketWinPct(
+                    awayRecord.Wins,
+                    awayGamesPlayed);
+
+                // Expanded superiority space
+                var homeStrength = RatingCalculator.ExpandStrength(homeRecord.Ranking ?? 0m);
+                var awayStrength = RatingCalculator.ExpandStrength(awayRecord.Ranking ?? 0m);
+
+                // Differential
+                var rawDifferential = homeStrength - awayStrength;
+
+                // Collapse sparse tails into stable cohorts
+                if (rawDifferential > 2.75m) 
+                    rawDifferential = 3.0m;
+                else if (rawDifferential > 2.5m) 
+                    rawDifferential = 2.75m;
+                else if (rawDifferential < -2.75m) 
+                    rawDifferential = -3.0m;
+                else if (rawDifferential < -2.5m) 
+                    rawDifferential = -2.75m;
+
+                var differential =
+                    Math.Round(
+                        (double)(rawDifferential / 0.05m),
+                        MidpointRounding.AwayFromZero) * 0.05;
+
+                // Observed values
+                var margin = (double)((game.HomePoints ?? 0) - (game.AwayPoints ?? 0));
+                var total = (double)((game.HomePoints ?? 0) + (game.AwayPoints ?? 0));
+
+                // Ensure bucket exists
+                if (!buckets.ContainsKey(differential))
+                    buckets[differential] = new List<(double, double)>();
+
+                if (!buckets.ContainsKey(-differential))
+                    buckets[-differential] = new List<(double, double)>();
+
+                // Store BOTH perspectives
+                buckets[differential].Add((margin, total));
+                buckets[-differential].Add((-margin, total));
+            }
+
+            // Aggregate results
+            var differentials = new List<AvgScoreDifferential>();
+
+            foreach (var bucket in buckets.OrderBy(b => b.Key))
+            {
+                var differential = bucket.Key;
+                var samples = bucket.Value;
+
+                if (samples.Count == 0)
+                    continue;
+
+                var margins = samples.Select(s => s.Margin).ToList();
+                var totals = samples.Select(s => s.Total).ToList();
+
+                var avgMargin = margins.Average();
+
+                var variance = margins
+                    .Select(m => Math.Pow(m - avgMargin, 2))
+                    .Average();
+
+                var stdDev = Math.Sqrt(variance);
+
+                differentials.Add(new AvgScoreDifferential
+                {
+                    StrengthDifferential = (decimal)differential,
+                    AverageMargin = (decimal)avgMargin,
+                    StdDevMargin = (decimal)stdDev,
+                    AverageTotalPoints = (decimal)totals.Average(),
+                    SampleSize = samples.Count,
+                    LastUpdatedUtc = DateTime.UtcNow
+                });
+            }
+
+            await _uow.Lookups.AddAvgScoreDifferentialsAsync(
+                differentials,
+                token);
+
+            await _uow.SaveChangesAsync(token);
+
+            return differentials.Count();
         }
 
         /// <summary>

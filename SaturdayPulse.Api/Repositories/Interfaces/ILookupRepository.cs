@@ -23,5 +23,10 @@ namespace SaturdayPulse.Repositories.Interfaces
         Task ClearAvgScoreDeltasAsync(CancellationToken token = default);
         Task ClearMatchupHistoriesAsync(CancellationToken token = default);
         Task AddMatchupHistoriesAsync(IEnumerable<MatchupHistory> histories, CancellationToken token = default);
+
+        Task<List<AvgScoreDifferential>>GetAvgScoreDifferentialsAsync(CancellationToken token = default);
+        Task AddAvgScoreDifferentialsAsync(IEnumerable<AvgScoreDifferential> differentials,CancellationToken token = default);
+        Task ClearAvgScoreDifferentialsAsync(CancellationToken token = default);
+
     }
 }
