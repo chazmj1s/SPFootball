@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Responses;
 
@@ -9,22 +10,25 @@ namespace SaturdayPulse.Services
     /// GetProjectedChampionshipQualifiers) must use this service
     /// rather than calling GamePredictionService directly.
     ///
-    /// Cache is keyed by year and invalidated when year changes.
-    /// Registered as Singleton in Program.cs.
+    /// Registered as Singleton in Program.cs — cache persists across requests.
+    /// Uses IServiceScopeFactory to resolve the Scoped IUnitOfWork safely
+    /// from within a Singleton lifetime.
     ///
+    /// Cache is keyed by year and invalidated when year changes.
     /// For each game, picks the freshest projection snapshot strictly before
     /// the game's own week. Week 0 snapshots (created by InitializeSeasonAsync)
     /// provide projections for week 1 games since 0 &lt; 1.
     /// </summary>
     public class ProjectionCacheService
     {
-        private readonly IUnitOfWork _uow;
+        private readonly IServiceScopeFactory             _scopeFactory;
 
         private readonly SemaphoreSlim                    _lock = new(1, 1);
         private          int?                             _cachedYear;
         private          Dictionary<int, GamePrediction>  _cache = new();
 
-        public ProjectionCacheService(IUnitOfWork uow) => _uow = uow;
+        public ProjectionCacheService(IServiceScopeFactory scopeFactory)
+            => _scopeFactory = scopeFactory;
 
         // ── Public API ────────────────────────────────────────────────────────────
 
@@ -64,14 +68,19 @@ namespace SaturdayPulse.Services
             await _lock.WaitAsync(token);
             try
             {
+                // Double-check inside lock.
                 if (_cachedYear == year && _cache.Count > 0) return;
 
-                var games = await _uow.Games.GetByYearAsync(year, token);
+                // Create a scope to resolve the Scoped IUnitOfWork from this Singleton.
+                using var scope = _scopeFactory.CreateScope();
+                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                var games = await uow.Games.GetByYearAsync(year, token);
                 var gameWeekById = games
                     .Where(g => g.GameId > 0)
                     .ToDictionary(g => g.GameId, g => g.Week);
 
-                var allProjections = await _uow.Projections.GetByYearAsync(year, token);
+                var allProjections = await uow.Projections.GetByYearAsync(year, token);
 
                 // For each game pick the freshest snapshot strictly before the game's
                 // own week. Week 0 snapshots cover week 1 games (0 < 1).
