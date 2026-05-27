@@ -8,4 +8,5 @@
     public int OpponentPoints { get; set; }
     public char Location { get; set; }
     public bool IsHomeTeam { get; set; }
+    public int Week { get; set; }
 }

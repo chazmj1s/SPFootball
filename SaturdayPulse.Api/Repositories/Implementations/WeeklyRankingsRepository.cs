@@ -15,6 +15,12 @@ namespace SaturdayPulse.Repositories
 
         public WeeklyRankingsRepository(NCAAContext ctx) => _ctx = ctx;
 
+        public Task<List<WeeklyRanking>> GetByYearAsync(
+            int year, CancellationToken token = default)
+            => _ctx.WeeklyRankings
+                   .Where(wr => wr.Year == year)
+                   .ToListAsync(token);
+
         public Task<List<WeeklyRanking>> GetByYearAndWeekAsync(
             int year, int week, CancellationToken token = default)
             => _ctx.WeeklyRankings

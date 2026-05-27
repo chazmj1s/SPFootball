@@ -8,9 +8,6 @@ namespace SaturdayPulse.Services
 {
     /// <summary>
     /// Computes and persists per-week power ranking snapshots into WeeklyRankings.
-    /// Mirrors the TeamMetricsService pipeline (SOS → PowerRating → Ranking) but
-    /// scoped to games played through the specified week.
-    /// Also computes per-team offensive and defensive Z-scores.
     ///
     /// Single source of truth pipeline:
     ///   Steps 1-13 : compute all metrics in memory
@@ -18,6 +15,11 @@ namespace SaturdayPulse.Services
     ///   Step 15    : UpsertFromWeeklyRankingsAsync → TeamRecords synced from WR
     ///   Step 16    : RollingAverageService → Seed/Trend/Pedigree (skippable for backfill)
     ///   Step 17    : write Projections for remaining unplayed games
+    ///
+    /// Z-score pipeline now uses AvgScoreDifferential (replaces AvgScoreDelta):
+    ///   - Expected margin derived from ExpandStrength(prior week Ranking) differential
+    ///   - StdDev from AvgScoreDifferential.StdDevMargin
+    ///   - Consistent with the prediction engine and the table's own construction
     ///
     /// For years with unplayed games (e.g. a future season), projected scores are
     /// substituted for missing actuals so the full pipeline can run meaningfully.
@@ -61,12 +63,19 @@ namespace SaturdayPulse.Services
             bool computeRollingAverages = true)
         {
             // ── 1. Load reference data ────────────────────────────────────────────
-            var allTeams         = await _uow.Teams.GetAllAsync(token);
-            var fbsTeams         = allTeams.Where(t =>
+            var allTeams             = await _uow.Teams.GetAllAsync(token);
+            var fbsTeams             = allTeams.Where(t =>
                 string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase)).ToList();
-            var fbsIds           = fbsTeams.Select(t => t.TeamId).ToHashSet();
-            var avgScoreDeltas   = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
-            var matchupHistories = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var fbsIds               = fbsTeams.Select(t => t.TeamId).ToHashSet();
+            var avgScoreDifferentials = await _uow.Lookups.GetAvgScoreDifferentialsAsync(token);
+            var matchupHistories     = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+
+            // Load prior week's WeeklyRankings for pregame strength — same source
+            // the AvgScoreDifferential table was built from.
+            var priorWeek     = Math.Max(week - 1, 0);
+            var priorRankings = await _uow.WeeklyRankings
+                .GetByYearAndWeekAsync(year, priorWeek, token);
+            var priorByTeamId = priorRankings.ToDictionary(wr => wr.TeamID);
 
             // ── 2. Played games through this week ─────────────────────────────────
             var games = await _uow.Games.GetPlayedGamesByYearAndWeekAsync(year, week, token);
@@ -76,11 +85,6 @@ namespace SaturdayPulse.Services
             var teamsDict    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
 
             // ── 2b. Substitute projected scores for unplayed games ────────────────
-            //
-            // For future seasons GetPlayedGamesByYearAndWeekAsync returns nothing.
-            // We synthesize scores from PredictMatchups so steps 3-14 have data.
-            // With InitializeSeasonAsync creating a week 0 snapshot, TeamRecords
-            // exist from day one. The predictionYear fallback is a safety net.
             var unplayedThisWeek = allYearGames
                 .Where(g => g.Week <= week &&
                             (g.HomePoints ?? 0) == 0 &&
@@ -179,7 +183,7 @@ namespace SaturdayPulse.Services
                     var homePts = g.HomePoints ?? 0;
                     var awayPts = g.AwayPoints ?? 0;
                     var neutral = g.NeutralSite == true;
-
+                    var week    = g.Week;
                     return new[]
                     {
                         new GameParticipant
@@ -191,7 +195,8 @@ namespace SaturdayPulse.Services
                             TeamPoints       = homePts,
                             OpponentPoints   = awayPts,
                             Location         = neutral ? 'N' : 'W',
-                            IsHomeTeam       = true
+                            IsHomeTeam       = true,
+                            Week             = week
                         },
                         new GameParticipant
                         {
@@ -202,13 +207,19 @@ namespace SaturdayPulse.Services
                             TeamPoints       = awayPts,
                             OpponentPoints   = homePts,
                             Location         = neutral ? 'N' : 'L',
-                            IsHomeTeam       = false
+                            IsHomeTeam       = false,
+                            Week             = week
                         }
                     };
                 })
                 .ToList();
 
             // ── 5. Z-scores (composite, offensive, defensive) ─────────────────────
+            //
+            // Uses AvgScoreDifferential instead of AvgScoreDelta.
+            // Expected margin derived from ExpandStrength(prior week Ranking) differential
+            // — consistent with how the table was built in BuildAvgScoreDifferentialsAsync.
+            // Falls back to raw win-pct differential if no prior ranking exists (week 1).
             var hfa = _config.HomeFieldAdvantage;
             double leagueAvgScore = games.Count > 0
                 ? (games.Average(g => (double)(g.HomePoints ?? 0)) +
@@ -217,36 +228,44 @@ namespace SaturdayPulse.Services
 
             var withZScores = gameParticipants.Select(gp =>
             {
-                var teamWins   = winsLookup.GetValueOrDefault(gp.TeamId,       0);
-                var teamLosses = lossesLookup.GetValueOrDefault(gp.TeamId,     0);
-                var oppWins    = winsLookup.GetValueOrDefault(gp.OpponentId,   0);
-                var oppLosses  = lossesLookup.GetValueOrDefault(gp.OpponentId, 0);
+                // Get pregame rankings from prior week snapshot.
+                // Fall back to current win-pct if no prior snapshot (e.g. week 1).
+                priorByTeamId.TryGetValue(gp.TeamId,     out var teamPrior);
+                priorByTeamId.TryGetValue(gp.OpponentId, out var oppPrior);
 
-                var teamWinPct = RatingCalculator.BucketWinPct(teamWins, teamWins + teamLosses);
-                var oppWinPct  = RatingCalculator.BucketWinPct(oppWins,  oppWins  + oppLosses);
-                var maxWinPct  = Math.Max(teamWinPct, oppWinPct);
-                var minWinPct  = Math.Min(teamWinPct, oppWinPct);
+                var teamStrength = RatingCalculator.ExpandStrength(teamPrior?.Ranking ?? 0m);
+                var oppStrength  = RatingCalculator.ExpandStrength(oppPrior?.Ranking  ?? 0m);
 
-                var asd = avgScoreDeltas.FirstOrDefault(
-                    a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct);
+                // Differential from team's perspective — positive means team is stronger.
+                var rawDiff   = teamStrength - oppStrength;
+                var clampedDiff = Math.Max(-3.0m, Math.Min(3.0m, rawDiff));
+                var differential = Math.Round(clampedDiff / 0.05m, MidpointRounding.AwayFromZero) * 0.05m;
+
+                var bucket = RatingCalculator.GetSmoothedExpectedMargin(avgScoreDifferentials, differential);
 
                 double zScore = 0.0, offZScore = 0.0, defZScore = 0.0;
 
-                if (asd != null && asd.StDevP != 0)
+                // bucket is already from team's perspective (positive = team favored)
+                var expectedFromTeam = (double)bucket;
+                expectedFromTeam     = RatingCalculator.ApplyHomeField(
+                    expectedFromTeam, gp.IsHomeTeam, gp.Location == 'N', hfa);
+
+                var t1 = Math.Min(gp.TeamId, gp.OpponentId);
+                var t2 = Math.Max(gp.TeamId, gp.OpponentId);
+                var rivalryTier = matchupHistories.FirstOrDefault(
+                    m => m.Team1Id == t1 && m.Team2Id == t2)?.RivalryTier;
+
+                // Get StdDev from the differential bucket.
+                var bucketRow = avgScoreDifferentials
+                    .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
+                    .FirstOrDefault();
+
+                var effectiveStDev = bucketRow != null
+                    ? (double)bucketRow.StdDevMargin * RatingCalculator.RivalryVarianceMultiplier(rivalryTier)
+                    : 14.0 * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+
+                if (effectiveStDev > 0)
                 {
-                    var expectedFromTeam = RatingCalculator.ExpectedFromPerspective(
-                        (double)asd.AverageScoreDelta, teamWinPct, oppWinPct);
-                    expectedFromTeam = RatingCalculator.ApplyHomeField(
-                        expectedFromTeam, gp.IsHomeTeam, gp.Location == 'N', hfa);
-
-                    var t1 = Math.Min(gp.TeamId, gp.OpponentId);
-                    var t2 = Math.Max(gp.TeamId, gp.OpponentId);
-                    var rivalryTier = matchupHistories.FirstOrDefault(
-                        m => m.Team1Id == t1 && m.Team2Id == t2)?.RivalryTier;
-
-                    var effectiveStDev = (double)asd.WeightedStdDev *
-                        RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
-
                     var delta = gp.TeamPoints - gp.OpponentPoints;
                     zScore    = RatingCalculator.DampenZScore((delta - expectedFromTeam) / effectiveStDev);
 
@@ -436,18 +455,9 @@ namespace SaturdayPulse.Services
             await _uow.SaveChangesAsync(token);
 
             // ── 15. Sync TeamRecords from WeeklyRankings ──────────────────────────
-            //
-            // WeeklyRankings is the single source of truth for all metrics.
-            // UpsertFromWeeklyRankingsAsync reads the last snapshot for this year
-            // and writes all fields to TeamRecords, creating rows if they don't exist.
             await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
 
             // ── 16. Compute Seed/Trend/Pedigree rolling averages ──────────────────
-            //
-            // Skipped during bulk backfill (computeRollingAverages = false).
-            // BackfillWeeklyRankingsAsync runs this once per year for performance.
-            // Must run after step 15 so TeamRecords has current data.
-            // Pass the current week so the Seed live swap activates at week 6.
             if (computeRollingAverages)
                 await _rollingAverageService.ComputeAndPersistAsync(year, week, token);
 
