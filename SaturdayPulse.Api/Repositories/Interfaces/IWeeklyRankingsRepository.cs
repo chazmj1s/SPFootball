@@ -9,6 +9,12 @@ namespace SaturdayPulse.Contracts
     public interface IWeeklyRankingsRepository
     {
         /// <summary>
+        /// Returns all WeeklyRankings rows for a specific year snapshot.
+        /// Used by WeeklyRankingsService (step 14) and the projections backfill.
+        /// </summary>
+        Task<List<WeeklyRanking>> GetByYearAsync(int year, CancellationToken token = default);
+
+        /// <summary>
         /// Returns all WeeklyRankings rows for a specific year/week snapshot.
         /// Used by WeeklyRankingsService (step 14) and the projections backfill.
         /// </summary>

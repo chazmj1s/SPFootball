@@ -6,14 +6,18 @@ using System.Text.Json;
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// Calculates SOS, PowerRating, and Rankings for all FBS teams in a given year.
+    /// Manual recalculation endpoints for SOS, PowerRating, and Rankings.
+    /// Used by admin endpoints when data needs to be recomputed outside the
+    /// normal weekly WeeklyRankingsService pipeline.
+    ///
+    /// Z-score pipeline now uses AvgScoreDifferential (replaces AvgScoreDelta):
+    ///   - Expected margin derived from ExpandStrength(prior week Ranking) differential
+    ///   - StdDev from AvgScoreDifferential.StdDevMargin
+    ///   - Consistent with WeeklyRankingsService and the prediction engine
     ///
     /// Pipeline order (must be sequential):
     ///   RollingAverageService.ComputeAndPersistAsync
     ///     → SetSOS → CalculatePowerRatings → CalculateRankings
-    ///
-    /// Pass 2 complete: all EF queries moved to repositories.
-    /// No direct _context references remain.
     /// </summary>
     public class TeamMetricsService
     {
@@ -143,48 +147,55 @@ namespace SaturdayPulse.Services
                 // ── Step 2: Game participants ─────────────────────────────────────
                 var gameParticipants = await _uow.Games.GetGameParticipantsAsync(targetYear, token);
 
-                // ── Step 3: Annotate with wins/losses ─────────────────────────────
-                var withRecords = gameParticipants.Select(gp => new
-                {
-                    gp.TeamId, gp.TeamDivision,
-                    TeamWins     = winsLookup.GetValueOrDefault(gp.TeamId,     0),
-                    TeamLosses   = lossesLookup.GetValueOrDefault(gp.TeamId,   0),
-                    gp.OpponentId, gp.OpponentDivision,
-                    gp.TeamPoints, gp.OpponentPoints,
-                    OpponentWins   = winsLookup.GetValueOrDefault(gp.OpponentId,   0),
-                    OpponentLosses = lossesLookup.GetValueOrDefault(gp.OpponentId, 0),
-                    gp.Location, gp.IsHomeTeam
-                }).ToList();
+                // ── Step 3: Load WeeklyRankings for pregame strength lookup ─────────
+                // Index by (TeamId, Week) so each game uses the prior week's rating.
+                var allWeeklyRankings  = await _uow.WeeklyRankings.GetByYearAsync(targetYear, token);
+                var rankingsByTeamWeek = allWeeklyRankings
+                    .ToDictionary(wr => (wr.TeamID, (int)wr.Week));
 
                 // ── Step 4: Z-scores ──────────────────────────────────────────────
-                var avgScoreDeltas   = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
-                var matchupHistories = await _uow.Lookups.GetMatchupHistoriesAsync(token);
-                var hfa              = _config.HomeFieldAdvantage;
+                var avgScoreDifferentials = await _uow.Lookups.GetAvgScoreDifferentialsAsync(token);
+                var matchupHistories      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+                var hfa                   = _config.HomeFieldAdvantage;
 
-                var withDeltas = withRecords.Select(r =>
+                var withDeltas = gameParticipants.Select(gp =>
                 {
-                    var delta      = r.TeamPoints - r.OpponentPoints;
-                    var teamWinPct = RatingCalculator.BucketWinPct(r.TeamWins, r.TeamWins + r.TeamLosses);
-                    var oppWinPct  = RatingCalculator.BucketWinPct(r.OpponentWins, r.OpponentWins + r.OpponentLosses);
-                    var maxWinPct  = Math.Max(teamWinPct, oppWinPct);
-                    var minWinPct  = Math.Min(teamWinPct, oppWinPct);
-                    var asd        = avgScoreDeltas.FirstOrDefault(a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct);
+                    var delta    = gp.TeamPoints - gp.OpponentPoints;
+                    var priorWk  = Math.Max(gp.Week - 1, 0);
+
+                    rankingsByTeamWeek.TryGetValue((gp.TeamId,     priorWk), out var teamPrior);
+                    rankingsByTeamWeek.TryGetValue((gp.OpponentId, priorWk), out var oppPrior);
+
+                    var teamStrength = RatingCalculator.ExpandStrength(teamPrior?.Ranking ?? 0m);
+                    var oppStrength  = RatingCalculator.ExpandStrength(oppPrior?.Ranking  ?? 0m);
+
+                    var rawDiff      = teamStrength - oppStrength;
+                    var clampedDiff  = Math.Max(-3.0m, Math.Min(3.0m, rawDiff));
+                    var differential = Math.Round(clampedDiff / 0.05m, MidpointRounding.AwayFromZero) * 0.05m;
+
+                    var bucketRow = avgScoreDifferentials
+                        .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
+                        .FirstOrDefault();
+
                     var rivalryTier = matchupHistories.FirstOrDefault(m =>
-                        m.Team1Id == Math.Min(r.TeamId, r.OpponentId) &&
-                        m.Team2Id == Math.Max(r.TeamId, r.OpponentId))?.RivalryTier;
+                        m.Team1Id == Math.Min(gp.TeamId, gp.OpponentId) &&
+                        m.Team2Id == Math.Max(gp.TeamId, gp.OpponentId))?.RivalryTier;
 
                     double zValue = 0.0;
-                    if (asd != null && asd.StDevP != 0)
+                    if (bucketRow != null && bucketRow.StdDevMargin != 0)
                     {
-                        var expected       = RatingCalculator.ExpectedFromPerspective((double)asd.AverageScoreDelta, teamWinPct, oppWinPct);
-                        expected           = RatingCalculator.ApplyHomeField(expected, r.IsHomeTeam, r.Location == 'N', hfa);
-                        var effectiveStDev = (double)asd.WeightedStdDev * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
-                        zValue             = RatingCalculator.DampenZScore((delta - expected) / effectiveStDev);
+                        var expected = (double)RatingCalculator.GetSmoothedExpectedMargin(
+                            avgScoreDifferentials, differential);
+                        expected = RatingCalculator.ApplyHomeField(
+                            expected, gp.IsHomeTeam, gp.Location == 'N', hfa);
+                        var effectiveStDev = (double)bucketRow.StdDevMargin *
+                            RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+                        zValue = RatingCalculator.DampenZScore((delta - expected) / effectiveStDev);
                     }
 
                     return new
                     {
-                        r.TeamId, r.TeamDivision, r.OpponentId, r.OpponentDivision,
+                        gp.TeamId, gp.TeamDivision, gp.OpponentId, gp.OpponentDivision,
                         Delta = delta, ZValue = zValue
                     };
                 }).ToList();
@@ -266,38 +277,50 @@ namespace SaturdayPulse.Services
 
             var gameParticipants = await _uow.Games.GetGameParticipantsAsync(targetYear, token);
 
-            var teamRecords  = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
-            var winsLookup   = teamRecords.ToDictionary(tr => tr.TeamID, tr => (int)tr.Wins);
-            var lossesLookup = teamRecords.ToDictionary(tr => tr.TeamID, tr => (int)tr.Losses);
+            // Load all WeeklyRankings for the year — indexed by (TeamId, Week)
+            // for per-game pregame strength lookup.
+            var allWeeklyRankings  = await _uow.WeeklyRankings.GetByYearAsync(targetYear, token);
+            var rankingsByTeamWeek = allWeeklyRankings
+                .ToDictionary(wr => (TeamId: wr.TeamID, Week: (int)wr.Week));
 
-            var avgScoreDeltas   = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
-            var matchupHistories = await _uow.Lookups.GetMatchupHistoriesAsync(token);
-            var hfa              = _config.HomeFieldAdvantage;
+            var avgScoreDifferentials = await _uow.Lookups.GetAvgScoreDifferentialsAsync(token);
+            var matchupHistories      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var hfa                   = _config.HomeFieldAdvantage;
 
             var zScores = gameParticipants
                 .Select(gp =>
                 {
-                    var teamWins   = winsLookup.GetValueOrDefault(gp.TeamId,     0);
-                    var teamLosses = lossesLookup.GetValueOrDefault(gp.TeamId,   0);
-                    var oppWins    = winsLookup.GetValueOrDefault(gp.OpponentId, 0);
-                    var oppLosses  = lossesLookup.GetValueOrDefault(gp.OpponentId, 0);
-                    var teamWinPct = RatingCalculator.BucketWinPct(teamWins, teamWins + teamLosses);
-                    var oppWinPct  = RatingCalculator.BucketWinPct(oppWins,  oppWins  + oppLosses);
-                    var maxWinPct  = Math.Max(teamWinPct, oppWinPct);
-                    var minWinPct  = Math.Min(teamWinPct, oppWinPct);
-                    var delta      = gp.TeamPoints - gp.OpponentPoints;
-                    var asd        = avgScoreDeltas.FirstOrDefault(a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct);
+                    var priorWk = Math.Max(gp.Week - 1, 0);
+
+                    rankingsByTeamWeek.TryGetValue((TeamId: gp.TeamId, Week: priorWk), out var teamPrior);
+                    rankingsByTeamWeek.TryGetValue((TeamId: gp.OpponentId, Week: priorWk), out var oppPrior);
+
+                    var teamStrength = RatingCalculator.ExpandStrength(teamPrior?.Ranking ?? 0m);
+                    var oppStrength  = RatingCalculator.ExpandStrength(oppPrior?.Ranking  ?? 0m);
+
+                    var rawDiff      = teamStrength - oppStrength;
+                    var clampedDiff  = Math.Max(-3.0m, Math.Min(3.0m, rawDiff));
+                    var differential = Math.Round(clampedDiff / 0.05m, MidpointRounding.AwayFromZero) * 0.05m;
+
+                    var bucketRow = avgScoreDifferentials
+                        .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
+                        .FirstOrDefault();
+
                     var rivalryTier = matchupHistories.FirstOrDefault(m =>
                         m.Team1Id == Math.Min(gp.TeamId, gp.OpponentId) &&
                         m.Team2Id == Math.Max(gp.TeamId, gp.OpponentId))?.RivalryTier;
 
                     double zScore = 0.0;
-                    if (asd != null && asd.StDevP != 0)
+                    if (bucketRow != null && bucketRow.StdDevMargin != 0)
                     {
-                        var expected       = RatingCalculator.ExpectedFromPerspective((double)asd.AverageScoreDelta, teamWinPct, oppWinPct);
-                        expected           = RatingCalculator.ApplyHomeField(expected, gp.IsHomeTeam, gp.Location == 'N', hfa);
-                        var effectiveStDev = (double)asd.WeightedStdDev * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
-                        zScore             = RatingCalculator.DampenZScore((delta - expected) / effectiveStDev);
+                        var expected = (double)RatingCalculator.GetSmoothedExpectedMargin(
+                            avgScoreDifferentials, differential);
+                        expected = RatingCalculator.ApplyHomeField(
+                            expected, gp.IsHomeTeam, gp.Location == 'N', hfa);
+                        var effectiveStDev = (double)bucketRow.StdDevMargin *
+                            RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+                        zScore = RatingCalculator.DampenZScore(
+                            (gp.TeamPoints - gp.OpponentPoints - expected) / effectiveStDev);
                     }
 
                     return new
@@ -319,7 +342,11 @@ namespace SaturdayPulse.Services
 
             foreach (var record in teamRecordsForUpdate)
             {
-                if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase)) { record.PowerRating = 0; continue; }
+                if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase))
+                {
+                    record.PowerRating = 0;
+                    continue;
+                }
 
                 var zData = zScores.FirstOrDefault(z => z.TeamId == record.TeamID);
                 if (zData != null)
@@ -340,7 +367,11 @@ namespace SaturdayPulse.Services
 
             foreach (var record in teamRecords)
             {
-                if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase)) { record.Ranking = 0; continue; }
+                if (string.Equals(record.Teams?.Division, "FCS", StringComparison.OrdinalIgnoreCase))
+                {
+                    record.Ranking = 0;
+                    continue;
+                }
 
                 var totalGames = record.Wins + record.Losses;
                 if (totalGames > 0 && record.CombinedSOS.HasValue && record.PowerRating.HasValue)

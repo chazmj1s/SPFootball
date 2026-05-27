@@ -97,7 +97,8 @@ namespace SaturdayPulse.Repositories.Implementations
                     TeamPoints       = g.HomePoints ?? 0,
                     OpponentPoints   = g.AwayPoints ?? 0,
                     Location         = g.NeutralSite == true ? 'N' : 'W',
-                    IsHomeTeam       = true
+                    IsHomeTeam       = true,
+                    Week             = g.Week
                 };
 
             var fromAway = from g in _context.Games
@@ -113,7 +114,8 @@ namespace SaturdayPulse.Repositories.Implementations
                     TeamPoints       = g.AwayPoints ?? 0,
                     OpponentPoints   = g.HomePoints ?? 0,
                     Location         = g.NeutralSite == true ? 'N' : 'L',
-                    IsHomeTeam       = false
+                    IsHomeTeam       = false,
+                    Week = g.Week
                 };
 
             return await fromHome.Union(fromAway).ToListAsync(token);
