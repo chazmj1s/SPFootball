@@ -66,13 +66,11 @@ namespace SaturdayPulse.Services
             if (_cachedYear == year && _cache.Count > 0) return;
 
             await _lock.WaitAsync(token);
+            var scope = _scopeFactory.CreateScope();
             try
             {
-                // Double-check inside lock.
                 if (_cachedYear == year && _cache.Count > 0) return;
 
-                // Create a scope to resolve the Scoped IUnitOfWork from this Singleton.
-                using var scope = _scopeFactory.CreateScope();
                 var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                 var games = await uow.Games.GetByYearAsync(year, token);
@@ -82,8 +80,6 @@ namespace SaturdayPulse.Services
 
                 var allProjections = await uow.Projections.GetByYearAsync(year, token);
 
-                // For each game pick the freshest snapshot strictly before the game's
-                // own week. Week 0 snapshots cover week 1 games (0 < 1).
                 var newCache = allProjections
                     .Where(p => gameWeekById.TryGetValue(p.GameId, out var gameWeek)
                                 && p.Week < gameWeek)
@@ -93,16 +89,17 @@ namespace SaturdayPulse.Services
                         p => p.GameId,
                         p => new GamePrediction
                         {
-                            PredictedTeamScore     = (double)(p.PredictedTotal + p.PredictedSpread) / 2.0,
+                            PredictedTeamScore = (double)(p.PredictedTotal + p.PredictedSpread) / 2.0,
                             PredictedOpponentScore = (double)(p.PredictedTotal - p.PredictedSpread) / 2.0,
-                            ExpectedMargin         = (double)p.PredictedSpread
+                            ExpectedMargin = (double)p.PredictedSpread
                         });
 
-                _cache      = newCache;
+                _cache = newCache;
                 _cachedYear = year;
             }
             finally
             {
+                await ((IAsyncDisposable)scope).DisposeAsync();
                 _lock.Release();
             }
         }
