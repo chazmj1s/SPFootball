@@ -80,7 +80,9 @@ namespace SaturdayPulse.Services
 
         public double GetStrengthDifferential(double teamStrength, double opponentStrength)
         {
-            return Math.Round(NormalizeStrength(teamStrength) - NormalizeStrength(opponentStrength),3);
+            var expanded = RatingCalculator.ExpandStrength((decimal)teamStrength) -
+                   RatingCalculator.ExpandStrength((decimal)opponentStrength);
+            return (double)NormalizeStrength((double)expanded);
         }
 
         public double NormalizeStrength(double strength)

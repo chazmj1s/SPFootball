@@ -33,7 +33,7 @@ namespace SaturdayPulse.Services
         /// </summary>
         public static decimal BucketWinPct(int wins, int gamesPlayed)
             => gamesPlayed > 0
-               ? Math.Round((decimal)wins / gamesPlayed * 40m, MidpointRounding.AwayFromZero) / 40m
+               ? Math.Round((decimal)wins / gamesPlayed * 20m, MidpointRounding.AwayFromZero) / 20m
                : 0m;
 
         /// <summary>
