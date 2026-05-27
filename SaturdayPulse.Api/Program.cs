@@ -41,13 +41,15 @@ builder.Services.AddScoped<MatchupHistoryCalculator>();
 builder.Services.AddScoped<TeamMetricsService>();
 builder.Services.AddScoped<IGameDataService, GameDataService>();
 builder.Services.AddScoped<GamePredictionService>();
-builder.Services.AddScoped<ProjectionCacheService>();
 builder.Services.AddScoped<WeeklyRankingsService>();
 builder.Services.AddScoped<RollingAverageService>();
 builder.Services.AddScoped<ProductionGameDataService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<DeveloperService>();
 builder.Services.AddScoped<IAvgScoreDifferentialService, AvgScoreDifferentialService>();
+
+builder.Services.AddSingleton<ProjectionCacheService>();
+
 
 // ── ASP.NET / Swagger ─────────────────────────────────────────────────────────
 builder.Services.AddControllersWithViews();
