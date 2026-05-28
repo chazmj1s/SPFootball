@@ -1,3 +1,4 @@
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Repositories.Interfaces

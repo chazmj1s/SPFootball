@@ -1,3 +1,4 @@
+using SaturdayPulse.Infrastructure;
 using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Services
@@ -33,37 +34,19 @@ namespace SaturdayPulse.Services
         /// </summary>
         public static decimal BucketWinPct(int wins, int gamesPlayed)
             => gamesPlayed > 0
-               ? Math.Round((decimal)wins / gamesPlayed * 20m, MidpointRounding.AwayFromZero) / 20m
+               ? Math.Round((decimal)wins / gamesPlayed * 40m, MidpointRounding.AwayFromZero) / 40m
                : 0m;
 
         /// <summary>
         /// Expands ranking differential space so extreme superiority relationships
         /// separate more naturally.
-        ///
-        /// Example:
-        ///     0.50 -> 1.50
-        ///     1.00 -> 3.00
-        ///
-        /// This allows ASD to distinguish between:
-        ///     moderate mismatches,
-        ///     major mismatches,
-        ///     catastrophic mismatches.
-        ///
-        /// We preserve the existing ranking system and only expand the emitted
-        /// superiority space used by ASD and projections.
         /// </summary>
         public static decimal ExpandStrength(decimal ranking)
         {
             var sign = Math.Sign(ranking);
-
-            var expanded =
-                (decimal)Math.Pow(
-                    Math.Abs((double)ranking),
-                    1.35);
-
+            var expanded = (decimal)Math.Pow(Math.Abs((double)ranking), 1.35);
             return Math.Round(sign * expanded, 4);
         }
-
 
         public static double GetSmoothedExpectedMargin(List<AvgScoreDifferential> buckets, decimal differential)
         {
@@ -71,26 +54,16 @@ namespace SaturdayPulse.Services
                 .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
                 .FirstOrDefault();
 
-            if (closest == null)
-                return 0d;
-
+            if (closest == null) return 0d;
             return Math.Round((double)closest.AverageMargin, 2);
-        }    
-        
+        }
+
         // ── Expected-margin helpers ───────────────────────────────────────────────
 
-        /// <summary>
-        /// Flips the raw expected margin (always from the higher-win-pct team's
-        /// perspective) so that it reads from <paramref name="teamWinPct"/>'s perspective.
-        /// </summary>
         public static double ExpectedFromPerspective(
             double rawExpectedDelta, decimal teamWinPct, decimal oppWinPct)
             => teamWinPct >= oppWinPct ? rawExpectedDelta : -rawExpectedDelta;
 
-        /// <summary>
-        /// Adjusts an expected margin for home-field advantage.
-        /// Home team → add HFA. Neutral site → no adjustment. Away → subtract HFA.
-        /// </summary>
         public static double ApplyHomeField(
             double expected, bool isHomeTeam, bool isNeutral, double homeFieldAdvantage)
         {
@@ -101,10 +74,6 @@ namespace SaturdayPulse.Services
 
         // ── Rivalry variance ──────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Rivalry variance multiplier for the metrics pipeline (TeamMetrics, WeeklyRankings).
-        /// Applied to AvgScoreDeltas.StDevP to increase prediction uncertainty.
-        /// </summary>
         public static double RivalryVarianceMultiplier(string? tier) => tier switch
         {
             "EPIC"     => 1.75,
@@ -114,11 +83,6 @@ namespace SaturdayPulse.Services
             _          => 1.00
         };
 
-        /// <summary>
-        /// Rivalry variance multiplier for GamePredictionService display output
-        /// (margin-of-error and confidence bands). More conservative than the
-        /// metrics multiplier — kept separate because they serve different purposes.
-        /// </summary>
         public static double RivalryVarianceMultiplierForDisplay(string? tier) => tier switch
         {
             "EPIC"     => 1.30,
@@ -127,10 +91,6 @@ namespace SaturdayPulse.Services
             _          => 1.00
         };
 
-        /// <summary>
-        /// Scoring-reduction multiplier for rivalry games applied to projected scores.
-        /// Reflects the tendency for rivalry games to be lower-scoring defensive battles.
-        /// </summary>
         public static double RivalryScoringAdjustment(string? tier) => tier switch
         {
             "EPIC"     => 0.90,
@@ -141,20 +101,11 @@ namespace SaturdayPulse.Services
 
         // ── Division weighting ────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Returns the opponent division weight for Z-score and SOS calculations.
-        /// FCS opponents count at 25% to prevent metric inflation against weaker opponents.
-        /// </summary>
         public static double DivisionWeight(string? opponentDivision)
             => opponentDivision == "FCS" ? 0.25 : 1.0;
 
         // ── Z-score dampening ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Applies logarithmic dampening: sign(z) × log(1 + |z|).
-        /// Reflects diminishing returns — a 40-point blowout is not twice as
-        /// meaningful as a 20-point blowout.
-        /// </summary>
         public static double DampenZScore(double zScore)
         {
             if (zScore == 0) return 0;
@@ -163,16 +114,6 @@ namespace SaturdayPulse.Services
 
         // ── Composite Z-score ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Calculates the composite per-game Z-score for one team from one game:
-        ///   1. Look up expected margin from AvgScoreDeltas bucket.
-        ///   2. Flip to team perspective.
-        ///   3. Adjust for home field.
-        ///   4. Adjust for rivalry variance.
-        ///   5. Compute (actual - expected) / effectiveStDev.
-        ///   6. Apply logarithmic dampening.
-        /// Returns 0 if no matching ASD bucket or StDevP is 0.
-        /// </summary>
         public static double ComputeGameZScore(
             int teamPoints, int opponentPoints,
             int teamWins, int teamLosses,
@@ -209,42 +150,31 @@ namespace SaturdayPulse.Services
 
         /// <summary>
         /// Returns the competitive tier for a given conference string.
-        /// Handles both abbreviations and full names.
+        /// Handles both abbreviations (SEC, B1G) and full names (Southeastern Conference).
+        /// Uses bidirectional matching — checks if the conference string contains the
+        /// pattern OR the pattern contains the conference string. This handles cases
+        /// where the DB stores full names but callers pass abbreviations and vice versa.
         /// Team-name overrides handle edge cases (Notre Dame = P4, UConn = G5).
         /// </summary>
         public static string GetConferenceTier(string? conference, string? teamName = null)
-        {
-            if (!string.IsNullOrEmpty(teamName))
+            => teamName switch
             {
-                if (teamName.Equals("Notre Dame",  StringComparison.OrdinalIgnoreCase)) return "P4";
-                if (teamName.Equals("Connecticut", StringComparison.OrdinalIgnoreCase)) return "G5";
-            }
-
-            if (string.IsNullOrEmpty(conference)) return "Other";
-
-            var power4 = new[]
-            {
-                "SEC", "Southeastern Conference",
-                "Big Ten", "Big Ten Conference",
-                "Big 12", "Big 12 Conference",
-                "ACC", "Atlantic Coast Conference"
+                "Notre Dame" => "P4",
+                "Connecticut" => "G5",
+                _ => conference switch
+                {
+                    "SEC"                => "P4",
+                    "Big Ten"            => "P4",
+                    "Big 12"             => "P4",
+                    "ACC"                => "P4",
+                    "American Athletic"  => "G5",
+                    "Mountain West"      => "G5",
+                    "Sun Belt"           => "G5",
+                    "Mid-American"       => "G5",
+                    "Conference USA"     => "G5",
+                    _                    => "Other"
+                }
             };
-            if (power4.Any(p => conference.Contains(p, StringComparison.OrdinalIgnoreCase))) return "P4";
-
-            var group5 = new[]
-            {
-                "American Athletic", "American Athletic Conference", "AAC",
-                "Mountain West", "Mountain West Conference",
-                "Sun Belt", "Sun Belt Conference",
-                "Mid-American", "Mid-American Conference", "MAC",
-                "Conference USA", "C-USA",
-                "Pac-12", "Pac-12 Conference"
-            };
-            if (group5.Any(g => conference.Contains(g, StringComparison.OrdinalIgnoreCase))) return "G5";
-            if (conference.Contains("Independent", StringComparison.OrdinalIgnoreCase)) return "Independent";
-
-            return "Other";
-        }
 
         /// <summary>
         /// Maps a Sun Belt team to East or West division.
@@ -264,9 +194,6 @@ namespace SaturdayPulse.Services
 
         // ── Conference ordering ───────────────────────────────────────────────────
 
-        /// <summary>
-        /// Sort key for standard conference display order across all endpoints.
-        /// </summary>
         public static int ConferenceDisplayOrder(string? conference) => conference switch
         {
             "SEC"      => 1,
