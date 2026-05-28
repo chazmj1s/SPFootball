@@ -627,6 +627,46 @@ namespace SaturdayPulse.Controllers
 
         #region Analytics and Diagnostics
 
+        [HttpGet("simulatePortalWeights")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> SimulatePortalWeights(
+            [FromQuery] int? startYear,
+            [FromQuery] int? endYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await _projectionAccuracyService
+                    .SimulatePortalWeightsAsync(startYear, endYear, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error simulating portal weights");
+                return StatusCode(500, "An error occurred simulating portal weights.");
+            }
+        }
+
+        [HttpGet("portalAccuracy")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> GetPortalAccuracy(
+            [FromQuery] int? startYear,
+            [FromQuery] int? endYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await _projectionAccuracyService
+                    .ComputePortalAccuracyAsync(startYear, endYear, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing portal accuracy");
+                return StatusCode(500, "An error occurred computing portal accuracy.");
+            }
+        }
+
         /// <summary>
         /// Computes projection accuracy metrics vs actual game results.
         /// Optionally scoped to a year range. Includes MAE, winner accuracy,
