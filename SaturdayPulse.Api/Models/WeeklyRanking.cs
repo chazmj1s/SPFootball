@@ -76,5 +76,16 @@ namespace SaturdayPulse.Models
 
         [Column("DefensiveRank")]
         public int DefensiveRank { get; set; }
+
+        /// <summary>
+        /// Absolute quality of incoming portal transfers for this season,
+        /// weighted by position tier and normalized against league mean.
+        /// Copied from TeamRecord.RosterStrength into the week 0 snapshot by
+        /// InitializeSeasonAsync. Used by GamePredictionService via WeeklyRankings
+        /// to adjust week 0 PowerRating before any games are played.
+        /// Null for years before portal data exists (pre-2021) and for weeks > 0.
+        /// </summary>
+        [Column("RosterStrength", TypeName = "decimal(10,4)")]
+        public decimal? RosterStrength { get; set; }
     }
 }

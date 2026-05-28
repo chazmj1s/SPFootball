@@ -88,6 +88,27 @@ namespace SaturdayPulse.Services
         public Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
             => _gameDataService.WeeklyRefreshAsync(year, week, token);
 
+        public Task<int> LoadPortalAsync(int season, CancellationToken token = default)
+            => _gameDataService.LoadPortalAsync(season, token);
+
+        public Task<int> LoadPortalBulkAsync(int startSeason, CancellationToken token = default)
+            => _gameDataService.LoadPortalBulkAsync(startSeason, token);
+
+        public Task<int> ComputePortalMetricsAsync(int season, CancellationToken token = default)
+            => _uow.Portal.ComputePortalMetricsAsync(season, token);
+
+        public async Task<int> ComputePortalMetricsBulkAsync(CancellationToken token = default)
+        {
+            var seasons = await _uow.Portal.GetDistinctSeasonsAsync(token);
+            int total = 0;
+            foreach (var season in seasons)
+            {
+                var count = await _uow.Portal.ComputePortalMetricsAsync(season, token);
+                total += count;
+            }
+            return total;
+        }
+
         // ── Rolling Averages ──────────────────────────────────────────────────────
 
         public async Task<BackfillResult> BackfillRollingAveragesAsync(int? startYear, CancellationToken token)
@@ -349,11 +370,12 @@ namespace SaturdayPulse.Services
         ///   • Projections for week 1 games use the week 0 snapshot (0 &lt; 1)
         ///   • TeamRecords are created from week 0 so PredictMatchups works from day one
         ///   • Seed/Trend/Pedigree are computed from the new TeamRecords
+        ///   • RosterStrength from portal data adjusts week 0 PowerRating
         ///
         /// Safe to call multiple times — skips if week 0 already exists for the year.
         ///
-        /// Future enhancement: after copying the snapshot, apply portal strength
-        /// adjustments and draft score adjustments before writing the week 0 snapshot.
+        /// Prerequisites: ComputePortalMetricsBulk must have been run so that
+        /// TeamRecords for the new year have RosterStrength populated.
         /// </summary>
         public async Task<object> InitializeSeasonAsync(int year, CancellationToken token = default)
         {
@@ -366,7 +388,7 @@ namespace SaturdayPulse.Services
             }
 
             // Find the last snapshot from the prior year.
-            var snapshots    = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
+            var snapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
             var lastSnapshot = snapshots
                 .Where(s => s.Year == year - 1)
                 .OrderByDescending(s => s.Week)
@@ -383,43 +405,54 @@ namespace SaturdayPulse.Services
             var priorRankings = await _uow.WeeklyRankings
                 .GetByYearAndWeekAsync(lastSnapshot.Year, lastSnapshot.Week, token);
 
-            // ── TODO: Apply portal strength adjustments here ──────────────────────
-            // For each team, compute net portal gain/loss weighted by star rating
-            // and position tier, then adjust PowerRating accordingly.
-            // Load from PortalStrength table once that pipeline is built.
-            // ─────────────────────────────────────────────────────────────────────
+            // ── Load RosterStrength from current year TeamRecords ─────────────────
+            // Must be loaded BEFORE UpsertFromWeeklyRankingsAsync runs, since that
+            // call will overwrite TeamRecords from the week 0 snapshot (which has no
+            // RosterStrength yet). We load from the existing TeamRecords which were
+            // populated by ComputePortalMetricsAsync.
+            var portalRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
+            var rosterStrengthByTeam = portalRecords
+                .Where(tr => tr.RosterStrength.HasValue)
+                .ToDictionary(tr => tr.TeamID, tr => tr.RosterStrength!.Value);
 
             // ── TODO: Apply draft score adjustments here ──────────────────────────
             // For each team, incorporate draft pick history into the Pedigree
             // component. Load from DraftScore table once that pipeline is built.
             // ─────────────────────────────────────────────────────────────────────
 
-            // Copy prior snapshot into week 0 of the new year.
+            // Copy prior snapshot into week 0 of the new year,
+            // applying RosterStrength adjustment to PowerRating inline.
             int copied = 0;
             foreach (var wr in priorRankings)
             {
+                var rsAdjustment = rosterStrengthByTeam.TryGetValue(wr.TeamID, out var rs)
+                    ? rs : (decimal?)null;
+                var powerAdjustment = rsAdjustment.HasValue
+                    ? (rsAdjustment.Value - 1.0m) * 0.05m : 0m;
+
                 await _uow.WeeklyRankings.AddAsync(new WeeklyRanking
                 {
-                    TeamID           = wr.TeamID,
-                    Year             = (short)year,
-                    Week             = 0,
-                    Wins             = wr.Wins,
-                    Losses           = wr.Losses,
-                    PointsFor        = wr.PointsFor,
-                    PointsAgainst    = wr.PointsAgainst,
-                    BaseSOS          = wr.BaseSOS,
-                    SubSOS           = wr.SubSOS,
-                    CombinedSOS      = wr.CombinedSOS,
-                    PowerRating      = wr.PowerRating,
-                    Ranking          = wr.Ranking,
-                    OverallRank      = wr.OverallRank,
-                    TierRank         = wr.TierRank,
-                    AvgPointsScored  = wr.AvgPointsScored,
+                    TeamID = wr.TeamID,
+                    Year = (short)year,
+                    Week = 0,
+                    Wins = wr.Wins,
+                    Losses = wr.Losses,
+                    PointsFor = wr.PointsFor,
+                    PointsAgainst = wr.PointsAgainst,
+                    BaseSOS = wr.BaseSOS,
+                    SubSOS = wr.SubSOS,
+                    CombinedSOS = wr.CombinedSOS,
+                    PowerRating = wr.PowerRating + powerAdjustment,
+                    Ranking = wr.Ranking,
+                    OverallRank = wr.OverallRank,
+                    TierRank = wr.TierRank,
+                    AvgPointsScored = wr.AvgPointsScored,
                     AvgPointsAllowed = wr.AvgPointsAllowed,
-                    OffensiveZScore  = wr.OffensiveZScore,
-                    DefensiveZScore  = wr.DefensiveZScore,
-                    OffensiveRank    = wr.OffensiveRank,
-                    DefensiveRank    = wr.DefensiveRank
+                    OffensiveZScore = wr.OffensiveZScore,
+                    DefensiveZScore = wr.DefensiveZScore,
+                    OffensiveRank = wr.OffensiveRank,
+                    DefensiveRank = wr.DefensiveRank,
+                    RosterStrength = rsAdjustment
                 }, token);
                 copied++;
             }
@@ -427,6 +460,9 @@ namespace SaturdayPulse.Services
             await _uow.SaveChangesAsync(token);
 
             // Seed TeamRecords from week 0 snapshot.
+            // Note: this overwrites existing TeamRecord fields from WeeklyRankings
+            // but preserves RosterStrength and PortalDelta since those fields are
+            // not mapped in WeeklyRankingsExtensions.UpdateTeamRecord.
             await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
 
             // Compute Seed/Trend/Pedigree. Pass week 0 — live swap will not activate.
@@ -434,16 +470,18 @@ namespace SaturdayPulse.Services
             await _uow.SaveChangesAsync(token);
 
             _logger.LogInformation(
-                "Season {Year} initialized — {Count} teams seeded from {PriorYear} week {PriorWeek}.",
-                year, copied, lastSnapshot.Year, lastSnapshot.Week);
+                "Season {Year} initialized — {Count} teams seeded from {PriorYear} week {PriorWeek}. " +
+                "{PortalCount} teams had RosterStrength applied.",
+                year, copied, lastSnapshot.Year, lastSnapshot.Week, rosterStrengthByTeam.Count);
 
             return new
             {
-                message     = $"Season {year} initialized successfully.",
+                message = $"Season {year} initialized successfully.",
                 year,
-                week        = 0,
+                week = 0,
                 teamsSeeded = copied,
-                seededFrom  = new { year = lastSnapshot.Year, week = lastSnapshot.Week }
+                portalAdjusted = rosterStrengthByTeam.Count,
+                seededFrom = new { year = lastSnapshot.Year, week = lastSnapshot.Week }
             };
         }
 

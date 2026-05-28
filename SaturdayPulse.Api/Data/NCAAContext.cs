@@ -15,7 +15,8 @@ namespace SaturdayPulse.Data
         public DbSet<Games>                  Games                   { get; set; }
         public DbSet<Lines>                  Lines                   { get; set; }
         public DbSet<TeamsConferenceHistory> TeamsConferenceHistory  { get; set; }
-        public DbSet<Projection> Projections { get; set; } = null!;
+        public DbSet<Projection>            Projections             { get; set; } = null!;
+        public DbSet<PortalEntry>           PortalEntries           { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
