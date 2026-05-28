@@ -47,6 +47,7 @@ builder.Services.AddScoped<ProductionGameDataService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<DeveloperService>();
 builder.Services.AddScoped<IAvgScoreDifferentialService, AvgScoreDifferentialService>();
+builder.Services.AddScoped<ProjectionAccuracyService>();
 
 builder.Services.AddSingleton<ProjectionCacheService>();
 

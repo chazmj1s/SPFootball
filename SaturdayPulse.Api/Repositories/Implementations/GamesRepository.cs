@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Data;
 using SaturdayPulse.Models;
 using SaturdayPulse.Repositories.Interfaces;

@@ -17,6 +17,7 @@ namespace SaturdayPulse.Controllers
     [Route("api/[controller]")]
     public class DeveloperController(
         DeveloperService developerService,
+        ProjectionAccuracyService _projectionAccuracyService,
         ILogger<DeveloperController> logger) : ControllerBase
     {
         #region CFBD V2 — Load
@@ -625,6 +626,33 @@ namespace SaturdayPulse.Controllers
         #endregion
 
         #region Analytics and Diagnostics
+
+        /// <summary>
+        /// Computes projection accuracy metrics vs actual game results.
+        /// Optionally scoped to a year range. Includes MAE, winner accuracy,
+        /// spread bias, and Vegas comparison where line data is available.
+        /// Example: GET /api/developer/projectionAccuracy
+        /// Example: GET /api/developer/projectionAccuracy?startYear=2015&endYear=2025
+        /// </summary>
+        [HttpGet("projectionAccuracy")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> GetProjectionAccuracy(
+            [FromQuery] int? startYear,
+            [FromQuery] int? endYear,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await _projectionAccuracyService.ComputeAccuracyAsync(
+                    startYear, endYear, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing projection accuracy");
+                return StatusCode(500, "An error occurred computing projection accuracy.");
+            }
+        }
 
         /// <summary>
         /// Provides detailed analytics on team performance vs calculated metrics.
