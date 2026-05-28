@@ -10,6 +10,7 @@ using SaturdayPulse.Utilities;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using SaturdayPulse.Api.Contracts.Responses;
 
 namespace SaturdayPulse.Services
 {
@@ -21,6 +22,86 @@ namespace SaturdayPulse.Services
         private HttpClient CfbdClient => _httpClientFactory.CreateClient("cfbd");
 
         #region CFBD V2 — Load Methods
+
+
+        /// <summary>
+        /// Loads transfer portal entries for a single season from CFBD.
+        /// Filters out Withdrawn entries before persisting.
+        /// Only FBS-relevant transfers are stored — destination or origin must be an FBS team.
+        /// </summary>
+        public async Task<int> LoadPortalAsync(int season, CancellationToken token = default)
+        {
+            // CFBD endpoint: GET /transferPortal?year={season}
+            var response = await CfbdClient.GetAsync($"player/portal?year={season}", token);
+            response.EnsureSuccessStatusCode();
+
+            var entries = await System.Text.Json.JsonSerializer.DeserializeAsync<List<CfbdPortalEntry>>(
+                await response.Content.ReadAsStreamAsync(token),
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                token);
+            if (entries == null || entries.Count == 0) return 0;
+
+            // Load FBS team names for filtering.
+            var fbsTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsNames = fbsTeams
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.TeamName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Also include known aliases.
+            var aliasNames = fbsTeams
+                .Where(t => t.Alias != null &&
+                            string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.Alias!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var allFbsNames = fbsNames.Concat(aliasNames).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Map to model — only include transfers involving at least one FBS team.
+            var portalEntries = entries
+                .Where(e => e.Eligibility != "Withdrawn" &&
+                            (allFbsNames.Contains(e.Origin ?? "") ||
+                             allFbsNames.Contains(e.Destination ?? "")))
+                .Select(e => new PortalEntry
+                {
+                    Season = season,
+                    FirstName = e.FirstName,
+                    LastName = e.LastName,
+                    Position = e.Position,
+                    Origin = e.Origin,
+                    Destination = e.Destination,
+                    TransferDate = e.TransferDate,
+                    Rating = e.Rating,
+                    Stars = e.Stars,
+                    Eligibility = e.Eligibility
+                })
+                .ToList();
+
+            await _uow.Portal.UpsertSeasonAsync(season, portalEntries, token);
+            await _uow.SaveChangesAsync(token);
+
+            return portalEntries.Count;
+        }
+
+        /// <summary>
+        /// Loads portal entries for every season from startSeason to current.
+        /// Portal data is only reliable from 2021 onward.
+        /// </summary>
+        public async Task<int> LoadPortalBulkAsync(int startSeason, CancellationToken token = default)
+        {
+            var currentSeason = DateTime.Now.Year;
+            var total = 0;
+
+            for (var season = startSeason; season <= currentSeason; season++)
+            {
+                token.ThrowIfCancellationRequested();
+                var count = await LoadPortalAsync(season, token);
+                total += count;
+                await Task.Delay(300, token); // rate limit
+            }
+
+            return total;
+        }
         /// <summary>
         /// Bulk load — fetches teams for every year from startYear to current.
         /// Teams change conference each year so we refresh annually.

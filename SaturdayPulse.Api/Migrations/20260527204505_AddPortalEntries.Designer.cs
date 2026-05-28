@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260527204505_AddPortalEntries")]
+    partial class AddPortalEntries
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -316,12 +319,6 @@ namespace SaturdayPulse.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Destination");
-
-                    b.HasIndex("Origin");
-
-                    b.HasIndex("Season");
-
                     b.ToTable("PortalEntries");
                 });
 
@@ -415,10 +412,6 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("PointsFor");
 
-                    b.Property<decimal?>("PortalDelta")
-                        .HasColumnType("decimal(10,4)")
-                        .HasColumnName("PortalDelta");
-
                     b.Property<decimal?>("PowerRating")
                         .HasColumnType("decimal(10,4)")
                         .HasColumnName("PowerRating");
@@ -426,10 +419,6 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<decimal?>("Ranking")
                         .HasColumnType("decimal(10,4)")
                         .HasColumnName("Ranking");
-
-                    b.Property<decimal?>("RosterStrength")
-                        .HasColumnType("decimal(10,4)")
-                        .HasColumnName("RosterStrength");
 
                     b.Property<decimal?>("SeedRating")
                         .HasColumnType("decimal(10,4)")
@@ -596,10 +585,6 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<decimal?>("Ranking")
                         .HasColumnType("decimal(10,4)")
                         .HasColumnName("Ranking");
-
-                    b.Property<decimal?>("RosterStrength")
-                        .HasColumnType("decimal(10,4)")
-                        .HasColumnName("RosterStrength");
 
                     b.Property<decimal?>("SubSOS")
                         .HasColumnType("decimal(10,3)")

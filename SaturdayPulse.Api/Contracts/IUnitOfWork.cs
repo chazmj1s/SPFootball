@@ -16,7 +16,7 @@ namespace SaturdayPulse.Contracts
         IProjectionRepository Projections { get; }
         IWeeklyRankingsRepository WeeklyRankings { get; }
         ITeamsConferenceHistoryRepository TeamsConferenceHistory { get; }
-
+        IPortalRepository Portal { get; }
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }
 }

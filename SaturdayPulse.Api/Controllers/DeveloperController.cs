@@ -812,5 +812,96 @@ namespace SaturdayPulse.Controllers
         }
 
         #endregion
+        #region Portal
+
+        /// <summary>
+        /// Loads transfer portal entries for a single season from CFBD.
+        /// Portal data is reliable from 2021 onward.
+        /// Example: POST /api/developer/loadPortal?season=2026
+        /// </summary>
+        [HttpPost("loadPortal")]
+        [Tags("Portal")]
+        public async Task<IActionResult> LoadPortal(
+            [FromQuery] int season,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadPortalAsync(season, token);
+                return Ok(new { message = $"Portal entries loaded for {season}", count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading portal for season={Season}", season);
+                return StatusCode(500, "An error occurred while loading portal data.");
+            }
+        }
+
+        /// <summary>
+        /// Loads portal entries for every season from startSeason to current.
+        /// Example: POST /api/developer/loadPortalBulk?startSeason=2021
+        /// </summary>
+        [HttpPost("loadPortalBulk")]
+        [Tags("Portal")]
+        public async Task<IActionResult> LoadPortalBulk(
+            [FromQuery] int startSeason,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var total = await developerService.LoadPortalBulkAsync(startSeason, token);
+                return Ok(new { message = $"Portal bulk load complete from {startSeason}", total });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error bulk loading portal from startSeason={StartSeason}", startSeason);
+                return StatusCode(500, "An error occurred during portal bulk load.");
+            }
+        }
+
+        /// <summary>
+        /// Computes RosterStrength and PortalDelta for a single season and persists to TeamRecords.
+        /// Run after loadPortal for the season.
+        /// Example: POST /api/developer/computePortalMetrics?season=2026
+        /// </summary>
+        [HttpPost("computePortalMetrics")]
+        [Tags("Portal")]
+        public async Task<IActionResult> ComputePortalMetrics(
+            [FromQuery] int season,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.ComputePortalMetricsAsync(season, token);
+                return Ok(new { message = $"Portal metrics computed for {season}", teamsUpdated = count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing portal metrics for season={Season}", season);
+                return StatusCode(500, "An error occurred computing portal metrics.");
+            }
+        }
+
+        /// <summary>
+        /// Computes RosterStrength and PortalDelta for all seasons with portal data.
+        /// Example: POST /api/developer/computePortalMetricsBulk
+        /// </summary>
+        [HttpPost("computePortalMetricsBulk")]
+        [Tags("Portal")]
+        public async Task<IActionResult> ComputePortalMetricsBulk(CancellationToken token = default)
+        {
+            try
+            {
+                var total = await developerService.ComputePortalMetricsBulkAsync(token);
+                return Ok(new { message = "Portal metrics computed for all seasons", teamsUpdated = total });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error bulk computing portal metrics");
+                return StatusCode(500, "An error occurred computing portal metrics.");
+            }
+        }
+
+        #endregion    
     }
-}
+    }

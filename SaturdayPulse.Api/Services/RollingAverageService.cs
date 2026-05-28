@@ -9,19 +9,26 @@ namespace SaturdayPulse.Services
     /// Computes the three-tier rolling averages (Seed, Trend, Pedigree) for all teams
     /// and persists the blended scalars to TeamRecords.SeedRating / TrendRating / PedigreeRating.
     ///
-    /// Pipeline position: runs after updateTeamRecords, before setSOS.
-    ///   updateTeamRecords → calculateRollingAverages → setSOS → calculatePowerRatings → ...
+    /// Pipeline position: runs after UpsertFromWeeklyRankingsAsync, inside ComputeAndSaveAsync.
+    ///   WeeklyRankings → UpsertFromWeeklyRankingsAsync → ComputeAndPersistAsync
     ///
     /// Tiers
     /// ─────
-    ///   Seed     (3-yr)  weights [0.50, 0.30, 0.20]  — internal pipeline only, not user-facing
+    ///   Seed     (3-yr)  weights [0.50, 0.30, 0.20]
     ///   Trend    (5-yr)  weights [0.40, 0.25, 0.15, 0.12, 0.08]
     ///   Pedigree (10-yr) linear decay (weight = n, n-1, … 1)
     ///
+    /// Portal integration (Seed and Trend only)
+    /// ────────────────────────────────────────
+    ///   PortalDelta from TeamRecord is blended into Seed and Trend alongside
+    ///   win percentage. Weight: 25% portal, 75% win percentage.
+    ///   Years without portal data (pre-2021) use win percentage only.
+    ///   Pedigree is win-percentage only — portal data doesn't go back far enough.
+    ///
     /// Week 6 live swap (Seed only)
     /// ────────────────────────────
-    ///   Weeks 0-(threshold-1) : Seed = (Year-1×50%) + (Year-2×30%) + (Year-3×20%)
-    ///   Week threshold+       : Seed = (CurrentSeason×50%) + (Year-1×30%) + (Year-2×20%)
+    ///   Weeks 0-(threshold-1) : Seed = prior years only
+    ///   Week threshold+       : Seed = current season + prior years
     ///   Threshold driven by MetricsConfiguration.SosWeekThreshold.
     /// </summary>
     public class RollingAverageService
@@ -32,7 +39,9 @@ namespace SaturdayPulse.Services
         private static readonly double[] SeedWeights  = [0.50, 0.30, 0.20];
         private static readonly double[] TrendWeights = [0.40, 0.25, 0.15, 0.12, 0.08];
 
-        private const double ExtraWinBump = 0.25;
+        private const double ExtraWinBump    = 0.25;
+        private const double PortalWinBlend  = 0.75; // win pct share
+        private const double PortalDeltaBlend = 0.25; // portal delta share
 
         public RollingAverageService(
             IUnitOfWork uow,
@@ -44,11 +53,6 @@ namespace SaturdayPulse.Services
 
         // ── Public record ─────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Full result for one team/year — blended scalars plus constituent history arrays.
-        /// Seed has no history array (internal pipeline value only).
-        /// trendHistory and pedigreeHistory are normalized win percentages, most-recent first.
-        /// </summary>
         public record RollingAverages(
             decimal                SeedRating,
             decimal                TrendRating,
@@ -58,10 +62,6 @@ namespace SaturdayPulse.Services
 
         // ── Public API ────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Computes all three tiers for every FBS team and writes the blended scalars
-        /// to TeamRecords. FCS teams are left null.
-        /// </summary>
         public async Task ComputeAndPersistAsync(
             int year,
             int? week = null,
@@ -69,7 +69,7 @@ namespace SaturdayPulse.Services
         {
             var currentYearRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(year, token);
 
-            var historicalRecords  = await _uow.TeamRecords.GetHistoricalAsync(
+            var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(
                 fromYear: year - 10, toYearExclusive: year, token);
 
             var historyByTeam = historicalRecords
@@ -98,17 +98,11 @@ namespace SaturdayPulse.Services
                 record.SeedRating     = averages.SeedRating;
                 record.TrendRating    = averages.TrendRating;
                 record.PedigreeRating = averages.PedigreeRating;
-                // TrendHistory and PedigreeHistory are not persisted — API only
             }
 
             await _uow.SaveChangesAsync(token);
         }
 
-        /// <summary>
-        /// Computes all three tiers for a single team without hitting the database.
-        /// Returns blended scalars plus trendHistory (5 values) and pedigreeHistory (10 values),
-        /// all most-recent first.
-        /// </summary>
         public RollingAverages Compute(
             TeamRecord currentRecord,
             List<TeamRecord> history,
@@ -135,12 +129,12 @@ namespace SaturdayPulse.Services
 
             if (useLiveSwap)
             {
-                values = [WinPct(current)];
-                values.AddRange(history.Take(2).Select(NormalizeWinPct));
+                values = [BlendWithPortal(WinPct(current), current.PortalDelta)];
+                values.AddRange(history.Take(2).Select(r => BlendWithPortal(NormalizeWinPct(r), r.PortalDelta)));
             }
             else
             {
-                values = history.Take(3).Select(NormalizeWinPct).ToList();
+                values = history.Take(3).Select(r => BlendWithPortal(NormalizeWinPct(r), r.PortalDelta)).ToList();
             }
 
             return (ApplyWeights(values, SeedWeights), []);
@@ -150,7 +144,7 @@ namespace SaturdayPulse.Services
             List<TeamRecord> history, double[] weights)
         {
             var records = history.Take(weights.Length).ToList();
-            var values  = records.Select(NormalizeWinPct).ToList();
+            var values  = records.Select(r => BlendWithPortal(NormalizeWinPct(r), r.PortalDelta)).ToList();
             var rating  = ApplyWeights(values, weights);
             var hist    = values.Select(v => (decimal)Math.Round(v, 4)).ToList();
 
@@ -160,6 +154,8 @@ namespace SaturdayPulse.Services
         private static (decimal Rating, IReadOnlyList<decimal> History) ComputePedigree(
             List<TeamRecord> history)
         {
+            // Pedigree is win-percentage only — portal data doesn't go back far enough
+            // to be meaningful over a 10-year window.
             var records = history.Take(10).ToList();
             int n       = records.Count;
 
@@ -181,6 +177,28 @@ namespace SaturdayPulse.Services
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Blends win percentage with portal delta signal.
+        /// For years without portal data (PortalDelta is null), uses win pct only.
+        /// Portal delta is normalized on a Z-score scale — convert to [0,1] range
+        /// for blending with win percentage using sigmoid-like clamping.
+        /// </summary>
+        private static double BlendWithPortal(double winPct, decimal? portalDelta)
+        {
+            if (!portalDelta.HasValue)
+                return winPct;
+
+            // PortalDelta is a Z-score (mean=0, std=1). Convert to a 0-1 scale
+            // centered at 0.5 so it blends naturally with win percentage.
+            // Clamp to ±2 std devs to prevent extreme outliers dominating.
+            var clampedDelta = Math.Max(-2.0, Math.Min(2.0, (double)portalDelta.Value));
+            var portalSignal = 0.5 + (clampedDelta / 4.0); // maps [-2,+2] → [0,1]
+
+            return Math.Round(
+                (winPct       * PortalWinBlend) +
+                (portalSignal * PortalDeltaBlend), 4);
+        }
 
         private static decimal ApplyWeights(List<double> values, double[] weights)
         {

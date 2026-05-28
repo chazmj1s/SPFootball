@@ -65,13 +65,33 @@ namespace SaturdayPulse.Models
         public int DefensiveRank { get; set; }
 
         [Column("SeedRating", TypeName = "decimal(10,4)")]
-        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20)
+        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20) + portal blend
 
         [Column("TrendRating", TypeName = "decimal(10,4)")]
-        public decimal? TrendRating { get; set; }     // 5-year weighted (40/25/15/12/8)
+        public decimal? TrendRating { get; set; }     // 5-year weighted (40/25/15/12/8) + portal blend
 
         [Column("PedigreeRating", TypeName = "decimal(10,4)")]
         public decimal? PedigreeRating { get; set; }  // 10-year linear decay
+
+        /// <summary>
+        /// Absolute quality of incoming portal transfers for this season,
+        /// weighted by position tier and normalized against league mean.
+        /// Used in week 0 WeeklyRankings snapshot to adjust PowerRating.
+        /// Computed once by ComputePortalMetricsAsync, carried forward unchanged.
+        /// Null for years before portal data exists (pre-2021).
+        /// </summary>
+        [Column("RosterStrength", TypeName = "decimal(10,4)")]
+        public decimal? RosterStrength { get; set; }
+
+        /// <summary>
+        /// Net portal gain/loss for this season (incoming minus outgoing),
+        /// weighted by position tier and normalized against league mean.
+        /// Incorporated into Seed and Trend rolling averages alongside win percentage.
+        /// Positive = net roster upgrade, negative = net roster downgrade.
+        /// Null for years before portal data exists (pre-2021).
+        /// </summary>
+        [Column("PortalDelta", TypeName = "decimal(10,4)")]
+        public decimal? PortalDelta { get; set; }
 
         [NotMapped]
         public List<double>? TrendHistory { get; set; }
