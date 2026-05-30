@@ -91,6 +91,22 @@ namespace SaturdayPulse.ViewModels
                 t.IsArcExpanded = !t.IsArcExpanded;
             });
 
+            ToggleScheduleExpandCommand = new Command<TeamRanking>(async t =>
+            {
+                if (t == null) return;
+
+                if (!t.IsScheduleExpanded && t.ScheduleGames == null)
+                {
+                    var data = await _apiService.GetTeamScheduleAsync(
+                        t.TeamID, _navState.SelectedYear);
+
+                    if (data?.Games?.Count > 0)
+                        t.ScheduleGames = data.Games;
+                }
+
+                t.IsScheduleExpanded = !t.IsScheduleExpanded;
+            });
+
             // React to shared nav changes
             _navState.PropertyChanged += (s, e) =>
             {
@@ -162,6 +178,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleStatsExpandCommand { get; }
         public ICommand ToggleTrendExpandCommand { get; }
         public ICommand ToggleArcExpandCommand   { get; }
+        public ICommand ToggleScheduleExpandCommand { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 

@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:SaturdayPulse.Models"
              xmlns:viewmodels="clr-namespace:SaturdayPulse.ViewModels"
+             xmlns:chart="clr-namespace:Syncfusion.Maui.Charts;assembly=Syncfusion.Maui.Charts"
              x:Class="SaturdayPulse.Views.ProjectionsPage"
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
@@ -92,8 +93,9 @@
           <DataTemplate x:DataType="models:ProjectedTeamStanding">
             <VerticalStackLayout Spacing="0">
 
+              <!-- ── Main row ── -->
               <Grid ColumnDefinitions="28,*,80,80"
-                    Padding="8,6,16,6"
+                    Padding="8,4,16,4"
                     BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
                 <!-- Finish badge -->
@@ -122,17 +124,37 @@
                   </Label>
                 </Border>
 
-                <Label Grid.Column="1" FontSize="14" VerticalOptions="Center" LineBreakMode="TailTruncation">
-                  <Label.FormattedText>
-                    <FormattedString>
-                      <Span Text="{Binding TeamName}" />
-                      <Span Text="  " />
-                      <Span Text="{Binding Conference}" FontSize="10"
-                            TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
-                    </FormattedString>
-                  </Label.FormattedText>
-                </Label>
+                <!-- Team name + conference + overall record stacked -->
+                <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                  <Label FontSize="14" LineBreakMode="TailTruncation">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="{Binding TeamName}" />
+                        <Span Text="  " />
+                        <Span Text="{Binding Conference}" FontSize="10"
+                              TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                  <!-- Overall record — only shown when populated -->
+                  <Label IsVisible="{Binding HasOverallRecord}"
+                         FontSize="10"
+                         TextColor="{AppThemeBinding Light=#888888, Dark=#777777}">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="Overall  " />
+                        <Span Text="{Binding OverallActualRecord}"
+                              TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                        <Span Text="  →  "
+                              TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+                        <Span Text="{Binding OverallProjectedRecord}"
+                              TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                </VerticalStackLayout>
 
+                <!-- Conf actual record -->
                 <Label Grid.Column="2" FontSize="13" FontAttributes="Bold"
                        HorizontalOptions="End" VerticalOptions="Center"
                        TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}">
@@ -145,6 +167,7 @@
                   </Label.FormattedText>
                 </Label>
 
+                <!-- Conf projected record -->
                 <Label Grid.Column="3" FontSize="13" FontAttributes="Bold"
                        HorizontalOptions="End" VerticalOptions="Center"
                        TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
@@ -165,7 +188,136 @@
 
               </Grid>
 
-              <!-- Expanded game detail -->
+              <!-- ── Chart toggle bar ── -->
+              <Grid ColumnDefinitions="*,*"
+                    Padding="8,2,16,2"
+                    BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
+
+                <!-- Win trajectory chart toggle -->
+                <Label Grid.Column="0"
+                       FontSize="10" HorizontalOptions="Start"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                  <Label.FormattedText>
+                    <FormattedString>
+                      <Span Text="Win Trajectory" />
+                      <Span Text="  " />
+                      <Span Text="{Binding ChartExpandIcon}" FontSize="8" />
+                    </FormattedString>
+                  </Label.FormattedText>
+                  <Label.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleChartExpandCommand}"
+                        CommandParameter="{Binding .}" />
+                  </Label.GestureRecognizers>
+                </Label>
+
+                <!-- Game detail toggle -->
+                <Label Grid.Column="1"
+                       FontSize="10" HorizontalOptions="End"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                  <Label.FormattedText>
+                    <FormattedString>
+                      <Span Text="Game Detail" />
+                      <Span Text="  " />
+                      <Span Text="{Binding ExpandIcon}" FontSize="8" />
+                    </FormattedString>
+                  </Label.FormattedText>
+                  <Label.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleTeamExpandCommand}"
+                        CommandParameter="{Binding .}" />
+                  </Label.GestureRecognizers>
+                </Label>
+
+              </Grid>
+
+              <!-- ── Win trajectory chart ── -->
+              <Border IsVisible="{Binding IsChartExpanded}"
+                      StrokeThickness="1"
+                      Stroke="{AppThemeBinding Light=#D8D8D8, Dark=#3A3A3A}"
+                      BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1A1A1A}"
+                      Margin="4,0,4,4">
+                <VerticalStackLayout Spacing="0">
+
+                  <Grid ColumnDefinitions="*,Auto,Auto" Padding="12,6,12,2">
+                    <Label Grid.Column="0"
+                           Text="Win Trajectory"
+                           FontSize="10" FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                    <Label Grid.Column="1"
+                           FontSize="9" Opacity="0.6" Margin="0,0,10,0">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="Conf  " />
+                          <Span Text="{Binding ActualRecord}"
+                                TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                          <Span Text=" → " />
+                          <Span Text="{Binding ProjectedRecord}"
+                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                    <Label Grid.Column="2"
+                           IsVisible="{Binding HasOverallRecord}"
+                           FontSize="9" Opacity="0.6">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="Overall  " />
+                          <Span Text="{Binding OverallActualRecord}"
+                                TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                          <Span Text=" → " />
+                          <Span Text="{Binding OverallProjectedRecord}"
+                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                  </Grid>
+
+                  <chart:SfCartesianChart HeightRequest="150" Margin="8,0,8,8">
+
+                    <chart:SfCartesianChart.XAxes>
+                      <chart:NumericalAxis ShowMajorGridLines="False" Interval="2">
+                        <chart:NumericalAxis.Title>
+                          <chart:ChartAxisTitle Text="Week" FontSize="9" />
+                        </chart:NumericalAxis.Title>
+                      </chart:NumericalAxis>
+                    </chart:SfCartesianChart.XAxes>
+
+                    <chart:SfCartesianChart.YAxes>
+                      <chart:NumericalAxis
+                          Minimum="0"
+                          Maximum="{Binding WinChartYMax}"
+                          Interval="{Binding WinChartYInterval}"
+                          ShowMajorGridLines="True" />
+                    </chart:SfCartesianChart.YAxes>
+
+                    <!-- Actual wins — solid line -->
+                    <chart:SplineSeries
+                        ItemsSource="{Binding ActualWinPoints}"
+                        XBindingPath="Index" YBindingPath="Value"
+                        Label="Actual"
+                        Fill="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}"
+                        StrokeWidth="3" EnableTooltip="True" />
+
+                    <!-- Projected wins — dashed line -->
+                    <chart:SplineSeries
+                        ItemsSource="{Binding ProjectedWinPoints}"
+                        XBindingPath="Index" YBindingPath="Value"
+                        Label="Projected"
+                        Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                        StrokeWidth="2" StrokeDashArray="6,3"
+                        EnableTooltip="True" />
+
+                    <chart:SfCartesianChart.Legend>
+                      <chart:ChartLegend Placement="Bottom" />
+                    </chart:SfCartesianChart.Legend>
+
+                  </chart:SfCartesianChart>
+
+                </VerticalStackLayout>
+              </Border>
+
+              <!-- ── Expanded game detail ── -->
               <VerticalStackLayout IsVisible="{Binding IsExpanded}"
                                    BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1A1A1A}"
                                    Padding="8,4,16,4" Spacing="0"

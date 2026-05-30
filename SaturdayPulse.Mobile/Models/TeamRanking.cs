@@ -384,6 +384,34 @@ public class TeamRanking : INotifyPropertyChanged
     public double ArcPctYInterval => ArcSharedBounds.Interval;
 
     // =========================================================
+    // Schedule Expansion
+    // =========================================================
+
+    public string ScheduleExpandIcon => IsScheduleExpanded ? "▲" : "▼";
+
+    private bool _isScheduleExpanded;
+
+    public bool IsScheduleExpanded
+    {
+        get => _isScheduleExpanded;
+        set
+        {
+            if (!SetProperty(ref _isScheduleExpanded, value)) return;
+            OnPropertyChanged(nameof(ScheduleExpandIcon));
+        }
+    }
+
+    private List<TeamGameResultView>? _scheduleGames;
+
+    public List<TeamGameResultView>? ScheduleGames
+    {
+        get => _scheduleGames;
+        set => SetProperty(ref _scheduleGames, value);
+    }
+
+    public bool HasScheduleData => ScheduleGames?.Count > 0;
+
+    // =========================================================
     // INotifyPropertyChanged
     // =========================================================
 

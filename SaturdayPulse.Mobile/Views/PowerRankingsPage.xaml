@@ -111,8 +111,8 @@
 
               </Grid>
 
-              <!-- ── Toggle bar: Trend/Pedigree | Season Arc | Offense/Defense ── -->
-              <Grid ColumnDefinitions="*,*,*"
+              <!-- ── Toggle bar: Trend/Pedigree | Season Arc | Schedule | Offense/Defense ── -->
+              <Grid ColumnDefinitions="*,*,*,*"
                     Padding="4,2,8,2"
                     BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
@@ -135,7 +135,7 @@
                   </Label.GestureRecognizers>
                 </Label>
 
-                <!-- CENTER: Season Arc -->
+                <!-- CENTER-LEFT: Season Arc -->
                 <Label Grid.Column="1"
                        FontSize="10" HorizontalOptions="Center"
                        TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
@@ -153,8 +153,26 @@
                   </Label.GestureRecognizers>
                 </Label>
 
-                <!-- RIGHT: Offense / Defense -->
+                <!-- CENTER-RIGHT: Schedule -->
                 <Label Grid.Column="2"
+                       FontSize="10" HorizontalOptions="Center"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                  <Label.FormattedText>
+                    <FormattedString>
+                      <Span Text="Schedule" />
+                      <Span Text="  " />
+                      <Span Text="{Binding ScheduleExpandIcon}" FontSize="8" />
+                    </FormattedString>
+                  </Label.FormattedText>
+                  <Label.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleScheduleExpandCommand}"
+                        CommandParameter="{Binding .}" />
+                  </Label.GestureRecognizers>
+                </Label>
+
+                <!-- RIGHT: Offense / Defense -->
+                <Label Grid.Column="3"
                        IsVisible="{Binding HasOffenseDefenseData}"
                        FontSize="10" HorizontalOptions="End"
                        TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
@@ -325,6 +343,100 @@
                     </chart:SfCartesianChart.Legend>
 
                   </chart:SfCartesianChart>
+
+                </VerticalStackLayout>
+
+              </Border>
+
+              <!-- ── Schedule expanded panel ── -->
+              <Border IsVisible="{Binding IsScheduleExpanded}"
+                      StrokeThickness="1"
+                      Stroke="{AppThemeBinding Light=#C8E6FF, Dark=#1E3A4A}"
+                      BackgroundColor="{AppThemeBinding Light=#F0F8FF, Dark=#111A20}"
+                      Margin="4,0,4,6">
+
+                <VerticalStackLayout Spacing="0">
+
+                  <!-- Header row -->
+                  <Grid ColumnDefinitions="*,Auto" Padding="12,8,12,4">
+                    <Label Grid.Column="0"
+                           Text="Season Schedule"
+                           FontSize="10" FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#1565C0, Dark=#64B5F6}" />
+                    <Label Grid.Column="1"
+                           Text="{Binding Record}"
+                           FontSize="9" Opacity="0.6" />
+                  </Grid>
+
+                  <!-- Column headers -->
+                  <Grid ColumnDefinitions="28,*,36,24,100"
+                        Padding="12,0,12,2">
+                    <Label Grid.Column="0" Text="Wk"       FontSize="9" Opacity="0.5" />
+                    <Label Grid.Column="1" Text="Opponent" FontSize="9" Opacity="0.5" />
+                    <Label Grid.Column="2" Text="Conf"     FontSize="9" Opacity="0.5" HorizontalOptions="Center" />
+                    <Label Grid.Column="3" Text="W/L"      FontSize="9" Opacity="0.5" HorizontalOptions="Center" />
+                    <Label Grid.Column="4" Text="Score (Proj)" FontSize="9" Opacity="0.5" HorizontalOptions="End" />
+                  </Grid>
+
+                  <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
+                           Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                  <!-- Game rows -->
+                  <VerticalStackLayout Padding="4,2,4,6" Spacing="0"
+                                       BindableLayout.ItemsSource="{Binding ScheduleGames}">
+                    <BindableLayout.ItemTemplate>
+                      <DataTemplate x:DataType="models:TeamGameResultView">
+                        <Grid ColumnDefinitions="28,*,36,24,100" Padding="8,3">
+
+                          <Label Grid.Column="0"
+                                 Text="{Binding Week, StringFormat='Wk{0}'}"
+                                 FontSize="10"
+                                 TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                                 VerticalOptions="Center" />
+
+                          <Label Grid.Column="1"
+                                 Text="{Binding OpponentDisplay}"
+                                 FontSize="11" VerticalOptions="Center"
+                                 LineBreakMode="TailTruncation" />
+
+                          <Label Grid.Column="2"
+                                 Text="{Binding OpponentConf}"
+                                 FontSize="10" HorizontalOptions="Center"
+                                 VerticalOptions="Center" Opacity="0.7" />
+
+                          <Label Grid.Column="3"
+                                 Text="{Binding DisplayResult}"
+                                 FontSize="11" FontAttributes="Bold"
+                                 HorizontalOptions="Center" VerticalOptions="Center">
+                            <Label.Triggers>
+                              <DataTrigger TargetType="Label" Binding="{Binding IsWin}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}" />
+                              </DataTrigger>
+                              <DataTrigger TargetType="Label" Binding="{Binding IsLoss}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light=#C62828, Dark=#EF5350}" />
+                              </DataTrigger>
+                            </Label.Triggers>
+                          </Label>
+
+                          <!-- Score(ProjScore) e.g. 42-24(34-24) or 42-24(-) -->
+                          <Label Grid.Column="4"
+                                 FontSize="10" HorizontalOptions="End"
+                                 VerticalOptions="Center">
+                            <Label.FormattedText>
+                              <FormattedString>
+                                <Span Text="{Binding Score}"
+                                      TextColor="{AppThemeBinding Light=#333333, Dark=#CCCCCC}" />
+                                <Span Text="{Binding DisplayProjScore}"
+                                      FontSize="9"
+                                      TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
+                              </FormattedString>
+                            </Label.FormattedText>
+                          </Label>
+
+                        </Grid>
+                      </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                  </VerticalStackLayout>
 
                 </VerticalStackLayout>
 

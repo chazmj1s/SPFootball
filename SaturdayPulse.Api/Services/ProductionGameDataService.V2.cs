@@ -954,7 +954,7 @@ namespace SaturdayPulse.Services
                 bool isHome  = g.HomeId == teamId;
                 var oppId    = isHome ? (g.AwayId ?? 0) : (g.HomeId ?? 0);
                 Teams.TryGetValue(oppId, out var opp);
-                var oppAbbr  = opp?.Abbreviation ?? opp?.TeamName ?? "Unknown";
+                var opponent  = opp?.TeamName ?? opp?.Abbreviation ?? "Unknown";
                 var oppConf  = ConfAbbr(opp);
 
                 bool isPlayed = (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0;
@@ -977,7 +977,7 @@ namespace SaturdayPulse.Services
                     g.Week,
                     GameDate   = g.GameDate,
                     GameDay    = g.GameDay,
-                    Opponent   = oppAbbr,
+                    Opponent   = opponent,
                     OpponentId = oppId,
                     OpponentConf = oppConf,
                     Location   = isHome ? "vs" : "@",
