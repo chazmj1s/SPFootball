@@ -104,7 +104,7 @@ namespace SaturdayPulse.Services
                     {
                         TeamName     = teamsDict[g.HomeId!.Value].TeamName,
                         OpponentName = teamsDict[g.AwayId!.Value].TeamName,
-                        Location     = g.NeutralSite == true ? 'N' : 'W',
+                        Location     = g.NeutralSite == true ? 'N' : 'H',
                         Week         = g.Week
                     })
                     .ToList();
@@ -194,7 +194,7 @@ namespace SaturdayPulse.Services
                             OpponentDivision = teamById.TryGetValue(awayId, out var at) ? at.Division : "fbs",
                             TeamPoints       = homePts,
                             OpponentPoints   = awayPts,
-                            Location         = neutral ? 'N' : 'W',
+                            Location         = neutral ? 'N' : 'H',
                             IsHomeTeam       = true,
                             Week             = week
                         },
@@ -206,7 +206,7 @@ namespace SaturdayPulse.Services
                             OpponentDivision = teamById.TryGetValue(homeId, out var ht2) ? ht2.Division : "fbs",
                             TeamPoints       = awayPts,
                             OpponentPoints   = homePts,
-                            Location         = neutral ? 'N' : 'L',
+                            Location         = neutral ? 'N' : 'A',
                             IsHomeTeam       = false,
                             Week             = week
                         }
@@ -478,7 +478,7 @@ namespace SaturdayPulse.Services
                 {
                     TeamName     = teamsDict[g.HomeId!.Value].TeamName,
                     OpponentName = teamsDict[g.AwayId!.Value].TeamName,
-                    Location     = g.NeutralSite == true ? 'N' : 'W',
+                    Location     = g.NeutralSite == true ? 'N' : 'H',
                     Week         = g.Week
                 })
                 .ToList();

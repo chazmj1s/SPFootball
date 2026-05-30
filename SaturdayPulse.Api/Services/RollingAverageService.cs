@@ -67,7 +67,12 @@ namespace SaturdayPulse.Services
             int? week = null,
             CancellationToken token = default)
         {
-            var currentYearRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(year, token);
+            // Load tracked records for saving — no Teams navigation property
+            var currentYearRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
+
+            // Load Teams separately using correct CFBD TeamId join
+            var teamIds = currentYearRecords.Select(r => r.TeamID).ToList();
+            var teamsDict = await _uow.Teams.GetByTeamIdsAsync(teamIds, token);
 
             var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(
                 fromYear: year - 10, toYearExclusive: year, token);
@@ -82,10 +87,12 @@ namespace SaturdayPulse.Services
 
             foreach (var record in currentYearRecords)
             {
-                if (record.Teams?.Division == "FCS")
+                teamsDict.TryGetValue(record.TeamID, out var team);
+
+                if (string.Equals(team?.Division, "fcs", StringComparison.OrdinalIgnoreCase))
                 {
-                    record.SeedRating     = 0;
-                    record.TrendRating    = 0;
+                    record.SeedRating = 0;
+                    record.TrendRating = 0;
                     record.PedigreeRating = 0;
                     continue;
                 }
@@ -95,14 +102,13 @@ namespace SaturdayPulse.Services
 
                 var averages = Compute(record, history, useLiveSwap);
 
-                record.SeedRating     = averages.SeedRating;
-                record.TrendRating    = averages.TrendRating;
+                record.SeedRating = averages.SeedRating;
+                record.TrendRating = averages.TrendRating;
                 record.PedigreeRating = averages.PedigreeRating;
             }
 
             await _uow.SaveChangesAsync(token);
         }
-
         public RollingAverages Compute(
             TeamRecord currentRecord,
             List<TeamRecord> history,

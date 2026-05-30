@@ -172,7 +172,7 @@ namespace SaturdayPulse.Services
                     var team1Score   = team1IsHome ? (g.HomePoints ?? 0) : (g.AwayPoints ?? 0);
                     var team2Score   = team1IsHome ? (g.AwayPoints ?? 0) : (g.HomePoints ?? 0);
                     bool team1Won    = team1Score > team2Score;
-                    char location    = g.NeutralSite == true ? 'N' : team1IsHome ? 'W' : 'L';
+                    char location    = g.NeutralSite == true ? 'N' : team1IsHome ? 'H' : 'A';
 
                     return (object)new
                     {

@@ -1,4 +1,4 @@
-﻿using SaturdayPulse.Interfaces;
+using SaturdayPulse.Interfaces;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Models;
@@ -7,87 +7,74 @@ using static SaturdayPulse.Interfaces.IAvgScoreDifferentialService;
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// Transitional implementation:
-    /// Uses legacy AvgScoreDelta bucket lookups internally
-    /// while exposing the future differential-based API surface.
+    /// Computes expected game distributions using the AvgScoreDifferential table.
     ///
-    /// Future versions will:
-    ///   - replace dual-bucket lookups with differential buckets
-    ///   - add interpolation/smoothing
-    ///   - support latent strength ratings
-    /// without requiring callers to change.
+    /// Fully migrated from legacy AvgScoreDelta bucket lookups:
+    ///   - Expected margin from AvgScoreDifferential.AverageMargin (differential-based)
+    ///   - StdDev from AvgScoreDifferential.StdDevMargin (differential-based)
+    ///   - Direction encoded in the differential itself — no win-percentage flip needed
+    ///
+    /// Differential = ExpandStrength(teamStrength) - ExpandStrength(opponentStrength)
+    ///   Positive → team is stronger → positive expected margin (team favored)
+    ///   Negative → opponent is stronger → negative expected margin (opponent favored)
+    ///
+    /// Range: ±3.0 in 0.05 increments. Tail collapse at ±2.5/±2.75.
+    /// Nearest bucket used when exact match not found.
     /// </summary>
     public class AvgScoreDifferentialService : IAvgScoreDifferentialService
     {
         private readonly IUnitOfWork _uow;
 
-    public AvgScoreDifferentialService(IUnitOfWork uow)
+        public AvgScoreDifferentialService(IUnitOfWork uow) => _uow = uow;
+
+        public ExpectedGameDistribution GetExpectedDistribution(
+            double teamStrength, double opponentStrength)
+            => GetExpectedDistribution((decimal)teamStrength, (decimal)opponentStrength);
+
+        public ExpectedGameDistribution GetExpectedDistribution(
+            decimal teamStrength, decimal opponentStrength)
         {
-            _uow = uow;
-        }
-
-        public ExpectedGameDistribution GetExpectedDistribution(double teamStrength, double opponentStrength)
-        {
-            return GetExpectedDistribution((decimal)teamStrength, (decimal)opponentStrength);
-        }
-
-        public ExpectedGameDistribution GetExpectedDistribution(decimal teamStrength, decimal opponentStrength)
-        {
-            // Normalize strengths
-            teamStrength = (decimal)NormalizeStrength((double)teamStrength);
-            opponentStrength = (decimal)NormalizeStrength((double)opponentStrength);
-
-            // Legacy ASD lookup still uses higher/lower bucket ordering
-            var maxStrength = Math.Max(teamStrength, opponentStrength);
-            var minStrength = Math.Min(teamStrength, opponentStrength);
-
-            var avgScoreDeltas = _uow.Lookups
-                .GetAvgScoreDeltasAsync()
-                .GetAwaiter()
-                .GetResult();
-
-            var asd = avgScoreDeltas.FirstOrDefault(a =>
-                          a.Team1WinPct == maxStrength &&
-                          a.Team2WinPct == minStrength)
-                      ?? new AvgScoreDelta
-                      {
-                          Team1WinPct = maxStrength,
-                          Team2WinPct = minStrength,
-                          AverageScoreDelta = (decimal)AvgScoreDelta.DefaultAverageScoreDelta,
-                          StDevP = (decimal)AvgScoreDelta.DefaultStdDev,
-                          SampleSize = 0
-                      };
-
-            // Differential-based lookup
-            var differential = GetStrengthDifferential((double)teamStrength, (double)opponentStrength);
-
             var avgScoreDifferentials = _uow.Lookups
                 .GetAvgScoreDifferentialsAsync()
                 .GetAwaiter()
                 .GetResult();
 
-            var smoothedExpectedMargin = RatingCalculator.GetSmoothedExpectedMargin(avgScoreDifferentials, (decimal)differential);
+            // Differential encodes direction:
+            // positive = team favored, negative = opponent favored.
+            var differential = (decimal)GetStrengthDifferential(
+                (double)teamStrength, (double)opponentStrength);
 
-            // Preserve directional perspective
-            var expectedMargin = teamStrength >= opponentStrength ? smoothedExpectedMargin : -smoothedExpectedMargin;
+            // Find nearest bucket.
+            var bucketRow = avgScoreDifferentials
+                .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
+                .FirstOrDefault();
+
+            // Expected margin is already from team's perspective via differential sign.
+            var expectedMargin = bucketRow != null
+                ? (double)bucketRow.AverageMargin
+                : AvgScoreDelta.DefaultAverageScoreDelta * Math.Sign((double)differential);
+
+            var stdDev = bucketRow != null
+                ? (double)bucketRow.StdDevMargin
+                : AvgScoreDelta.DefaultStdDev;
+
+            var sampleSize = bucketRow?.SampleSize ?? 0;
 
             return new ExpectedGameDistribution(
                 ExpectedMargin: expectedMargin,
-                StdDev: asd.WeightedStdDev,
-                Reliability: asd.ReliabilityWeight,
-                SampleSize: (int)asd.SampleSize);
+                StdDev:         stdDev,
+                Reliability:    sampleSize > 100 ? 1.0 : sampleSize / 100.0,
+                SampleSize:     (int)sampleSize);
         }
 
         public double GetStrengthDifferential(double teamStrength, double opponentStrength)
         {
             var expanded = RatingCalculator.ExpandStrength((decimal)teamStrength) -
-                   RatingCalculator.ExpandStrength((decimal)opponentStrength);
-            return (double)NormalizeStrength((double)expanded);
+                           RatingCalculator.ExpandStrength((decimal)opponentStrength);
+            return NormalizeStrength((double)expanded);
         }
 
         public double NormalizeStrength(double strength)
-        {
-            return Math.Max(-3.0, Math.Min(3.0, Math.Round(strength, 3)));
-        }
+            => Math.Max(-3.0, Math.Min(3.0, Math.Round(strength, 3)));
     }
 }

@@ -46,9 +46,9 @@ public class TeamRanking : INotifyPropertyChanged
     public int OffensiveRank { get; set; }
     public int DefensiveRank { get; set; }
 
-    public double TrendRating { get; set; }
-    public double PedigreeRating { get; set; }
-    public double SeedRating { get; set; }
+    public double? TrendRating { get; set; }
+    public double? PedigreeRating { get; set; }
+    public double? SeedRating { get; set; }
 
     // =========================================================
     // Raw History Data

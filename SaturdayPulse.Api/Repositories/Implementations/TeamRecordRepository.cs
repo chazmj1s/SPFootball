@@ -6,11 +6,25 @@ using SaturdayPulse.Extensions;
 
 namespace SaturdayPulse.Repositories.Implementations
 {
+    /// <summary>
+    /// Repository for TeamRecords.
+    ///
+    /// IMPORTANT — Teams FK mismatch:
+    ///   Teams.Id      = EF auto-increment PK (1, 2, 3 …)
+    ///   Teams.TeamId  = CFBD team ID (e.g. 2390 for Miami)
+    ///   TeamRecords.TeamID = CFBD team ID → joins to Teams.TeamId, NOT Teams.Id
+    ///
+    /// EF's Include(tr => tr.Teams) joins on Teams.Id (the EF PK) which is WRONG.
+    /// All methods that need the Teams navigation property use a manual join on
+    /// Teams.TeamId instead. Never use Include(tr => tr.Teams) in this repository.
+    /// </summary>
     public class TeamRecordRepository : ITeamRecordRepository
     {
         private readonly NCAAContext _context;
 
         public TeamRecordRepository(NCAAContext context) => _context = context;
+
+        // ── Simple queries (no Teams join needed) ─────────────────────────────────
 
         public Task<List<TeamRecord>> GetByYearAsync(int year, CancellationToken token = default)
             => _context.TeamRecords
@@ -27,31 +41,10 @@ namespace SaturdayPulse.Repositories.Implementations
                 .Where(tr => tr.Year == year && teamIds.Contains(tr.TeamID))
                 .ToDictionaryAsync(tr => tr.TeamID, token);
 
-        public Task<List<TeamRecord>> GetByYearWithTeamsAsync(int year, CancellationToken token = default)
-            => _context.TeamRecords
-                .Include(tr => tr.Teams)
-                .Where(tr => tr.Year == year)
-                .ToListAsync(token);
-
-        public Task<List<TeamRecord>> GetFbsByYearAsync(int year, CancellationToken token = default)
-            => _context.TeamRecords
-                .Include(tr => tr.Teams)
-                .Where(tr => tr.Year == year &&
-                             tr.Teams != null &&
-                             tr.Teams.Division == "FBS")
-                .ToListAsync(token);
-
         public Task<List<TeamRecord>> GetHistoricalAsync(
             int fromYear, int toYearExclusive, CancellationToken token = default)
             => _context.TeamRecords
                 .Where(tr => tr.Year >= fromYear && tr.Year < toYearExclusive)
-                .ToListAsync(token);
-
-        public Task<List<TeamRecord>> GetSinceYearWithTeamsAsync(
-            int fromYear, CancellationToken token = default)
-            => _context.TeamRecords
-                .Include(tr => tr.Teams)
-                .Where(tr => tr.Year >= fromYear)
                 .ToListAsync(token);
 
         public Task<List<TeamRecord>> GetByTeamAllYearsAsync(
@@ -66,9 +59,80 @@ namespace SaturdayPulse.Repositories.Implementations
             var records = await _context.TeamRecords
                 .Where(tr => tr.Year == year && tr.Ranking.HasValue)
                 .ToListAsync(token);
-
             return records.OrderByDescending(tr => tr.Ranking).ToList();
         }
+
+        // ── Queries requiring Teams navigation property ───────────────────────────
+        // Uses manual join on Teams.TeamId (CFBD ID), NOT Teams.Id (EF PK).
+
+        public async Task<List<TeamRecord>> GetByYearWithTeamsAsync(
+            int year, CancellationToken token = default)
+        {
+            var records = await _context.TeamRecords
+                .Where(tr => tr.Year == year)
+                .ToListAsync(token);
+
+            await PopulateTeamsAsync(records, token);
+            return records;
+        }
+
+        public async Task<List<TeamRecord>> GetFbsByYearAsync(
+            int year, CancellationToken token = default)
+        {
+            var records = await _context.TeamRecords
+                .Where(tr => tr.Year == year)
+                .ToListAsync(token);
+
+            await PopulateTeamsAsync(records, token);
+
+            return records
+                .Where(tr => string.Equals(tr.Teams?.Division, "fbs",
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        public async Task<List<TeamRecord>> GetSinceYearWithTeamsAsync(
+            int fromYear, CancellationToken token = default)
+        {
+            var records = await _context.TeamRecords
+                .Where(tr => tr.Year >= fromYear)
+                .ToListAsync(token);
+
+            await PopulateTeamsAsync(records, token);
+            return records;
+        }
+
+        public async Task<List<TeamRecord>> QueryAsync(
+            int? wins = null, int? losses = null,
+            int? minWins = null, int? maxWins = null,
+            int? startYear = null, int? endYear = null,
+            decimal? minPowerRating = null, decimal? maxPowerRating = null,
+            int limit = 50, CancellationToken token = default)
+        {
+            var query = _context.TeamRecords
+                .Where(tr => tr.PowerRating != null)
+                .AsQueryable();
+
+            if (wins.HasValue)           query = query.Where(tr => tr.Wins        == wins.Value);
+            if (losses.HasValue)         query = query.Where(tr => tr.Losses      == losses.Value);
+            if (minWins.HasValue)        query = query.Where(tr => tr.Wins        >= minWins.Value);
+            if (maxWins.HasValue)        query = query.Where(tr => tr.Wins        <= maxWins.Value);
+            if (startYear.HasValue)      query = query.Where(tr => tr.Year        >= startYear.Value);
+            if (endYear.HasValue)        query = query.Where(tr => tr.Year        <= endYear.Value);
+            if (minPowerRating.HasValue) query = query.Where(tr => tr.PowerRating >= minPowerRating.Value);
+            if (maxPowerRating.HasValue) query = query.Where(tr => tr.PowerRating <= maxPowerRating.Value);
+
+            var records = await query
+                .OrderByDescending(tr => tr.Year)
+                .ThenByDescending(tr => tr.PowerRating)
+                .Take(limit)
+                .ToListAsync(token);
+
+            await PopulateTeamsAsync(records, token);
+            return records;
+        }
+
+        // ── Upsert methods ────────────────────────────────────────────────────────
 
         public async Task UpsertFromWeeklyRankingsAsync(int? targetYear = null, CancellationToken token = default)
         {
@@ -91,31 +155,22 @@ namespace SaturdayPulse.Repositories.Implementations
                 .ToTeamRecords();
 
             await _context.TeamRecords.AddRangeAsync(newRecords, token);
-
             await _context.SaveChangesAsync(token);
         }
 
         /// <summary>
         /// Upserts TeamRecords from the Games table.
-        ///
-        /// For played games, actual scores are used directly.
-        /// For unplayed games (scores null or 0), projected scores are automatically
-        /// substituted from the Projections table using the freshest available snapshot.
-        /// Games with no projection are excluded.
-        ///
-        /// Synthetic scores are never written to the Games table — they flow only into
-        /// TeamRecords and are overwritten when actuals arrive.
+        /// For unplayed games, projected scores are substituted from Projections table.
+        /// Synthetic scores are never written to the Games table.
         /// </summary>
         public async Task UpsertFromGamesAsync(int? targetYear = null, CancellationToken token = default)
         {
             var query = _context.Games.Where(g => g.Year > 0);
-
             if (targetYear.HasValue)
                 query = query.Where(g => g.Year == targetYear.Value);
 
             var games = await query.ToListAsync(token);
 
-            // For unplayed games, substitute projected scores from the Projections table.
             var unplayedGameIds = games
                 .Where(g => (g.HomePoints ?? 0) == 0 && (g.AwayPoints ?? 0) == 0)
                 .Select(g => g.GameId)
@@ -123,7 +178,6 @@ namespace SaturdayPulse.Repositories.Implementations
 
             if (unplayedGameIds.Any())
             {
-                // Pick the freshest projection (highest snapshot week) per game.
                 var projections = await _context.Projections
                     .Where(p => unplayedGameIds.Contains(p.GameId))
                     .GroupBy(p => p.GameId)
@@ -137,18 +191,14 @@ namespace SaturdayPulse.Repositories.Implementations
                 {
                     if (!projByGameId.TryGetValue(g.GameId, out var proj)) continue;
 
-                    // Derive home/away scores from spread and total.
-                    // PredictedSpread is home-relative (positive = home favored).
                     g.HomePoints = (int)Math.Round(
                         (double)(proj.PredictedTotal + proj.PredictedSpread) / 2.0);
                     g.AwayPoints = (int)Math.Round(
                         (double)(proj.PredictedTotal - proj.PredictedSpread) / 2.0);
 
-                    // Avoid 0-0 results which are indistinguishable from unplayed.
                     if (g.HomePoints == 0 && g.AwayPoints == 0) g.HomePoints = 14;
                 }
 
-                // Drop games that still have no scores (no projection found).
                 games = games
                     .Where(g => (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0)
                     .ToList();
@@ -193,7 +243,6 @@ namespace SaturdayPulse.Repositories.Implementations
 
             if (grouped.Count == 0) return;
 
-            // Filter out FCS placeholder IDs (1000xxx) and any team not in the Teams table.
             var validTeamIds = (await _context.Teams
                 .Select(t => t.TeamId)
                 .ToListAsync(token))
@@ -234,32 +283,34 @@ namespace SaturdayPulse.Repositories.Implementations
             }
         }
 
-        public async Task<List<TeamRecord>> QueryAsync(
-            int? wins = null, int? losses = null,
-            int? minWins = null, int? maxWins = null,
-            int? startYear = null, int? endYear = null,
-            decimal? minPowerRating = null, decimal? maxPowerRating = null,
-            int limit = 50, CancellationToken token = default)
+        // ── Private helpers ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Populates the Teams navigation property on a list of TeamRecords using
+        /// a manual join on Teams.TeamId (CFBD ID) rather than Teams.Id (EF PK).
+        /// This is necessary because TeamRecords.TeamID = CFBD ID, not the EF auto-increment.
+        /// </summary>
+        private async Task PopulateTeamsAsync(
+            List<TeamRecord> records, CancellationToken token)
         {
-            var query = _context.TeamRecords
-                .Include(tr => tr.Teams)
-                .Where(tr => tr.PowerRating != null)
-                .AsQueryable();
+            if (!records.Any()) return;
 
-            if (wins.HasValue)           query = query.Where(tr => tr.Wins          == wins.Value);
-            if (losses.HasValue)         query = query.Where(tr => tr.Losses        == losses.Value);
-            if (minWins.HasValue)        query = query.Where(tr => tr.Wins          >= minWins.Value);
-            if (maxWins.HasValue)        query = query.Where(tr => tr.Wins          <= maxWins.Value);
-            if (startYear.HasValue)      query = query.Where(tr => tr.Year          >= startYear.Value);
-            if (endYear.HasValue)        query = query.Where(tr => tr.Year          <= endYear.Value);
-            if (minPowerRating.HasValue) query = query.Where(tr => tr.PowerRating   >= minPowerRating.Value);
-            if (maxPowerRating.HasValue) query = query.Where(tr => tr.PowerRating   <= maxPowerRating.Value);
+            var teamIds = records.Select(r => r.TeamID).Distinct().ToList();
+            var teams   = await _context.Teams
+                .AsNoTracking()
+                .Where(t => teamIds.Contains(t.TeamId))
+                .ToDictionaryAsync(t => t.TeamId, token);
 
-            return await query
-                .OrderByDescending(tr => tr.Year)
-                .ThenByDescending(tr => tr.PowerRating)
-                .Take(limit)
-                .ToListAsync(token);
+            foreach (var record in records)
+            {
+                var team = teams.GetValueOrDefault(record.TeamID);
+                if (team != null)
+                {
+                    // Detach from change tracker before assigning to avoid conflicts
+                    _context.Entry(record).State = EntityState.Detached;
+                    record.Teams = team;
+                }
+            }
         }
     }
 }
