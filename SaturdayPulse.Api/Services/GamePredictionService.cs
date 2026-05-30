@@ -3,6 +3,8 @@ using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Models;
+using SaturdayPulse.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace SaturdayPulse.Services
 {
@@ -10,16 +12,21 @@ namespace SaturdayPulse.Services
     /// Predicts game scores based on team metrics and historical data.
     /// Uses IUnitOfWork for all data access — no direct EF/DbContext references.
     ///
-    /// Single source of truth for predictions: WeeklyRankings.
-    ///   • PredictMatchups loads the latest WeeklyRankings snapshot for the year.
-    ///   • TeamRecords is NOT used here — it is reserved for Seed/Trend/Pedigree only.
-    ///   • WeeklyRankings has the same fields as TeamRecords minus the rolling averages,
-    ///     and reflects the current in-season state rather than the annual summary.
+    /// Snapshot week logic:
+    ///   Weeks 1-5  : use week 0 preseason snapshot for all predictions.
+    ///                Prevents single early-season blowouts over weak opponents
+    ///                from corrupting ratings before enough data accumulates.
+    ///   Week 6+    : use week n-1 snapshot (current season data takes over).
+    ///   Consistent across all years including historical backfill — week 0
+    ///   was seeded from the prior year's final ratings in all cases.
+    ///
+    ///   SosWeekThreshold from MetricsConfiguration drives the cutoff (default 6).
     /// </summary>
     public class GamePredictionService
     {
         private readonly IAvgScoreDifferentialService _avgScoreDifferentialService;
         private readonly IUnitOfWork                  _uow;
+        private readonly MetricsConfiguration         _config;
         private const    double                       HomeFieldAdvantage    = 2.5;
         private const    int                          RecentYearsForAverage = 5;
         private          double?                      _cachedAvgTeamScore;
@@ -27,17 +34,17 @@ namespace SaturdayPulse.Services
 
         public GamePredictionService(
             IUnitOfWork uow,
-            IAvgScoreDifferentialService avgScoreDifferentialService)
+            IAvgScoreDifferentialService avgScoreDifferentialService,
+            IOptions<MetricsConfiguration> config)
         {
             _uow                         = uow;
             _avgScoreDifferentialService = avgScoreDifferentialService;
+            _config                      = config.Value;
         }
 
         // ── Public API ────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Predicts the score for a single matchup using the latest WeeklyRankings snapshot.
-        /// </summary>
+        /// <summary>Predicts the score for a single matchup.</summary>
         public async Task<GamePrediction> PredictMatchup(
             int year, string teamName, string opponentName,
             char location, int week = 0, CancellationToken token = default)
@@ -47,29 +54,29 @@ namespace SaturdayPulse.Services
             var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
                            ?? throw new ArgumentException($"Team not found: {opponentName}");
 
-            var ratingsById = await GetLatestRatingsAsync(year, token);
+            var recordsById    = await GetRatingsForWeekAsync(year, week, token);
+            var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var avgTeamScore   = await GetAverageTeamScoreAsync(year, token);
 
-            if (!ratingsById.TryGetValue(team.TeamId,     out var teamRating) ||
-                !ratingsById.TryGetValue(opponent.TeamId, out var oppRating))
-                throw new ArgumentException("WeeklyRankings not found for specified year.");
-
-            var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
-            var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
+            if (!recordsById.TryGetValue(team.TeamId,     out var teamRecord) ||
+                !recordsById.TryGetValue(opponent.TeamId, out var oppRecord))
+                throw new ArgumentException("Team records not found for specified year.");
 
             return CalculatePrediction(
-                teamRating, oppRating, team, opponent, location,
+                teamRecord, oppRecord, team, opponent, location,
                 rivalries, avgTeamScore, year, week);
         }
 
-        /// <summary>
-        /// Predicts scores for multiple matchups in a single DB round-trip.
-        /// Uses the latest WeeklyRankings snapshot for the year as the sole data source.
-        /// </summary>
+        /// <summary>Predicts scores for multiple matchups in a single DB round-trip.</summary>
         public async Task<List<GamePrediction>> PredictMatchups(
             int year, List<MatchupRequest> matchups, CancellationToken token = default)
         {
+            // Use the week from the first matchup — all matchups in a batch
+            // are assumed to be from the same week.
+            var week = matchups.FirstOrDefault()?.Week ?? 0;
+
             var teams        = await _uow.Teams.GetDictionaryByNameAsync(token);
-            var ratingsById  = await GetLatestRatingsAsync(year, token);
+            var recordsById  = await GetRatingsForWeekAsync(year, week, token);
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
 
@@ -77,14 +84,14 @@ namespace SaturdayPulse.Services
 
             foreach (var matchup in matchups)
             {
-                if (!teams.TryGetValue(matchup.TeamName,     out var team)     ||
-                    !teams.TryGetValue(matchup.OpponentName, out var opponent)) continue;
+                if (!teams.TryGetValue(matchup.TeamName,     out var team)      ||
+                    !teams.TryGetValue(matchup.OpponentName, out var opponent))  continue;
 
-                if (!ratingsById.TryGetValue(team.TeamId,     out var teamRating) ||
-                    !ratingsById.TryGetValue(opponent.TeamId, out var oppRating))  continue;
+                if (!recordsById.TryGetValue(team.TeamId,     out var teamRecord) ||
+                    !recordsById.TryGetValue(opponent.TeamId, out var oppRecord))  continue;
 
                 predictions.Add(CalculatePrediction(
-                    teamRating, oppRating, team, opponent, matchup.Location,
+                    teamRecord, oppRecord, team, opponent, matchup.Location,
                     rivalries, avgTeamScore, year, matchup.Week));
             }
 
@@ -93,22 +100,18 @@ namespace SaturdayPulse.Services
 
         // ── Projection builder ────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Maps a computed GamePrediction + game metadata to a Projection row
-        /// ready for persistence. Called by WeeklyRankingsService step 17.
-        /// </summary>
         public static Projection BuildProjection(
             GamePrediction prediction,
             int gameId, int year, int week,
             int homeTeamId, int awayTeamId)
         {
-            var homeSpread = prediction.Location == 'H' || prediction.Location == 'W'
+            var homeSpread = prediction.Location == 'H'
                 ? prediction.ExpectedMargin
                 : -prediction.ExpectedMargin;
 
             var total = prediction.PredictedTeamScore + prediction.PredictedOpponentScore;
 
-            var homeWinProb = prediction.Location == 'H' || prediction.Location == 'W'
+            var homeWinProb = prediction.Location == 'H'
                 ? prediction.WinProbability
                 : prediction.OpponentWinProbability;
 
@@ -125,33 +128,121 @@ namespace SaturdayPulse.Services
             };
         }
 
+        // ── Ratings loader ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns the team ratings dictionary to use for prediction at a given week.
+        ///
+        /// Weeks 1-5  → week 0 preseason snapshot (stable, prevents early noise)
+        /// Week 6+    → week n-1 snapshot (current season data)
+        /// Week 0     → week 0 snapshot (preseason — used during initialization)
+        ///
+        /// Falls back to prior year final snapshot if week 0 doesn't exist.
+        /// Falls back to TeamRecords if no WeeklyRankings snapshot is available.
+        /// </summary>
+        private async Task<Dictionary<int, TeamRecord>> GetRatingsForWeekAsync(
+            int year, int week, CancellationToken token)
+        {
+            // Determine which snapshot week to use.
+            int snapshotWeek = week < _config.SosWeekThreshold
+                ? 0          // weeks 0-5: use preseason baseline
+                : week - 1;  // week 6+: use prior week
+
+            // Try current year snapshot first.
+            var snapshot = await _uow.WeeklyRankings
+                .GetByYearAndWeekAsync(year, snapshotWeek, token);
+
+            // Fall back to prior year final snapshot if current year week 0
+            // doesn't exist yet (season not initialized).
+            if (!snapshot.Any())
+            {
+                var priorSnapshots = await _uow.WeeklyRankings
+                    .GetDistinctYearWeeksAsync(token);
+
+                var priorSnapshot = priorSnapshots
+                    .Where(s => s.Year == year - 1)
+                    .OrderByDescending(s => s.Week)
+                    .FirstOrDefault();
+
+                if (priorSnapshot != default)
+                    snapshot = await _uow.WeeklyRankings
+                        .GetByYearAndWeekAsync(priorSnapshot.Year, priorSnapshot.Week, token);
+            }
+
+            // If we have a snapshot, build synthetic TeamRecords from it.
+            var result = snapshot.Any()
+                ? snapshot.ToDictionary(
+                    wr => wr.TeamID,
+                    wr => new TeamRecord
+                    {
+                        TeamID        = wr.TeamID,
+                        Year          = wr.Year,
+                        Wins          = wr.Wins,
+                        Losses        = wr.Losses,
+                        PointsFor     = wr.PointsFor,
+                        PointsAgainst = wr.PointsAgainst,
+                        PowerRating   = wr.PowerRating,
+                        Ranking       = wr.Ranking,
+                        CombinedSOS   = wr.CombinedSOS,
+                        BaseSOS       = wr.BaseSOS,
+                        SubSOS        = wr.SubSOS
+                    })
+                : (await _uow.TeamRecords.GetByYearAsync(year, token))
+                    .ToDictionary(tr => tr.TeamID);
+
+            // Add FCS placeholder records for teams not in the snapshot.
+            // FCS teams don't have WeeklyRankings entries — without a placeholder
+            // they default to Ranking=0 (average) producing wildly wrong predictions.
+            // Ranking 0.03 / PowerRating -0.50 represents a typical FCS program
+            // and produces ~28-30 point expected margin vs an average FBS opponent,
+            // consistent with actual FBS vs FCS game results.
+            var allTeams = await _uow.Teams.GetAllAsync(token);
+            foreach (var team in allTeams.Where(t =>
+                string.Equals(t.Division, "fcs", StringComparison.OrdinalIgnoreCase) &&
+                !result.ContainsKey(t.TeamId)))
+            {
+                result[team.TeamId] = new TeamRecord
+                {
+                    TeamID      = team.TeamId,
+                    Year        = (short)year,
+                    Ranking     = 0.03m,
+                    PowerRating = -0.50m,
+                    Wins        = 0,
+                    Losses      = 0,
+                    PointsFor   = 280,   // ~20 pts/game — typical FCS scoring
+                    PointsAgainst = 420  // ~30 pts/game allowed — typical FCS defense
+                };
+            }
+
+            return result;
+        }
+
         // ── Core prediction ───────────────────────────────────────────────────────
 
         private GamePrediction CalculatePrediction(
-            WeeklyRanking teamRating, WeeklyRanking oppRating,
+            TeamRecord teamRecord, TeamRecord oppRecord,
             Teams team, Teams opponent,
             char location,
             List<MatchupHistory> rivalries,
             double avgTeamScore,
             int year, int week)
         {
-            var teamGamesPlayed = teamRating.Wins + teamRating.Losses;
-            var oppGamesPlayed  = oppRating.Wins  + oppRating.Losses;
+            var teamGamesPlayed = teamRecord.Wins + teamRecord.Losses;
+            var oppGamesPlayed  = oppRecord.Wins  + oppRecord.Losses;
 
-            // Use Ranking from WeeklyRankings — same scale the AvgScoreDifferential
-            // table was built from, enabling the full ±3.0 differential range.
+            // Use Ranking values for the differential lookup — matches the scale
+            // used when building the AvgScoreDifferential table (ExpandStrength(Ranking)).
+            // BucketWinPct (0-1 range) produces differentials far too small for the table.
             var distribution = _avgScoreDifferentialService.GetExpectedDistribution(
-                (double)(teamRating.Ranking ?? 0m),
-                (double)(oppRating.Ranking  ?? 0m));
+                (double)(teamRecord.Ranking ?? 0m),
+                (double)(oppRecord.Ranking  ?? 0m));
 
             var expectedFromTeam = distribution.ExpectedMargin;
+            expectedFromTeam     = RatingCalculator.ApplyHomeField(
+                expectedFromTeam, location == 'H', location == 'N', HomeFieldAdvantage);
 
-            expectedFromTeam = RatingCalculator.ApplyHomeField(
-                expectedFromTeam, location == 'H' || location == 'W', location == 'N', HomeFieldAdvantage);
-
-            // PowerRating differential fine-tunes the spread beyond what win record alone predicts.
-            if (teamRating.PowerRating.HasValue && oppRating.PowerRating.HasValue)
-                expectedFromTeam += (double)(teamRating.PowerRating.Value - oppRating.PowerRating.Value) * 10.0;
+            if (teamRecord.PowerRating.HasValue && oppRecord.PowerRating.HasValue)
+                expectedFromTeam += (double)(teamRecord.PowerRating.Value - oppRecord.PowerRating.Value) * 10.0;
 
             var normalizedT1 = Math.Min(team.TeamId, opponent.TeamId);
             var normalizedT2 = Math.Max(team.TeamId, opponent.TeamId);
@@ -162,11 +253,10 @@ namespace SaturdayPulse.Services
             string? rivalryNote        = rivalry != null
                 ? $"{rivalry.RivalryName} ({rivalry.RivalryTier})" : null;
 
-            // Score components from WeeklyRankings avg points data.
-            var teamPPG = teamGamesPlayed > 0 ? teamRating.PointsFor     / (double)teamGamesPlayed : avgTeamScore;
-            var oppPPG  = oppGamesPlayed  > 0 ? oppRating.PointsFor      / (double)oppGamesPlayed  : avgTeamScore;
-            var teamPAG = teamGamesPlayed > 0 ? teamRating.PointsAgainst / (double)teamGamesPlayed : avgTeamScore;
-            var oppPAG  = oppGamesPlayed  > 0 ? oppRating.PointsAgainst  / (double)oppGamesPlayed  : avgTeamScore;
+            var teamPPG = teamGamesPlayed > 0 ? teamRecord.PointsFor     / (double)teamGamesPlayed : 28.0;
+            var oppPPG  = oppGamesPlayed  > 0 ? oppRecord.PointsFor      / (double)oppGamesPlayed  : 28.0;
+            var teamPAG = teamGamesPlayed > 0 ? teamRecord.PointsAgainst / (double)teamGamesPlayed : 28.0;
+            var oppPAG  = oppGamesPlayed  > 0 ? oppRecord.PointsAgainst  / (double)oppGamesPlayed  : 28.0;
 
             var predictedTeamScore = (teamPPG + oppPAG) / 2.0 + (expectedFromTeam / 2.0);
             var predictedOppScore  = (oppPPG  + teamPAG) / 2.0 - (expectedFromTeam / 2.0);
@@ -176,8 +266,8 @@ namespace SaturdayPulse.Services
             predictedOppScore    *= weekMultiplier;
 
             double scoringAdjustment = RatingCalculator.RivalryScoringAdjustment(rivalry?.RivalryTier);
-            if (teamRating.Ranking.HasValue && teamRating.Ranking <= 25 &&
-                oppRating.Ranking.HasValue  && oppRating.Ranking  <= 25)
+            if (teamRecord.Ranking.HasValue && teamRecord.Ranking <= 25 &&
+                oppRecord.Ranking.HasValue  && oppRecord.Ranking  <= 25)
                 scoringAdjustment *= 0.95;
             if (week >= 15) scoringAdjustment *= 0.93;
 
@@ -194,8 +284,8 @@ namespace SaturdayPulse.Services
                 TeamName               = team.TeamName,
                 OpponentName           = opponent.TeamName,
                 Location               = location,
-                TeamWins               = (int)teamRating.Wins,
-                OpponentWins           = (int)oppRating.Wins,
+                TeamWins               = (int)teamRecord.Wins,
+                OpponentWins           = (int)oppRecord.Wins,
                 PredictedTeamScore     = Math.Round(predictedTeamScore, 1),
                 PredictedOpponentScore = Math.Round(predictedOppScore,  1),
                 ExpectedMargin         = Math.Round(expectedFromTeam,   1),
@@ -203,45 +293,12 @@ namespace SaturdayPulse.Services
                 RawStdDev              = stdDev,
                 Confidence             = CalculateConfidence(stdDev, varianceMultiplier),
                 RivalryNote            = rivalryNote,
-                TeamPowerRating        = teamRating.PowerRating,
-                OpponentPowerRating    = oppRating.PowerRating
+                TeamPowerRating        = teamRecord.PowerRating,
+                OpponentPowerRating    = oppRecord.PowerRating
             };
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Returns the latest WeeklyRankings snapshot for the given year,
-        /// keyed by TeamID. Falls back to the prior year if no snapshot exists
-        /// for the requested year (handles new season bootstrap).
-        /// </summary>
-        private async Task<Dictionary<int, WeeklyRanking>> GetLatestRatingsAsync(
-            int year, CancellationToken token)
-        {
-            var snapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
-
-            // Try current year first, fall back to prior year if nothing exists yet.
-            var lastSnapshot = snapshots
-                .Where(s => s.Year == year)
-                .OrderByDescending(s => s.Week)
-                .FirstOrDefault();
-
-            if (lastSnapshot == default)
-            {
-                lastSnapshot = snapshots
-                    .Where(s => s.Year == year - 1)
-                    .OrderByDescending(s => s.Week)
-                    .FirstOrDefault();
-            }
-
-            if (lastSnapshot == default)
-                return new Dictionary<int, WeeklyRanking>();
-
-            var rankings = await _uow.WeeklyRankings
-                .GetByYearAndWeekAsync(lastSnapshot.Year, lastSnapshot.Week, token);
-
-            return rankings.ToDictionary(wr => wr.TeamID);
-        }
 
         private async Task<double> GetAverageTeamScoreAsync(int year, CancellationToken token)
         {

@@ -97,7 +97,7 @@ namespace SaturdayPulse.Repositories.Implementations
                     OpponentDivision = opp.Division,
                     TeamPoints       = g.HomePoints ?? 0,
                     OpponentPoints   = g.AwayPoints ?? 0,
-                    Location         = g.NeutralSite == true ? 'N' : 'W',
+                    Location         = g.NeutralSite == true ? 'N' : 'H',
                     IsHomeTeam       = true,
                     Week             = g.Week
                 };
@@ -114,7 +114,7 @@ namespace SaturdayPulse.Repositories.Implementations
                     OpponentDivision = opp.Division,
                     TeamPoints       = g.AwayPoints ?? 0,
                     OpponentPoints   = g.HomePoints ?? 0,
-                    Location         = g.NeutralSite == true ? 'N' : 'L',
+                    Location         = g.NeutralSite == true ? 'N' : 'A',
                     IsHomeTeam       = false,
                     Week = g.Week
                 };

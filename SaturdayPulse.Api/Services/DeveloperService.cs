@@ -678,7 +678,7 @@ namespace SaturdayPulse.Services
                     {
                         TeamName     = homeTeam.TeamName,
                         OpponentName = awayTeam.TeamName,
-                        Location     = g.NeutralSite == true ? 'N' : 'W',
+                        Location     = g.NeutralSite == true ? 'N' : 'H',
                         Week         = g.Week
                     });
                 }

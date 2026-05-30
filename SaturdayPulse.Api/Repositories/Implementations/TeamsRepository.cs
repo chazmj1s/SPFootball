@@ -12,6 +12,10 @@ namespace SaturdayPulse.Repositories.Implementations
 
         public Task<List<Teams>> GetAllAsync(CancellationToken token = default)
             => _context.Teams.OrderBy(t => t.TeamName).ToListAsync(token);
+        public Task<Dictionary<int, Teams>> GetByTeamIdsAsync(IEnumerable<int> teamIds, CancellationToken token = default)
+            => _context.Teams
+                    .Where(t => teamIds.Contains(t.TeamId))
+                    .ToDictionaryAsync(t => t.TeamId, token);
         public Task<Teams?> GetByNameAsync(string teamName, CancellationToken token = default)
             => _context.Teams.FirstOrDefaultAsync(t => t.TeamName == teamName, token);
         public Task<Teams?> GetByTeamIdAsync(int teamId, CancellationToken token = default)
