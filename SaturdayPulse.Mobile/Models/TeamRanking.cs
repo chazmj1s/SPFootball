@@ -247,10 +247,57 @@ public class TeamRanking : INotifyPropertyChanged
                 PedigreePoints.Add(new ChartPoint { Index = i + 1, Value = PedigreeHistory[i] });
 
         OnPropertyChanged(nameof(HasTrendData));
+        OnPropertyChanged(nameof(TrendYMin));
+        OnPropertyChanged(nameof(TrendYMax));
+        OnPropertyChanged(nameof(TrendYInterval));
     }
 
     // keep old name as alias so existing callers don't break
     public void LoadChartPoints() => LoadTrendChartPoints();
+
+    // ── Trend / Pedigree dynamic Y axis ──────────────────────────────────
+
+    /// <summary>Per-team Y axis minimum for the Trend/Pedigree chart.</summary>
+    public double TrendYMin
+    {
+        get
+        {
+            var values = TrendPoints.Select(p => p.Value)
+                .Concat(PedigreePoints.Select(p => p.Value))
+                .ToList();
+            if (values.Count == 0) return 0;
+            var min = values.Min();
+            // Pad 15% below, snap to nearest 0.05
+            return Math.Max(0, Math.Floor((min - (min * 0.15)) * 20) / 20);
+        }
+    }
+
+    /// <summary>Per-team Y axis maximum for the Trend/Pedigree chart.</summary>
+    public double TrendYMax
+    {
+        get
+        {
+            var values = TrendPoints.Select(p => p.Value)
+                .Concat(PedigreePoints.Select(p => p.Value))
+                .ToList();
+            if (values.Count == 0) return 1;
+            var max = values.Max();
+            // Pad 15% above, snap to nearest 0.05
+            return Math.Ceiling((max + (max * 0.15)) * 20) / 20;
+        }
+    }
+
+    /// <summary>A clean interval that produces ~4 gridlines between min and max.</summary>
+    public double TrendYInterval
+    {
+        get
+        {
+            var range = TrendYMax - TrendYMin;
+            if (range <= 0) return 0.1;
+            // Round to nearest 0.05 for clean labels
+            return Math.Max(0.05, Math.Round(range / 4 * 20) / 20);
+        }
+    }
 
     // =========================================================
     // Season Arc Chart Data
@@ -280,10 +327,61 @@ public class TeamRanking : INotifyPropertyChanged
         foreach (var w in SeasonArcWeeks)
         {
             ArcRankingPoints.Add(new ChartPoint { Index = w.Week, Value = w.Ranking  ?? 0 });
-            ArcSosPoints    .Add(new ChartPoint { Index = w.Week, Value = (w.CombinedSOS-1)*10 ?? 0 });
+            ArcSosPoints    .Add(new ChartPoint { Index = w.Week, Value = (w.CombinedSOS - 1) * 10 ?? 0 });
             ArcWinPctPoints .Add(new ChartPoint { Index = w.Week, Value = w.WinPct });
         }
+
+        OnPropertyChanged(nameof(ArcRatingYMin));
+        OnPropertyChanged(nameof(ArcRatingYMax));
+        OnPropertyChanged(nameof(ArcRatingYInterval));
+        OnPropertyChanged(nameof(ArcSosYMin));
+        OnPropertyChanged(nameof(ArcSosYMax));
+        OnPropertyChanged(nameof(ArcSosYInterval));
+        OnPropertyChanged(nameof(ArcPctYMin));
+        OnPropertyChanged(nameof(ArcPctYMax));
+        OnPropertyChanged(nameof(ArcPctYInterval));
     }
+
+    // ── Season Arc dynamic Y axis — shared bounds across all three series ─
+
+    private static (double Min, double Max, double Interval) ComputeAxisBounds(
+        IEnumerable<ChartPoint> points, double snapTo, double fallbackMin, double fallbackMax)
+    {
+        var values = points.Select(p => p.Value).ToList();
+        if (values.Count == 0) return (fallbackMin, fallbackMax, (fallbackMax - fallbackMin) / 4);
+
+        var rawMin = values.Min();
+        var rawMax = values.Max();
+        var pad    = Math.Max(Math.Abs(rawMin), Math.Abs(rawMax)) * 0.15;
+        if (pad < snapTo) pad = snapTo;
+
+        double snap     = 1.0 / snapTo;
+        double min      = Math.Floor((rawMin  - pad) * snap) / snap;
+        double max      = Math.Ceiling((rawMax + pad) * snap) / snap;
+        double range    = max - min;
+        double interval = Math.Max(snapTo, Math.Round(range / 4 * snap) / snap);
+
+        return (min, max, interval);
+    }
+
+    private (double Min, double Max, double Interval) ArcSharedBounds =>
+        ComputeAxisBounds(
+            ArcRankingPoints
+                .Concat(ArcSosPoints)
+                .Concat(ArcWinPctPoints),
+            0.25, -1, 2);
+
+    public double ArcRatingYMin      => ArcSharedBounds.Min;
+    public double ArcRatingYMax      => ArcSharedBounds.Max;
+    public double ArcRatingYInterval => ArcSharedBounds.Interval;
+
+    public double ArcSosYMin      => ArcSharedBounds.Min;
+    public double ArcSosYMax      => ArcSharedBounds.Max;
+    public double ArcSosYInterval => ArcSharedBounds.Interval;
+
+    public double ArcPctYMin      => ArcSharedBounds.Min;
+    public double ArcPctYMax      => ArcSharedBounds.Max;
+    public double ArcPctYInterval => ArcSharedBounds.Interval;
 
     // =========================================================
     // INotifyPropertyChanged
