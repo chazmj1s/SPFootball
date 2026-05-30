@@ -35,7 +35,7 @@ namespace SaturdayPulse.Services
             if (games.Count == 0) return new ScheduleResult(Array.Empty<object>());
 
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
-            var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
 
             string GetConfAbbr(Teams? t)
             {
@@ -58,74 +58,84 @@ namespace SaturdayPulse.Services
             if (firstGame != null)
             {
                 var found = allProjections.TryGetValue(firstGame.GameId, out _);
-
                 Console.WriteLine($"First GameId: {firstGame.GameId}, Found: {found}, Cache sample: {string.Join(", ", allProjections.Keys.Take(5))}");
             }
 
             var results = games.Select(g =>
             {
-                Teams.TryGetValue(g.HomeId ?? 0, out var homeTeam); 
-                Teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+                teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+                teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
 
-                bool homeWon   = (g.HomePoints ?? 0) >= (g.AwayPoints ?? 0);
-                var winnerId   = homeWon ? g.HomeId    : g.AwayId;
-                var winnerName = homeWon ? g.HomeName  : g.AwayName;
-                var winnerTeam = homeWon ? homeTeam    : awayTeam;
-                var wPoints    = homeWon ? (g.HomePoints ?? 0) : (g.AwayPoints ?? 0);
+                var homePoints = g.HomePoints ?? 0;
+                var awayPoints = g.AwayPoints ?? 0;
+                var isPlayed = homePoints > 0 || awayPoints > 0;
+                var actualOU = homePoints + awayPoints;
 
-                var loserId    = homeWon ? g.AwayId    : g.HomeId;
-                var loserName  = homeWon ? g.AwayName  : g.HomeName;
-                var loserTeam  = homeWon ? awayTeam    : homeTeam;
-                var lPoints    = homeWon ? (g.AwayPoints ?? 0) : (g.HomePoints ?? 0);
+                char location = g.NeutralSite == true ? 'N' : 'H'; // H = home team is identified; away team is away
 
-                char location  = g.NeutralSite == true ? 'N' : homeWon ? 'W' : 'L';
-
-                double? projWinner = null, projLoser = null;
+                double? projHome = null, projAway = null;
                 if (allProjections.TryGetValue(g.GameId, out var pred))
                 {
-                    projWinner = Math.Max(0, Math.Round(pred.PredictedTeamScore, 1));
-                    projLoser  = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
+                    // Projections are stored as PredictedTeamScore = home, PredictedOpponentScore = away
+                    projHome = Math.Max(0, Math.Round(pred.PredictedTeamScore, 1));
+                    projAway = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
                 }
 
-                var actualOU = wPoints + lPoints;
-                var projOU   = projWinner.HasValue && projLoser.HasValue
-                               ? (double?)Math.Round(projWinner.Value + projLoser.Value, 1) : null;
+                var projOU = projHome.HasValue && projAway.HasValue
+                             ? (double?)Math.Round(projHome.Value + projAway.Value, 1) : null;
 
                 return (object)new
                 {
-                    Id              = g.GameId,
+                    Id = g.GameId,
                     g.Year,
                     g.Week,
-                    GameDate        = g.GameDate,
-                    GameDay         = g.GameDay,
-                    WinnerName      = winnerName,
-                    WinnerShortName = winnerName,
-                    WinnerId        = winnerId,
-                    WinnerConf      = GetConfAbbr(winnerTeam),
-                    WinnerTier      = RatingCalculator.GetConferenceTier(GetConfName(winnerTeam), winnerName),
-                    WPoints         = wPoints,
-                    LoserName       = loserName,
-                    LoserShortName  = loserName,
-                    LoserId         = loserId,
-                    LoserConf       = GetConfAbbr(loserTeam),
-                    LoserTier       = RatingCalculator.GetConferenceTier(GetConfName(loserTeam), loserName),
-                    LPoints         = lPoints,
-                    Location        = location,
-                    ActualOU        = actualOU,
-                    ProjWinnerScore = projWinner,
-                    ProjLoserScore  = projLoser,
-                    ProjOU          = projOU,
-                    // Future rebind fields — ignored by client today
-                    HomeId          = g.HomeId,
-                    HomeName        = g.HomeName,
-                    AwayId          = g.AwayId,
-                    AwayName        = g.AwayName
+                    GameDate = g.GameDate,
+                    GameDay = g.GameDay,
+
+                    // Home team (bottom row on client)
+                    HomeName = g.HomeName,
+                    HomeId = g.HomeId,
+                    HomeConf = GetConfAbbr(homeTeam),
+                    HomeTier = RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName),
+                    HomePoints = homePoints,
+                    HomeProjScore = projHome,
+
+                    // Away team (top row on client)
+                    AwayName = g.AwayName,
+                    AwayId = g.AwayId,
+                    AwayConf = GetConfAbbr(awayTeam),
+                    AwayTier = RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName),
+                    AwayPoints = awayPoints,
+                    AwayProjScore = projAway,
+
+                    Location = location,
+                    IsPlayed = isPlayed,
+                    ActualOU = actualOU,
+                    ProjOU = projOU,
+
+                    // Legacy winner/loser fields — kept temporarily so the existing client
+                    // doesn't break before it's updated to consume the new home/away fields.
+                    WinnerName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
+                    WinnerShortName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
+                    WinnerId = homePoints >= awayPoints ? g.HomeId : g.AwayId,
+                    WinnerConf = homePoints >= awayPoints ? GetConfAbbr(homeTeam) : GetConfAbbr(awayTeam),
+                    WinnerTier = homePoints >= awayPoints
+                                      ? RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName)
+                                      : RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName),
+                    WPoints = homePoints >= awayPoints ? homePoints : awayPoints,
+                    LoserName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
+                    LoserShortName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
+                    LoserId = homePoints >= awayPoints ? g.AwayId : g.HomeId,
+                    LoserConf = homePoints >= awayPoints ? GetConfAbbr(awayTeam) : GetConfAbbr(homeTeam),
+                    LoserTier = homePoints >= awayPoints
+                                      ? RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName)
+                                      : RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName),
+                    LPoints = homePoints >= awayPoints ? awayPoints : homePoints,
                 };
             }).ToList();
 
             return new ScheduleResult(results);
         }
-
         // ── Teams and Rivalries ──────────────────────────────────────────────────
 
         /// <summary>
