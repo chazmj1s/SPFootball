@@ -215,7 +215,11 @@
                     </chart:SfCartesianChart.XAxes>
 
                     <chart:SfCartesianChart.YAxes>
-                      <chart:NumericalAxis Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="True" />
+                      <chart:NumericalAxis
+                          Minimum="{Binding TrendYMin}"
+                          Maximum="{Binding TrendYMax}"
+                          Interval="{Binding TrendYInterval}"
+                          ShowMajorGridLines="True" />
                     </chart:SfCartesianChart.YAxes>
 
                     <chart:SplineSeries
@@ -274,17 +278,20 @@
 
                     <chart:SfCartesianChart.YAxes>
                         <chart:NumericalAxis x:Name="RatingAxis"
-                           Minimum="-1" Maximum="2"
-                           Interval="0.5"
+                           Minimum="{Binding ArcRatingYMin}"
+                           Maximum="{Binding ArcRatingYMax}"
+                           Interval="{Binding ArcRatingYInterval}"
                            ShowMajorGridLines="True" />
                         <chart:NumericalAxis x:Name="PctAxis"
-                           Minimum="0" Maximum="1.2"
-                           Interval="0.2"
+                           Minimum="{Binding ArcPctYMin}"
+                           Maximum="{Binding ArcPctYMax}"
+                           Interval="{Binding ArcPctYInterval}"
                            ShowMajorGridLines="False"
                            CrossesAt="9999" />
                         <chart:NumericalAxis x:Name="SOSAxis"
-                           Minimum="0" Maximum="1.2"
-                           Interval="0.2"
+                           Minimum="{Binding ArcSosYMin}"
+                           Maximum="{Binding ArcSosYMax}"
+                           Interval="{Binding ArcSosYInterval}"
                            ShowMajorGridLines="False"
                            CrossesAt="9999" />
                     </chart:SfCartesianChart.YAxes>
