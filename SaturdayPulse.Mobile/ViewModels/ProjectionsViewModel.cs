@@ -39,6 +39,11 @@ namespace SaturdayPulse.ViewModels
                 if (team != null) team.IsExpanded = !team.IsExpanded;
             });
 
+            ToggleChartExpandCommand = new Microsoft.Maui.Controls.Command<ProjectedTeamStanding>(team =>
+            {
+                if (team != null) team.IsChartExpanded = !team.IsChartExpanded;
+            });
+
             ToggleMatchupExpandCommand = new Microsoft.Maui.Controls.Command<ChampionshipMatchup>(matchup =>
             {
                 if (matchup != null) matchup.IsExpanded = !matchup.IsExpanded;
@@ -102,6 +107,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand LoadDataCommand               { get; }
         public ICommand SelectViewCommand             { get; }
         public ICommand ToggleTeamExpandCommand       { get; }
+        public ICommand ToggleChartExpandCommand      { get; }
         public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
 

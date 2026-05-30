@@ -172,13 +172,12 @@ namespace SaturdayPulse.Services
         /// <summary>
         /// Gets team schedule as JSON
         /// </summary>
-        public async Task<string?> GetTeamScheduleAsync(int teamId, int year)
+        public async Task<TeamScheduleResponse?> GetTeamScheduleAsync(int teamId, int year)
         {
             try
             {
                 var url = $"teamSchedule/v2?teamId={teamId}&year={year}";
-                var response = await _httpClient.GetStringAsync(url);
-                return response;
+                return await _httpClient.GetFromJsonAsync<TeamScheduleResponse>(url);
             }
             catch (Exception ex)
             {
