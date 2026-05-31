@@ -112,6 +112,7 @@ namespace SaturdayPulse.Services
                     IsPlayed = isPlayed,
                     ActualOU = actualOU,
                     ProjOU = projOU,
+                    SeasonType = g.SeasonType,
 
                     // Legacy winner/loser fields — kept temporarily so the existing client
                     // doesn't break before it's updated to consume the new home/away fields.
@@ -1009,6 +1010,98 @@ namespace SaturdayPulse.Services
             } : null;
 
             return new TeamScheduleV2Result(summary, games);
+        }
+
+        // ── Postseason ───────────────────────────────────────────────────────────
+
+        public async Task<ScheduleResult> GetPostseasonGamesV2Async(int? year, CancellationToken token = default)
+        {
+            var targetYear = year ?? DateTime.Now.Year;
+
+            var games = await _uow.Games.GetPostSeasonByYear(targetYear, token);
+            if (games.Count == 0) return new ScheduleResult(Array.Empty<object>());
+
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+            var teams      = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+
+            // FBS only — exclude FCS/D2/D3 placeholder rows
+            games = games
+                .Where(g =>
+                {
+                    teams.TryGetValue(g.HomeId ?? 0, out var ht);
+                    teams.TryGetValue(g.AwayId ?? 0, out var at);
+                    return string.Equals(ht?.Division, "fbs", StringComparison.OrdinalIgnoreCase) &&
+                           string.Equals(at?.Division, "fbs", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+
+            if (games.Count == 0) return new ScheduleResult(Array.Empty<object>());
+
+            string GetConfAbbr(SaturdayPulse.Models.Teams? t)
+            {
+                if (t?.ConferenceId == null) return string.Empty;
+                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                return conf?.Abbreviation ?? string.Empty;
+            }
+
+            string GetConfName(SaturdayPulse.Models.Teams? t)
+            {
+                if (t?.ConferenceId == null) return string.Empty;
+                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                return conf?.Name ?? string.Empty;
+            }
+
+            var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
+
+            var results = games.Select(g =>
+            {
+                teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+                teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+
+                var homePoints = g.HomePoints ?? 0;
+                var awayPoints = g.AwayPoints ?? 0;
+                var isPlayed   = homePoints > 0 || awayPoints > 0;
+                var actualOU   = homePoints + awayPoints;
+                char location  = g.NeutralSite == true ? 'N' : 'H';
+
+                double? projHome = null, projAway = null;
+                if (allProjections.TryGetValue(g.GameId, out var pred))
+                {
+                    projHome = Math.Max(0, Math.Round(pred.PredictedTeamScore,     1));
+                    projAway = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
+                }
+
+                var projOU = projHome.HasValue && projAway.HasValue
+                             ? (double?)Math.Round(projHome.Value + projAway.Value, 1) : null;
+
+                return (object)new
+                {
+                    Id            = g.GameId,
+                    g.Year,
+                    g.Week,
+                    GameDate      = g.GameDate,
+                    GameDay       = g.GameDay,
+                    HomeName      = g.HomeName,
+                    HomeId        = g.HomeId,
+                    HomeConf      = GetConfAbbr(homeTeam),
+                    HomeTier      = RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName),
+                    HomePoints    = homePoints,
+                    HomeProjScore = projHome,
+                    AwayName      = g.AwayName,
+                    AwayId        = g.AwayId,
+                    AwayConf      = GetConfAbbr(awayTeam),
+                    AwayTier      = RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName),
+                    AwayPoints    = awayPoints,
+                    AwayProjScore = projAway,
+                    Location      = location,
+                    IsPlayed      = isPlayed,
+                    ActualOU      = actualOU,
+                    ProjOU        = projOU,
+                    SeasonType    = g.SeasonType,
+                };
+            }).ToList();
+
+            return new ScheduleResult(results);
         }
 
         // ── Private helpers ───────────────────────────────────────────────────────

@@ -44,12 +44,15 @@ namespace SaturdayPulse.ViewModels
             });
 
             _navState.PropertyChanged += OnNavStateChanged;
-
         }
 
         // ── Bindable collections ──────────────────────────────────────────
 
         public ObservableCollection<ChampionshipMatchup> Championships { get; } = new();
+        public ObservableCollection<PlayoffRound> PlayoffRounds { get; } = new();
+        public ObservableCollection<BowlDayGroup> BowlDays { get; } = new();
+        private bool _playoffLoaded;
+        private bool _bowlsLoaded;
 
         // ── Bindable properties ───────────────────────────────────────────
 
@@ -60,7 +63,9 @@ namespace SaturdayPulse.ViewModels
         }
 
         public bool IsLoading => _isBusy;
-        public bool HasLoaded { get; set; }
+        public bool HasLoaded       { get; set; }
+        public bool HasPlayoffData  => PlayoffRounds.Any();
+        public bool HasBowlData     => BowlDays.Any();
 
         public string StatusMessage
         {
@@ -94,6 +99,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
 
+
         // ── Load ──────────────────────────────────────────────────────────
 
         public async Task LoadDataAsync()
@@ -104,17 +110,63 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
+                // ── Championship projections ──────────────────────────────
                 var championships = await _apiService.GetProjectedChampionshipQualifiersAsync(
                     _navState.SelectedYear, _navState.SelectedWeek);
 
-                if (championships == null)
+                if (championships != null)
                 {
-                    StatusMessage = "Failed to load projections";
-                    return;
+                    _allChampionships = championships;
+                    ApplyConferenceFilter();
                 }
 
-                _allChampionships = championships;
-                ApplyConferenceFilter();
+                // ── Postseason games (playoff + bowl) — load once per year ──
+                if (!_playoffLoaded && !_bowlsLoaded)
+                {
+                    var postseason = await _apiService.GetPostseasonAsync(_navState.SelectedYear);
+                    if (postseason != null && postseason.Count > 0)
+                    {
+                        var weekToRound = new Dictionary<int, string>
+                        {
+                            { 17, "First Round" },
+                            { 19, "Quarterfinals" },
+                            { 20, "Semifinals" },
+                            { 21, "National Championship" }
+                        };
+
+                        var playoffRounds = postseason
+                            .Where(g => g.SeasonType == "playoff")
+                            .GroupBy(g => g.Week)
+                            .OrderBy(g => g.Key)
+                            .Select(weekGrp =>
+                            {
+                                var label = weekToRound.TryGetValue(weekGrp.Key, out var r) ? r : $"Week {weekGrp.Key}";
+                                var days  = weekGrp
+                                    .GroupBy(g => g.GroupHeader)
+                                    .OrderBy(g => g.Key)
+                                    .Select(dayGrp => new PlayoffDayGroup(dayGrp.Key, dayGrp.ToList()))
+                                    .ToList();
+                                return new PlayoffRound(label, days);
+                            });
+
+                        PlayoffRounds.Clear();
+                        foreach (var round in playoffRounds)
+                            PlayoffRounds.Add(round);
+                        _playoffLoaded = true;
+                        OnPropertyChanged(nameof(HasPlayoffData));
+
+                        var bowlGroups = postseason
+                            .Where(g => g.SeasonType == "postseason")
+                            .GroupBy(g => g.GameDate ?? "TBD")
+                            .OrderBy(g => g.Key);
+
+                        BowlDays.Clear();
+                        foreach (var grp in bowlGroups)
+                            BowlDays.Add(new BowlDayGroup(grp.Key, grp.OrderBy(g => g.GameDate).ToList()));
+                        _bowlsLoaded = true;
+                        OnPropertyChanged(nameof(HasBowlData));
+                    }
+                }
 
                 StatusMessage = $"Week {_navState.SelectedWeek} projections";
                 HasLoaded = true;
@@ -150,7 +202,17 @@ namespace SaturdayPulse.ViewModels
 
         private async void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
         {
-            // User week tap — re-filter client-side only, no server call
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
+            {
+                _playoffLoaded = false;
+                _bowlsLoaded   = false;
+                PlayoffRounds.Clear();
+                BowlDays.Clear();
+            }
+
+            // Week and conference changes only affect Championship view
+            if (_selectedView == "Playoffs" || _selectedView == "Bowls") return;
+
             if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
                 await LoadDataAsync();
 
@@ -158,5 +220,46 @@ namespace SaturdayPulse.ViewModels
                 ApplyConferenceFilter();
         }
 
+    }
+}
+
+// ── Grouping models ───────────────────────────────────────────────────────────
+
+namespace SaturdayPulse.ViewModels
+{
+    /// <summary>One round of the CFP bracket (First Round / Quarterfinals / Semifinals / Championship).</summary>
+    public class PlayoffRound
+    {
+        public string RoundLabel { get; }
+        public List<PlayoffDayGroup> Days { get; }
+        public PlayoffRound(string label, List<PlayoffDayGroup> days)
+        {
+            RoundLabel = label;
+            Days       = days;
+        }
+    }
+
+    /// <summary>One calendar day of CFP playoff games within a round.</summary>
+    public class PlayoffDayGroup
+    {
+        public string DateLabel { get; }
+        public List<SaturdayPulse.Models.GameResult> Games { get; }
+        public PlayoffDayGroup(string dateLabel, List<SaturdayPulse.Models.GameResult> games)
+        {
+            DateLabel = dateLabel;
+            Games     = games;
+        }
+    }
+
+    /// <summary>One calendar day of bowl games.</summary>
+    public class BowlDayGroup
+    {
+        public string DateLabel { get; }
+        public List<SaturdayPulse.Models.GameResult> Games { get; }
+        public BowlDayGroup(string dateLabel, List<SaturdayPulse.Models.GameResult> games)
+        {
+            DateLabel = dateLabel;
+            Games     = games;
+        }
     }
 }

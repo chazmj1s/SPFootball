@@ -11,8 +11,9 @@ namespace SaturdayPulse.Models
         public int     Year { get; set; }
         public int     Week { get; set; }
 
-        public string? GameDate { get; set; }
-        public string? GameDay  { get; set; }
+        public string? GameDate    { get; set; }
+        public string? GameDay     { get; set; }
+        public string  SeasonType   { get; set; } = "regular";
 
         /// <summary>Sequential position assigned by the ViewModel after load — used for "original order" sort.</summary>
         public int  SequenceNumber { get; set; }
@@ -47,6 +48,8 @@ namespace SaturdayPulse.Models
         // ── Display: visitor (away) on top, home on bottom ────────────────
 
         public string VisitorName  => AwayName;
+        public string VisitorNameWithConf => string.IsNullOrEmpty(AwayConf)  ? AwayName  : $"{AwayName} ({AwayConf})";
+        public string HomeNameWithConf    => string.IsNullOrEmpty(HomeConf)  ? HomeName  : $"{HomeName} ({HomeConf})";
         public string VisitorScore => IsPlayed ? AwayPoints.ToString() : "–";
         public string HomeScore    => IsPlayed ? HomePoints.ToString()  : "–";
 

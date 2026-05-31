@@ -169,6 +169,30 @@ namespace SaturdayPulse.Services
             }
         }
 
+        // <summary>
+        /// Gets the full season schedule with actual and projected scores.
+        /// </summary>
+        public async Task<List<Models.GameResult>?> GetPostseasonAsync(int? year = null)
+        {
+            try
+            {
+                var currentYear = year ?? DateTime.Now.Year;
+                var url = $"postseason/v2?year={currentYear}";
+                var envelope = await _httpClient.GetFromJsonAsync<PostseasonEnvelope>(url);
+                return envelope?.Games;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error getting postseason: {ex.Message}");
+                return null;
+            }
+        }
+
+        private class PostseasonEnvelope
+        {
+            public List<Models.GameResult> Games { get; set; } = new();
+        }
+
         /// <summary>
         /// Gets team schedule as JSON
         /// </summary>
@@ -182,6 +206,42 @@ namespace SaturdayPulse.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error getting team schedule: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets CFP playoff games (SeasonType == "playoff") for a given year.
+        /// </summary>
+        public async Task<List<Models.GameResult>?> GetPlayoffGamesAsync(int? year = null)
+        {
+            try
+            {
+                var currentYear = year ?? DateTime.Now.Year;
+                var url = $"playoff-games/v2?year={currentYear}";
+                return await _httpClient.GetFromJsonAsync<List<Models.GameResult>>(url);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error getting playoff games: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets FBS bowl games (SeasonType == "postseason") for a given year.
+        /// </summary>
+        public async Task<List<Models.GameResult>?> GetBowlGamesAsync(int? year = null)
+        {
+            try
+            {
+                var currentYear = year ?? DateTime.Now.Year;
+                var url = $"bowl-games/v2?year={currentYear}";
+                return await _httpClient.GetFromJsonAsync<List<Models.GameResult>>(url);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error getting bowl games: {ex.Message}");
                 return null;
             }
         }
