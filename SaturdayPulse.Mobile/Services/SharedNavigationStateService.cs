@@ -15,7 +15,9 @@ namespace SaturdayPulse.Services
         private int    _selectedYear       = 2025;
         private int    _selectedWeek       = 1;
         private string _selectedConference = "All";
-        private bool   _showFavoritesFirst = Preferences.Get("ShowFavoritesFirst", false);
+        private bool   _showFavoritesFirst    = Preferences.Get("ShowFavoritesFirst", false);
+        private string _defaultWeek           = Preferences.Get("DefaultWeek", "Current");
+        private string _defaultConference     = Preferences.Get("DefaultConference", "All");
         private bool   _suppressNavReady   = false;
 
         // ── Year ──────────────────────────────────────────────────────────
@@ -109,6 +111,42 @@ namespace SaturdayPulse.Services
             }
         }
 
+        // ── Default Week preference ───────────────────────────────────────
+
+        /// <summary>
+        /// "Week1" or "Current" — controls which week is selected on app launch.
+        /// </summary>
+        public string DefaultWeek
+        {
+            get => _defaultWeek;
+            set
+            {
+                if (_defaultWeek == value) return;
+                _defaultWeek = value;
+                Preferences.Set("DefaultWeek", value);
+                OnPropertyChanged();
+            }
+        }
+
+        // ── Default Conference preference ─────────────────────────────────
+
+        /// <summary>
+        /// Conference abbreviation or "All" — applied to SelectedConference on launch.
+        /// </summary>
+        public string DefaultConference
+        {
+            get => _defaultConference;
+            set
+            {
+                if (_defaultConference == value) return;
+                _defaultConference = value;
+                Preferences.Set("DefaultConference", value);
+                OnPropertyChanged();
+                // Apply immediately so the header updates without restarting
+                SelectedConference = value;
+            }
+        }
+
         // ── Week items ────────────────────────────────────────────────────
 
         public ObservableCollection<WeekItem> Weeks { get; } = new();
@@ -124,6 +162,67 @@ namespace SaturdayPulse.Services
         {
             foreach (var w in Weeks)
                 w.IsSelected = w.Week == _selectedWeek;
+        }
+
+        // ── Startup defaults ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Called once after the schedule loads. Sets SelectedConference and
+        /// SelectedWeek according to the user's saved DefaultConference /
+        /// DefaultWeek preferences.
+        ///
+        /// "Current" = the highest week number whose earliest game date is
+        /// on or before today.  Falls back to week 1 if all games are future.
+        /// </summary>
+        public void ApplyStartupDefaults<T>(
+            IEnumerable<T> schedule,
+            Func<T, int>       getWeek,
+            Func<T, DateTime?> getDate)
+        {
+            // ── Conference ────────────────────────────────────────────────
+            if (_defaultConference != "All")
+                SelectedConference = _defaultConference;
+
+            // ── Week ──────────────────────────────────────────────────────
+            if (_defaultWeek == "Week1")
+            {
+                SelectedWeek = 1;
+                return;
+            }
+
+            // "Current" — last week with at least one game date ≤ today.
+            // If no games have been played yet (pre-season / off-season),
+            // the season hasn't started so default to week 1.
+            var today = DateTime.Today;
+            var games = schedule.ToList();
+
+            var seasonStartDate = games
+                .Select(g => getDate(g))
+                .Where(d => d.HasValue)
+                .Select(d => d!.Value.Date)
+                .DefaultIfEmpty(DateTime.MaxValue)
+                .Min();
+
+            if (today < seasonStartDate)
+            {
+                // Off-season or pre-season — no games played yet
+                SelectedWeek = 1;
+                return;
+            }
+
+            // At least one game has been played — find the latest such week
+            var currentWeek = games
+                .GroupBy(g => getWeek(g))
+                .Where(grp => grp.Any(g =>
+                {
+                    var d = getDate(g);
+                    return d.HasValue && d.Value.Date <= today;
+                }))
+                .Select(grp => grp.Key)
+                .DefaultIfEmpty(1)
+                .Max();
+
+            SelectedWeek = currentWeek;
         }
 
         // ── INotifyPropertyChanged ────────────────────────────────────────
