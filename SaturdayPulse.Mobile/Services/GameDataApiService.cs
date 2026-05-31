@@ -354,7 +354,7 @@ namespace SaturdayPulse.Services
         /// <summary>
         /// Gets projected conference championship qualifiers for all FBS conferences.
         /// </summary>
-        public async Task<List<ChampionshipMatchup>> GetProjectedChampionshipQualifiersAsync(
+        public async Task<List<ChampionshipMatchup>?> GetProjectedChampionshipQualifiersAsync(
             int year,
             int? throughWeek = null)
         {
@@ -389,7 +389,9 @@ namespace SaturdayPulse.Services
                                            {
                                                TeamName         = c.GetProperty("teamName").GetString(),
                                                ConferenceWins   = c.GetProperty("conferenceWins").GetInt32(),
-                                               ConferenceLosses = c.GetProperty("conferenceLosses").GetInt32()
+                                               ConferenceLosses = c.GetProperty("conferenceLosses").GetInt32(),
+                                               ActualConferenceWins = c.GetProperty("actualConferenceWins").GetInt32(),
+                                               ActualConferenceLosses = c.GetProperty("actualConferenceLosses").GetInt32()
                                            }).ToList()
                 }).ToList();
             }
@@ -405,8 +407,8 @@ namespace SaturdayPulse.Services
             TeamName         = q.GetProperty("teamName").GetString(),
             ConferenceWins   = q.GetProperty("conferenceWins").GetInt32(),
             ConferenceLosses = q.GetProperty("conferenceLosses").GetInt32(),
-            OverallWins      = q.GetProperty("overallWins").GetInt32(),
-            OverallLosses    = q.GetProperty("overallLosses").GetInt32(),
+            ActualConferenceWins = q.GetProperty("actualConferenceWins").GetInt32(),
+            ActualConferenceLosses = q.GetProperty("actualConferenceLosses").GetInt32(),
             Division         = q.TryGetProperty("division", out var d) && d.ValueKind != JsonValueKind.Null
                                    ? d.GetString() : null
         };

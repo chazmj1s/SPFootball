@@ -11,23 +11,13 @@
   <Grid RowDefinitions="Auto,*,24">
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 0: Loading indicator                            -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <ActivityIndicator Grid.Row="0"
-                       IsRunning="{Binding IsLoading}"
-                       IsVisible="{Binding IsLoading}"
-                       HorizontalOptions="Center"
-                       VerticalOptions="Center" />
-
-    <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 1: Games list with pull-to-refresh              -->
     <!-- ═══════════════════════════════════════════════════ -->
     <RefreshView Grid.Row="1"
                  Command="{Binding RefreshCommand}"
-                 IsRefreshing="{Binding IsLoading}">
+                 IsRefreshing="False">
 
-      <CollectionView ItemsSource="{Binding Games}"
-                      IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
+      <CollectionView ItemsSource="{Binding Games}">
 
         <CollectionView.ItemTemplate>
           <DataTemplate x:DataType="models:GameResult">
@@ -174,12 +164,7 @@
              Padding="8,0" FontSize="10" Opacity="0.5"
              VerticalOptions="Center" HorizontalOptions="Start"
              TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
-      <ActivityIndicator IsRunning="{Binding IsLoading}"
-                         IsVisible="{Binding IsLoading}"
-                         HeightRequest="16" WidthRequest="16"
-                         HorizontalOptions="End" VerticalOptions="Center"
-                         Margin="8,0" />
-    </Grid>
+</Grid>
 
   </Grid>
 </ContentPage>

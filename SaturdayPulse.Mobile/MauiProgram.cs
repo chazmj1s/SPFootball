@@ -53,17 +53,17 @@ public static class MauiProgram
         });
 
         // Register ViewModels
-        builder.Services.AddTransient<PowerRankingsViewModel>();
-        builder.Services.AddTransient<ScheduleViewModel>();
-        builder.Services.AddTransient<SettingsViewModel>();
-        builder.Services.AddTransient<ProjectionsViewModel>();
+        builder.Services.AddSingleton<PowerRankingsViewModel>();
+        builder.Services.AddSingleton<ScheduleViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>();
+        builder.Services.AddSingleton<ProjectionsViewModel>();
         builder.Services.AddSingleton<MainViewModel>();
 
         // Register Pages
-        builder.Services.AddTransient<PowerRankingsPage>();
-        builder.Services.AddTransient<SchedulePage>();
-        builder.Services.AddTransient<SettingsPage>();
-        builder.Services.AddTransient<ProjectionsPage>();
+        builder.Services.AddSingleton<PowerRankingsPage>();
+        builder.Services.AddSingleton<SchedulePage>();
+        builder.Services.AddSingleton<SettingsPage>();
+        builder.Services.AddSingleton<ProjectionsPage>();
         builder.Services.AddSingleton<MainPage>();
 
 #if DEBUG

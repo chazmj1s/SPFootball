@@ -94,7 +94,7 @@ namespace SaturdayPulse.Models
         // ── Display helpers ───────────────────────────────────────────────
 
         // Conference record (existing)
-        public string ActualRecord    => $"{ActualWins}-{ActualLosses}";
+        public string ActualConferenceRecord    => $"{ActualWins}-{ActualLosses}";
         public string ProjectedRecord => $"{ProjectedWins}-{ProjectedLosses}";
 
         // Overall record
@@ -107,8 +107,8 @@ namespace SaturdayPulse.Models
             OverallProjectedWins > 0 || OverallProjectedLosses > 0;
 
         public string RecordDisplay => ActualWins == ProjectedWins && ActualLosses == ProjectedLosses
-            ? ActualRecord
-            : $"{ActualRecord}  →  {ProjectedRecord}";
+            ? ActualConferenceRecord
+            : $"{ActualConferenceRecord}  →  {ProjectedRecord}";
 
         public string FinishDisplay   => ProjectedFinish > 0 ? $"#{ProjectedFinish}" : "";
         public bool   IsQualifier     => ProjectedFinish <= 2;
@@ -188,10 +188,13 @@ namespace SaturdayPulse.Models
         public int    ConferenceLosses { get; set; }
         public int    OverallWins      { get; set; }
         public int    OverallLosses    { get; set; }
+        public int    ActualConferenceWins       { get; set; }
+        public int    ActualConferenceLosses     { get; set; }
         public string Division         { get; set; }
 
         public string ConferenceRecord => $"{ConferenceWins}-{ConferenceLosses}";
         public string OverallRecord    => $"{OverallWins}-{OverallLosses}";
+        public string ActualConferenceRecord     => $"{ActualConferenceWins}-{ActualConferenceLosses}";
     }
 
     public class ChampionshipContender
@@ -199,7 +202,13 @@ namespace SaturdayPulse.Models
         public string TeamName          { get; set; }
         public int    ConferenceWins    { get; set; }
         public int    ConferenceLosses  { get; set; }
+        public int    OverallWins       { get; set; }
+        public int    OverallLosses     { get; set; }
+        public int    ActualConferenceWins        { get; set; }
+        public int    ActualConferenceLosses      { get; set; }
         public string ConferenceRecord  => $"{ConferenceWins}-{ConferenceLosses}";
+        public string OverallRecord     => $"{OverallWins}-{OverallLosses}";
+        public string ActualConferenceRecord      => $"{ActualConferenceWins}-{ActualConferenceLosses}";
     }
 
     // ── Championship matchup ──────────────────────────────────────────────

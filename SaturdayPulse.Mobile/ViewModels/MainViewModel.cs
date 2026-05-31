@@ -47,6 +47,7 @@ namespace SaturdayPulse.ViewModels
 
             SelectWeekCommand = new Microsoft.Maui.Controls.Command<int>(week =>
             {
+                Console.WriteLine($"[SelectWeek] week={week}");
                 _navState.SelectedWeek = week;
             });
 
@@ -81,7 +82,9 @@ namespace SaturdayPulse.ViewModels
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
                     OnPropertyChanged(nameof(SelectedYear));
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
-                    OnPropertyChanged(nameof(SelectedWeek));
+                {
+                    OnPropertyChanged(nameof(SelectedWeek));  // triggers scroll in MainPage
+                }
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
                     OnPropertyChanged(nameof(SelectedConference));
                 if (e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
@@ -127,6 +130,22 @@ namespace SaturdayPulse.ViewModels
         public ICommand SelectConferenceCommand { get; }
 
         public SharedNavigationStateService NavState => _navState;
+
+        // ── Loading state ─────────────────────────────────────────────────
+
+        private bool _isLoading;
+        public bool IsLoading
+        {
+            get => _isLoading;
+            set
+            {
+                if (_isLoading != value)
+                {
+                    _isLoading = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         // ── INotifyPropertyChanged ────────────────────────────────────────
 

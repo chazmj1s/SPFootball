@@ -23,7 +23,7 @@
         <!-- ═══════════════════════════════════════════════════ -->
         <RefreshView Grid.Row="1"
                      Command="{Binding RefreshCommand}"
-                     IsRefreshing="{Binding IsLoading}">
+                 IsRefreshing="False">
             <ScrollView>
                 <VerticalStackLayout Spacing="0">
 
@@ -124,12 +124,7 @@
                         </Grid>
 
                         <!-- Loading indicator -->
-                        <ActivityIndicator IsRunning="{Binding IsLoading}"
-                                           IsVisible="{Binding IsLoading}"
-                                           HorizontalOptions="Center"
-                                           Margin="0,16" />
-
-                        <!-- ═══════════════════════════════════ -->
+<!-- ═══════════════════════════════════ -->
                         <!-- TEAMS VIEW                          -->
                         <!-- ═══════════════════════════════════ -->
                         <VerticalStackLayout IsVisible="{Binding IsTeamsView}" Spacing="0">
@@ -465,12 +460,7 @@
                    Padding="8,0" FontSize="10" Opacity="0.5"
                    VerticalOptions="Center" HorizontalOptions="Start"
                    TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
-            <ActivityIndicator IsRunning="{Binding IsLoading}"
-                               IsVisible="{Binding IsLoading}"
-                               HeightRequest="16" WidthRequest="16"
-                               HorizontalOptions="End" VerticalOptions="Center"
-                               Margin="8,0" />
-        </Grid>
+</Grid>
 
     </Grid>
 </ContentPage>

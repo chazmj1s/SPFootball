@@ -89,7 +89,7 @@ namespace SaturdayPulse.ViewModels
         }
 
         public bool   IsLoading => _isBusy;
-        public bool   HasLoaded { get; private set; }
+        public bool   HasLoaded { get; set; }  // public setter so MainPage can reset on year change
 
         public string StatusMessage
         {
@@ -111,6 +111,8 @@ namespace SaturdayPulse.ViewModels
         public ICommand PreviousWeekCommand       { get; }
         public ICommand NextWeekCommand           { get; }
         public ICommand TogglePersonalGameCommand { get; }
+
+
 
         // ── Load ──────────────────────────────────────────────────────────
 
@@ -144,7 +146,6 @@ namespace SaturdayPulse.ViewModels
 
                 var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
                 _navState.SetWeeks(weeks);
-                _navState.SetDefaultWeek(games.Where(g => g.IsPlayed).Select(g => g.Week));
 
                 ApplyFiltersAndSort();
                 StatusMessage = "( ) = projected value";
@@ -156,6 +157,7 @@ namespace SaturdayPulse.ViewModels
             }
             finally
             {
+
                 IsBusy = false;
             }
         }
@@ -187,7 +189,6 @@ namespace SaturdayPulse.ViewModels
                 _           => filtered
             };
 
-            // ShowFavoritesFirst: starred games → followed-team games → normal sequence
             List<GameResult> sorted;
             if (_navState.ShowFavoritesFirst)
             {
@@ -202,7 +203,6 @@ namespace SaturdayPulse.ViewModels
                 sorted = filtered.OrderBy(g => g.SequenceNumber).ToList();
             }
 
-            // Group headers — stamp after sort so they reflect actual display order
             string lastHeader = null;
             foreach (var g in sorted)
             {
@@ -217,11 +217,11 @@ namespace SaturdayPulse.ViewModels
 
         private void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
-                _ = LoadDataAsync();
+            // User week tap — re-filter client-side only, no server call
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                ApplyFiltersAndSort();
 
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek) ||
-                e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
                 e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
                 ApplyFiltersAndSort();
         }

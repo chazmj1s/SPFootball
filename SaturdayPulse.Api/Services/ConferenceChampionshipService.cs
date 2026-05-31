@@ -18,8 +18,10 @@ namespace SaturdayPulse.Services
         public string TeamName        { get; set; }
         public string Conference      { get; set; }
         public string Division        { get; set; }  // null if conference has no divisions
-        public int    ConferenceWins  { get; set; }
+        public int    ConferenceWins { get; set; }
         public int    ConferenceLosses { get; set; }
+        public int    ActualConferenceWins { get; set; }
+        public int    ActualConferenceLosses { get; set; }
         public int    OverallWins     { get; set; }
         public int    OverallLosses   { get; set; }
 
@@ -83,7 +85,14 @@ namespace SaturdayPulse.Services
         public string TeamName { get; set; }
         public int ConferenceWins { get; set; }
         public int ConferenceLosses { get; set; }
+        public int OverallWins { get; set; }
+        public int OverallLosses { get; set; }
+        public int ActualConferenceWins { get; set; }
+        public int ActualConferenceLosses { get; set; }
         public string ConferenceRecord => $"{ConferenceWins}-{ConferenceLosses}";
+        public string OverallRecord => $"{OverallWins}-{OverallLosses}";
+        public string ActualConferenceRecord => $"{ActualConferenceWins}-{ActualConferenceLosses}";
+
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -690,7 +699,9 @@ namespace SaturdayPulse.Services
                     {
                         TeamName = t.TeamName,
                         ConferenceWins = t.ConferenceWins,
-                        ConferenceLosses = t.ConferenceLosses
+                        ConferenceLosses = t.ConferenceLosses,
+                        ActualConferenceWins = t.ActualConferenceWins,
+                        ActualConferenceLosses = t.ActualConferenceLosses
                     })
                     .ToList();
             }

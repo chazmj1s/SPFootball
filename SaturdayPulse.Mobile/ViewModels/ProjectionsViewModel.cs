@@ -9,13 +9,12 @@ namespace SaturdayPulse.ViewModels
 {
     public class ProjectionsViewModel : BaseViewModel
     {
-        private readonly GameDataApiService    _apiService;
+        private readonly GameDataApiService           _apiService;
         private readonly SharedNavigationStateService _navState;
 
-        private List<ProjectedTeamStanding>  _allStandings     = new();
-        private List<ChampionshipMatchup>    _allChampionships = new();
+        private List<ChampionshipMatchup> _allChampionships = new();
         private bool   _isBusy;
-        private string _selectedView  = "Standings";
+        private string _selectedView  = "Championship";
         private string _statusMessage = string.Empty;
 
         public ProjectionsViewModel(
@@ -34,16 +33,6 @@ namespace SaturdayPulse.ViewModels
                 SelectedView = view;
             });
 
-            ToggleTeamExpandCommand = new Microsoft.Maui.Controls.Command<ProjectedTeamStanding>(team =>
-            {
-                if (team != null) team.IsExpanded = !team.IsExpanded;
-            });
-
-            ToggleChartExpandCommand = new Microsoft.Maui.Controls.Command<ProjectedTeamStanding>(team =>
-            {
-                if (team != null) team.IsChartExpanded = !team.IsChartExpanded;
-            });
-
             ToggleMatchupExpandCommand = new Microsoft.Maui.Controls.Command<ChampionshipMatchup>(matchup =>
             {
                 if (matchup != null) matchup.IsExpanded = !matchup.IsExpanded;
@@ -54,21 +43,13 @@ namespace SaturdayPulse.ViewModels
                 if (matchup != null) matchup.IsContendersExpanded = !matchup.IsContendersExpanded;
             });
 
-            // React to shared navigation changes
-            _navState.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
-                    e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
-                    _ = LoadDataAsync();
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
-                    ApplyConferenceFilter();
-            };
+            _navState.PropertyChanged += OnNavStateChanged;
+
         }
 
         // ── Bindable collections ──────────────────────────────────────────
 
-        public ObservableCollection<ProjectedTeamStanding> Standings    { get; } = new();
-        public ObservableCollection<ChampionshipMatchup>  Championships { get; } = new();
+        public ObservableCollection<ChampionshipMatchup> Championships { get; } = new();
 
         // ── Bindable properties ───────────────────────────────────────────
 
@@ -79,7 +60,7 @@ namespace SaturdayPulse.ViewModels
         }
 
         public bool IsLoading => _isBusy;
-        public bool HasLoaded { get; private set; }
+        public bool HasLoaded { get; set; }
 
         public string StatusMessage
         {
@@ -94,20 +75,22 @@ namespace SaturdayPulse.ViewModels
             {
                 _selectedView = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(IsStandingsView));
                 OnPropertyChanged(nameof(IsChampionshipView));
+                OnPropertyChanged(nameof(IsPlayoffsView));
+                OnPropertyChanged(nameof(IsBowlsView));
+                OnPropertyChanged(nameof(IsSandboxView));
             }
         }
 
-        public bool IsStandingsView    => _selectedView == "Standings";
         public bool IsChampionshipView => _selectedView == "Championship";
+        public bool IsPlayoffsView     => _selectedView == "Playoffs";
+        public bool IsBowlsView        => _selectedView == "Bowls";
+        public bool IsSandboxView      => _selectedView == "Sandbox";
 
         // ── Commands ──────────────────────────────────────────────────────
 
         public ICommand LoadDataCommand               { get; }
         public ICommand SelectViewCommand             { get; }
-        public ICommand ToggleTeamExpandCommand       { get; }
-        public ICommand ToggleChartExpandCommand      { get; }
         public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
 
@@ -121,37 +104,16 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var standingsTask     = _apiService.GetProjectedStandingsAsync(
-                    _navState.SelectedYear, _navState.SelectedWeek);
-                var championshipsTask = _apiService.GetProjectedChampionshipQualifiersAsync(
+                var championships = await _apiService.GetProjectedChampionshipQualifiersAsync(
                     _navState.SelectedYear, _navState.SelectedWeek);
 
-                await Task.WhenAll(standingsTask, championshipsTask);
-
-                var standings     = standingsTask.Result;
-                var championships = championshipsTask.Result;
-
-                if (standings == null || championships == null)
+                if (championships == null)
                 {
                     StatusMessage = "Failed to load projections";
                     return;
                 }
 
-                // Compute projected finish rank within each conference
-                var byConference = standings
-                    .GroupBy(s => s.Conference)
-                    .ToDictionary(g => g.Key, g => g
-                        .OrderByDescending(s => s.ProjectedWinPct)
-                        .ThenByDescending(s => s.ProjectedWins)
-                        .ToList());
-
-                foreach (var conf in byConference.Values)
-                    for (int i = 0; i < conf.Count; i++)
-                        conf[i].ProjectedFinish = i + 1;
-
-                _allStandings     = standings;
                 _allChampionships = championships;
-
                 ApplyConferenceFilter();
 
                 StatusMessage = $"Week {_navState.SelectedWeek} projections";
@@ -173,20 +135,6 @@ namespace SaturdayPulse.ViewModels
         {
             var conf = _navState.SelectedConference;
 
-            // Filter standings
-            var filteredStandings = conf == "All"
-                ? _allStandings
-                : _allStandings.Where(s =>
-                {
-                    var abbr = ConferenceHelper.DisplayToAbbr(conf);
-                    return s.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase);
-                }).ToList();
-
-            Standings.Clear();
-            foreach (var s in filteredStandings)
-                Standings.Add(s);
-
-            // Filter championships
             var filteredChamps = conf == "All"
                 ? _allChampionships
                 : _allChampionships.Where(c =>
@@ -199,5 +147,16 @@ namespace SaturdayPulse.ViewModels
             foreach (var c in filteredChamps)
                 Championships.Add(c);
         }
+
+        private async void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
+        {
+            // User week tap — re-filter client-side only, no server call
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                await LoadDataAsync();
+
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                ApplyConferenceFilter();
+        }
+
     }
 }
