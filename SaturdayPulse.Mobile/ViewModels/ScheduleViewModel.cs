@@ -146,6 +146,15 @@ namespace SaturdayPulse.ViewModels
 
                 var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
                 _navState.SetWeeks(weeks);
+                _navState.ApplyStartupDefaults(
+                    games,
+                    g => g.Week,
+                    g =>
+                    {
+                        if (string.IsNullOrWhiteSpace(g.GameDate)) return null;
+                        var dateStr = $"{g.GameDate} {_navState.SelectedYear}";
+                        return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
+                    });
 
                 ApplyFiltersAndSort();
                 StatusMessage = "( ) = projected value";

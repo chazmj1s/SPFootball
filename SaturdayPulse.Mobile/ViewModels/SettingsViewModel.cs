@@ -72,22 +72,20 @@ namespace SaturdayPulse.ViewModels
             set => _navState.ShowFavoritesFirst = value;
         }
 
-        // ── Teams ─────────────────────────────────────────────────────────
-        public ObservableCollection<TeamInfo> Teams             { get; } = new();
-        public ObservableCollection<string>   ConferenceFilters { get; } = new();
-
-        private string _selectedConference = "All";
-        public string SelectedConference
+        public string DefaultWeek
         {
-            get => _selectedConference;
-            set
-            {
-                if (_selectedConference == value) return;
-                _selectedConference = value;
-                OnPropertyChanged();
-                ApplyTeamFilter();
-            }
+            get => _navState.DefaultWeek;
+            set => _navState.DefaultWeek = value;
         }
+
+        public string DefaultConference
+        {
+            get => _navState.DefaultConference;
+            set => _navState.DefaultConference = value;
+        }
+
+        // ── Teams ─────────────────────────────────────────────────────────
+        public ObservableCollection<TeamInfo> Teams { get; } = new();
 
         // ── Games ─────────────────────────────────────────────────────────
         public ObservableCollection<RivalryInfo> Games { get; } = new();
@@ -111,12 +109,14 @@ namespace SaturdayPulse.ViewModels
         }
 
         // ── Commands ──────────────────────────────────────────────────────
-        public ICommand LoadDataCommand       { get; }
-        public ICommand SelectViewCommand     { get; }
-        public ICommand TogglePersonalCommand { get; }
-        public ICommand ToggleSectionCommand  { get; }
-        public ICommand ToggleFollowCommand   { get; }
-        public ICommand RefreshCommand { get; }
+        public ICommand LoadDataCommand               { get; }
+        public ICommand SelectViewCommand             { get; }
+        public ICommand TogglePersonalCommand         { get; }
+        public ICommand ToggleSectionCommand          { get; }
+        public ICommand ToggleFollowCommand           { get; }
+        public ICommand RefreshCommand                { get; }
+        public ICommand SelectDefaultWeekCommand      { get; }
+        public ICommand SelectDefaultConferenceCommand { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
         public SettingsViewModel(
@@ -170,8 +170,36 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsMoreCoolStuffExpanded));
             });
 
+            SelectDefaultWeekCommand = new Microsoft.Maui.Controls.Command<string>(value =>
+            {
+                DefaultWeek = value;
+            });
+
+            SelectDefaultConferenceCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var options = new List<string> { "All" };
+                options.AddRange(ConferenceHelper.OrderedConferences.Select(c => c.Display));
+
+                var result = await Shell.Current.DisplayActionSheet(
+                    "Default Conference", "Cancel", null, options.ToArray());
+
+                if (result != null && result != "Cancel")
+                    DefaultConference = result == "All" ? "All"
+                        : ConferenceHelper.DisplayToAbbr(result) ?? result;
+            });
+
             _followService.TeamFollowChanged         += OnTeamFollowChanged;
             _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
+
+            _navState.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                    ApplyTeamFilter();
+                if (e.PropertyName == nameof(SharedNavigationStateService.DefaultWeek))
+                    OnPropertyChanged(nameof(DefaultWeek));
+                if (e.PropertyName == nameof(SharedNavigationStateService.DefaultConference))
+                    OnPropertyChanged(nameof(DefaultConference));
+            };
         }
 
         // ── Load ──────────────────────────────────────────────────────────
@@ -197,12 +225,6 @@ namespace SaturdayPulse.ViewModels
 
                     _allTeams = [.. teams.OrderBy(t => t.TeamName)];
 
-                    ConferenceFilters.Clear();
-                    foreach (var c in ConferenceHelper.FilterDisplayList())
-                        ConferenceFilters.Add(c);
-
-                    _selectedConference = "All";
-                    OnPropertyChanged(nameof(SelectedConference));
                     ApplyTeamFilter();
                 }
 
@@ -284,9 +306,10 @@ namespace SaturdayPulse.ViewModels
         {
             var filtered = _allTeams.AsEnumerable();
 
-            if (SelectedConference != "All")
+            var conf = _navState.SelectedConference;
+            if (conf != "All")
             {
-                var abbr = ConferenceHelper.DisplayToAbbr(SelectedConference);
+                var abbr = ConferenceHelper.DisplayToAbbr(conf);
                 filtered = filtered.Where(t => t.ConferenceAbbr == abbr);
             }
 

@@ -64,62 +64,65 @@
                     <!-- Section body -->
                     <VerticalStackLayout IsVisible="{Binding IsFollowingExpanded}" Spacing="0">
 
-                        <!-- Teams | Games toggle -->
+                        <!-- Teams | Games flat tabs -->
                         <Grid ColumnDefinitions="*,*"
-                              BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}"
-                              Padding="8,4">
+                              BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}">
 
-                            <Border Grid.Column="0"
-                                    Margin="0,0,4,0" Padding="0,6"
-                                    StrokeShape="RoundRectangle 6" StrokeThickness="0">
-                                <Border.Triggers>
-                                    <DataTrigger TargetType="Border" Binding="{Binding IsTeamsView}" Value="True">
-                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Border" Binding="{Binding IsTeamsView}" Value="False">
-                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#E0E0E0, Dark=#333333}" />
-                                    </DataTrigger>
-                                </Border.Triggers>
-                                <Label Text="Teams" FontSize="13" FontAttributes="Bold" HorizontalOptions="Center">
+                            <!-- Teams tab -->
+                            <VerticalStackLayout Grid.Column="0" Spacing="0">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Teams" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="Teams" FontSize="13" FontAttributes="Bold"
+                                       HorizontalOptions="Center" Padding="0,8">
                                     <Label.Triggers>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="True">
-                                            <Setter Property="TextColor" Value="White" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="False">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
                                         </DataTrigger>
                                     </Label.Triggers>
                                 </Label>
-                                <Border.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Teams" />
-                                </Border.GestureRecognizers>
-                            </Border>
+                                <BoxView HeightRequest="2" HorizontalOptions="Fill">
+                                    <BoxView.Triggers>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="True">
+                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="False">
+                                            <Setter Property="Color" Value="Transparent" />
+                                        </DataTrigger>
+                                    </BoxView.Triggers>
+                                </BoxView>
+                            </VerticalStackLayout>
 
-                            <Border Grid.Column="1"
-                                    Margin="4,0,0,0" Padding="0,6"
-                                    StrokeShape="RoundRectangle 6" StrokeThickness="0">
-                                <Border.Triggers>
-                                    <DataTrigger TargetType="Border" Binding="{Binding IsGamesView}" Value="True">
-                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Border" Binding="{Binding IsGamesView}" Value="False">
-                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#E0E0E0, Dark=#333333}" />
-                                    </DataTrigger>
-                                </Border.Triggers>
-                                <Label Text="Games" FontSize="13" FontAttributes="Bold" HorizontalOptions="Center">
+                            <!-- Games tab -->
+                            <VerticalStackLayout Grid.Column="1" Spacing="0">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="Games" FontSize="13" FontAttributes="Bold"
+                                       HorizontalOptions="Center" Padding="0,8">
                                     <Label.Triggers>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="True">
-                                            <Setter Property="TextColor" Value="White" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="False">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
                                         </DataTrigger>
                                     </Label.Triggers>
                                 </Label>
-                                <Border.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
-                                </Border.GestureRecognizers>
-                            </Border>
+                                <BoxView HeightRequest="2" HorizontalOptions="Fill">
+                                    <BoxView.Triggers>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="True">
+                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="False">
+                                            <Setter Property="Color" Value="Transparent" />
+                                        </DataTrigger>
+                                    </BoxView.Triggers>
+                                </BoxView>
+                            </VerticalStackLayout>
 
                         </Grid>
 
@@ -128,20 +131,6 @@
                         <!-- TEAMS VIEW                          -->
                         <!-- ═══════════════════════════════════ -->
                         <VerticalStackLayout IsVisible="{Binding IsTeamsView}" Spacing="0">
-
-                            <!-- Conference filter -->
-                            <Grid ColumnDefinitions="Auto,*"
-                                  Padding="10,6,10,4" ColumnSpacing="8">
-                                <Label Grid.Column="0" Text="Conference"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       VerticalOptions="Center" />
-                                <Picker Grid.Column="1"
-                                        ItemsSource="{Binding ConferenceFilters}"
-                                        SelectedItem="{Binding SelectedConference}"
-                                        FontSize="13" HeightRequest="32"
-                                        VerticalOptions="Center" />
-                            </Grid>
 
                             <!-- Column headers -->
                             <Grid ColumnDefinitions="28,*,60"
@@ -402,6 +391,138 @@
                                        LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Grid>
+
+                        <!-- Divider -->
+                        <BoxView HeightRequest="1"
+                                 Color="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}"
+                                 Margin="-16,0" />
+
+                        <!-- Default Week -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Default week"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Which week is selected when the app launches."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+
+                            <!-- Horizontal radio buttons — sized to content, left-anchored -->
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="24" Margin="0,2,0,0">
+
+                                <!-- Week 1 -->
+                                <StackLayout Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                    <StackLayout.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectDefaultWeekCommand}"
+                                                              CommandParameter="Week1" />
+                                    </StackLayout.GestureRecognizers>
+                                    <Ellipse WidthRequest="16" HeightRequest="16" VerticalOptions="Center">
+                                        <Ellipse.Triggers>
+                                            <DataTrigger TargetType="Ellipse"
+                                                         Binding="{Binding DefaultWeek}" Value="Week1">
+                                                <Setter Property="Fill"
+                                                        Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                                <Setter Property="StrokeThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Ellipse"
+                                                         Binding="{Binding DefaultWeek}" Value="Current">
+                                                <Setter Property="Fill" Value="Transparent" />
+                                                <Setter Property="Stroke"
+                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                                <Setter Property="StrokeThickness" Value="1.5" />
+                                            </DataTrigger>
+                                        </Ellipse.Triggers>
+                                    </Ellipse>
+                                    <Label Text="Week 1" FontSize="13" VerticalOptions="Center">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding DefaultWeek}" Value="Week1">
+                                                <Setter Property="TextColor"
+                                                        Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding DefaultWeek}" Value="Current">
+                                                <Setter Property="TextColor"
+                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                </StackLayout>
+
+                                <!-- Current -->
+                                <StackLayout Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <StackLayout.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectDefaultWeekCommand}"
+                                                              CommandParameter="Current" />
+                                    </StackLayout.GestureRecognizers>
+                                    <Ellipse WidthRequest="16" HeightRequest="16" VerticalOptions="Center">
+                                        <Ellipse.Triggers>
+                                            <DataTrigger TargetType="Ellipse"
+                                                         Binding="{Binding DefaultWeek}" Value="Current">
+                                                <Setter Property="Fill"
+                                                        Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                                <Setter Property="StrokeThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Ellipse"
+                                                         Binding="{Binding DefaultWeek}" Value="Week1">
+                                                <Setter Property="Fill" Value="Transparent" />
+                                                <Setter Property="Stroke"
+                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                                <Setter Property="StrokeThickness" Value="1.5" />
+                                            </DataTrigger>
+                                        </Ellipse.Triggers>
+                                    </Ellipse>
+                                    <Label Text="Current" FontSize="13" VerticalOptions="Center">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding DefaultWeek}" Value="Current">
+                                                <Setter Property="TextColor"
+                                                        Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding DefaultWeek}" Value="Week1">
+                                                <Setter Property="TextColor"
+                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                </StackLayout>
+
+                                <!-- Spacer -->
+                                <BoxView Grid.Column="2" Color="Transparent" />
+
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <!-- Divider -->
+                        <BoxView HeightRequest="1"
+                                 Color="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}"
+                                 Margin="-16,0" />
+
+                        <!-- Default Conference — plain tap row, purple value + chevron -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Default conference"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Conference filter applied when the app launches."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding SelectDefaultConferenceCommand}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding DefaultConference}"
+                                       FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                                <Label Grid.Column="1"
+                                       Text="▾" FontSize="14"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
 
                     </VerticalStackLayout>
 
