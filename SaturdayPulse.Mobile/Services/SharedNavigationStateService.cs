@@ -16,6 +16,7 @@ namespace SaturdayPulse.Services
         private int    _selectedWeek       = 1;
         private string _selectedConference = "All";
         private bool   _showFavoritesFirst = Preferences.Get("ShowFavoritesFirst", false);
+        private bool   _suppressNavReady   = false;
 
         // ── Year ──────────────────────────────────────────────────────────
 
@@ -27,8 +28,11 @@ namespace SaturdayPulse.Services
                 if (_selectedYear != value)
                 {
                     _selectedYear = value;
+                    _selectedWeek = 1;                          // reset to week 1 on year change
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(SelectedWeek));    // update week strip highlight
                     Weeks.Clear();
+                    if (!_suppressNavReady) OnPropertyChanged("YearChanged");
                 }
             }
         }
@@ -40,13 +44,38 @@ namespace SaturdayPulse.Services
             get => _selectedWeek;
             set
             {
+                Console.WriteLine($"[NavState] SelectedWeek{_selectedWeek} set to {value}");
+
                 if (_selectedWeek != value)
                 {
                     _selectedWeek = value;
                     OnPropertyChanged();
                     SyncWeekItems();
+             
+                Console.WriteLine($"[NavState] SelectedWeek set to {value}, firing WeekChanged");
+
+                    if (!_suppressNavReady) OnPropertyChanged("WeekChanged");
                 }
             }
+        }
+
+        /// <summary>
+        /// Set year and week atomically — fires a single YearChanged
+        /// notification instead of two separate signals.
+        /// </summary>
+        public void SetYearAndWeek(int year, int week)
+        {
+            _suppressNavReady = true;
+            try
+            {
+                SelectedYear = year;
+                SelectedWeek = week;
+            }
+            finally
+            {
+                _suppressNavReady = false;
+            }
+            OnPropertyChanged("YearChanged");
         }
 
         // ── Conference ────────────────────────────────────────────────────
@@ -95,14 +124,6 @@ namespace SaturdayPulse.Services
         {
             foreach (var w in Weeks)
                 w.IsSelected = w.Week == _selectedWeek;
-        }
-
-        public void SetDefaultWeek(IEnumerable<int> playedWeeks)
-        {
-            var weeks = playedWeeks.ToList();
-            _selectedWeek = weeks.Any() ? weeks.Max() : 1;
-            OnPropertyChanged(nameof(SelectedWeek));
-            SyncWeekItems();
         }
 
         // ── INotifyPropertyChanged ────────────────────────────────────────

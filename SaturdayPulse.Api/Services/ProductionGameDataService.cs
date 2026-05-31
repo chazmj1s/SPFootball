@@ -284,14 +284,14 @@ namespace SaturdayPulse.Services
                 .OrderBy(r => RatingCalculator.ConferenceDisplayOrder(r.Conference))
                 .Select(r =>
                 {
-                    var q1 = new { r.Qualifier1.TeamName, r.Qualifier1.ConferenceWins, r.Qualifier1.ConferenceLosses, r.Qualifier1.OverallWins, r.Qualifier1.OverallLosses, r.Qualifier1.Division };
-                    var q2 = new { r.Qualifier2.TeamName, r.Qualifier2.ConferenceWins, r.Qualifier2.ConferenceLosses, r.Qualifier2.OverallWins, r.Qualifier2.OverallLosses, r.Qualifier2.Division };
+                    var q1 = new { r.Qualifier1.TeamName, r.Qualifier1.ConferenceWins, r.Qualifier1.ConferenceLosses, r.Qualifier1.ActualConferenceWins, r.Qualifier1.ActualConferenceLosses, r.Qualifier1.OverallWins, r.Qualifier1.OverallLosses, r.Qualifier1.Division };
+                    var q2 = new { r.Qualifier2.TeamName, r.Qualifier2.ConferenceWins, r.Qualifier2.ConferenceLosses, r.Qualifier2.ActualConferenceWins, r.Qualifier2.ActualConferenceLosses, r.Qualifier2.OverallWins, r.Qualifier2.OverallLosses, r.Qualifier2.Division };
 
                     if (includeContenders)
                         return (object)new
                         {
                             r.Conference, r.Format, Qualifier1 = q1, Qualifier2 = q2,
-                            Contenders       = r.Contenders.Select(c => new { c.TeamName, c.ConferenceWins, c.ConferenceLosses, c.ConferenceRecord }).ToList(),
+                            Contenders = r.Contenders.Select(c => new { c.TeamName, c.ConferenceWins, c.ConferenceLosses, c.ConferenceRecord,c.OverallWins,c.OverallLosses, c.OverallRecord, c.ActualConferenceWins, c.ActualConferenceLosses, c.ActualConferenceRecord }).ToList(),
                             r.Qualifier1Method, r.Qualifier2Method, r.TiebreakerLog, r.StubsApplied,
                             SimulatedThrough = throughWeek.HasValue
                                 ? $"Week {throughWeek} (weeks {throughWeek + 1}-15 projected)"

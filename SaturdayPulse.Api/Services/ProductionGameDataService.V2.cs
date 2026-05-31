@@ -496,16 +496,18 @@ namespace SaturdayPulse.Services
 
                 return new ConferenceStanding
                 {
-                    TeamId            = t.TeamId,
-                    TeamName          = t.TeamName,
-                    Conference        = confAbbr,
-                    Division          = RatingCalculator.GetDivision(t.TeamName, confAbbr),
-                    ConferenceWins    = confWins,
-                    ConferenceLosses  = confLosses,
-                    OverallWins       = rec != null ? (int)rec.Wins   : 0,
-                    OverallLosses     = rec != null ? (int)rec.Losses : 0,
-                    ConfPointsFor     = ptsFor,
-                    ConfPointsAgainst = ptsAgainst
+                    TeamId                 = t.TeamId,
+                    TeamName               = t.TeamName,
+                    Conference             = confAbbr,
+                    Division               = RatingCalculator.GetDivision(t.TeamName, confAbbr),
+                    ConferenceWins         = confWins,
+                    ConferenceLosses       = confLosses,
+                    ActualConferenceWins   = confWins,
+                    ActualConferenceLosses = confLosses,
+                    OverallWins            = rec != null ? (int)rec.Wins   : 0,
+                    OverallLosses          = rec != null ? (int)rec.Losses : 0,
+                    ConfPointsFor          = ptsFor,
+                    ConfPointsAgainst      = ptsAgainst
                 };
             }).ToList();
 
@@ -531,7 +533,8 @@ namespace SaturdayPulse.Services
             var Teams    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
             var confByYear = await _uow.TeamsConferenceHistory.GetConferenceIdsByYearAsync(year, token);
-            var records    = await _uow.TeamRecords.GetByYearAsync(year, token);
+            var records = throughWeek.HasValue ? await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, (int)throughWeek, token) :
+                                                 await _uow.WeeklyRankings.GetByYearAsync(year, token);
             var recordById = records.ToDictionary(tr => tr.TeamID);
 
             var fbsTeamsThisYear = Teams.Values
@@ -600,9 +603,11 @@ namespace SaturdayPulse.Services
                     TeamName          = t.TeamName,
                     Conference        = confAbbr,
                     Division          = RatingCalculator.GetDivision(t.TeamName, confAbbr),
-                    ConferenceWins    = actualWins + projWins,
-                    ConferenceLosses  = actualLosses + projLosses,
-                    OverallWins       = rec != null ? (int)rec.Wins   : 0,
+                    ConferenceWins = actualWins + projWins,
+                    ConferenceLosses = actualLosses + projLosses,
+                    ActualConferenceWins = actualWins,
+                    ActualConferenceLosses = actualLosses,
+                    OverallWins = rec != null ? (int)rec.Wins   : 0,
                     OverallLosses     = rec != null ? (int)rec.Losses : 0,
                     ConfPointsFor     = ptsFor,
                     ConfPointsAgainst = ptsAgainst

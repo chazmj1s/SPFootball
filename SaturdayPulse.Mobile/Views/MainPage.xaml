@@ -6,7 +6,7 @@
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*"
+  <Grid RowDefinitions="Auto,Auto,2,Auto,Auto,*"
         BackgroundColor="{AppThemeBinding Light=#1A1A2E, Dark=#0D0D1A}">
 
     <!-- ═══════════════════════════════════════════════════ -->
@@ -92,9 +92,24 @@
     </Grid>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 2: Conference filter pill                       -->
+    <!-- ROW 2: Loading indicator                             -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <Border Grid.Row="2"
+    <Grid Grid.Row="2" x:Name="LoadingBarHost"
+          IsVisible="{Binding IsLoading}"
+          BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#1A1A1A}">
+      <BoxView x:Name="LoadingBar"
+               HeightRequest="2"
+               WidthRequest="80"
+               HorizontalOptions="Start"
+               VerticalOptions="Fill"
+               Color="#BF5700"
+               TranslationX="0" />
+    </Grid>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ROW 3: Conference filter pill                       -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <Border Grid.Row="3"
             StrokeShape="RoundRectangle 6"
             Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
             StrokeThickness="1"
@@ -116,9 +131,9 @@
     </Border>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 3: Tab strip                                    -->
+    <!-- ROW 4: Tab strip                                    -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <ScrollView Grid.Row="3"
+    <ScrollView Grid.Row="4"
                 Orientation="Horizontal"
                 HorizontalScrollBarVisibility="Never"
                 BackgroundColor="{AppThemeBinding Light=#1A1A2E, Dark=#0D0D1A}">
@@ -155,9 +170,9 @@
     </ScrollView>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 4: Page host — AbsoluteLayout fills all space   -->
+    <!-- ROW 5: Page host — AbsoluteLayout fills all space   -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <AbsoluteLayout Grid.Row="4"
+    <AbsoluteLayout Grid.Row="5"
                     x:Name="PageHost"
                     BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#121212}">
       <AbsoluteLayout.GestureRecognizers>

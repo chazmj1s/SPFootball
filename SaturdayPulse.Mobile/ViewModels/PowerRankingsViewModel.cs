@@ -1,8 +1,9 @@
-using System.Collections.ObjectModel;
-using System.Windows.Input;
 using SaturdayPulse.Helpers;
 using SaturdayPulse.Models;
 using SaturdayPulse.Services;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Input;
 
 namespace SaturdayPulse.ViewModels
 {
@@ -107,18 +108,8 @@ namespace SaturdayPulse.ViewModels
                 t.IsScheduleExpanded = !t.IsScheduleExpanded;
             });
 
-            // React to shared nav changes
-            _navState.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear) ||
-                    e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
-                    _ = LoadDataAsync();
 
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
-                    e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
-                    ApplyFiltersAndSort();
-            };
-
+            _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
         }
 
@@ -145,7 +136,7 @@ namespace SaturdayPulse.ViewModels
         }
 
         public string StatusMessage { get; private set; } = "Loading...";
-        public bool   HasLoaded     { get; private set; }
+        public bool   HasLoaded     { get; set; }
 
         public string ActiveSortLabel => _currentSort switch
         {
@@ -372,6 +363,17 @@ namespace SaturdayPulse.ViewModels
             }
 
             FilteredTeams = new ObservableCollection<TeamRanking>(result);
+        }
+
+        private async void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
+        {
+            // User week tap — re-filter client-side only, no server call
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                await LoadDataAsync();
+
+            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
+                e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
+                ApplyFiltersAndSort();
         }
 
         private void OnTeamFollowChanged(int teamId, bool isFollowed)
