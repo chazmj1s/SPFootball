@@ -122,6 +122,14 @@ namespace SaturdayPulse.Repositories.Implementations
             return await fromHome.Union(fromAway).ToListAsync(token);
         }
 
+        public Task<List<Games>> GetPostSeasonByYear(int year, CancellationToken token = default)
+            => _context.Games
+                .Where(g => g.Year == year &&
+                            new List<string> { "postseason", "playoff" }.Contains(g.SeasonType))
+                .OrderBy(g => g.SeasonType)
+                .ThenBy(g => g.Week)
+                .ToListAsync(token);
+
         public async Task UpsertRangeAsync(IEnumerable<Games> games, CancellationToken token = default)
         {
             var incoming    = games.ToList();

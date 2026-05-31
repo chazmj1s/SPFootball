@@ -336,6 +336,29 @@ namespace SaturdayPulse.Controllers
         /// V2: Full season schedule for a single team from Games + Teams tables.
         /// Example: GET /api/productiongamedata/teamSchedule/v2?teamId=123&year=2025
         /// </summary>
+        [HttpGet("postseason/v2")]
+        public async Task<IActionResult> GetPostseasonV2(
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var result = await gameDataService.GetPostseasonGamesV2Async(targetYear, token);
+                return Ok(new {games = result.Games });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving V2 postseason schedule for {Year}", year);
+                return StatusCode(500, "An error occurred while retrieving the team schedule.");
+            }
+        }
+
+        /// <summary>
+        /// V2: Full season schedule for a single team from Games + Teams tables.
+        /// Example: GET /api/productiongamedata/teamSchedule/v2?teamId=123&year=2025
+        /// </summary>
         [HttpGet("teamSchedule/v2")]
         public async Task<IActionResult> GetTeamScheduleV2(
             [FromQuery] int teamId,
@@ -345,7 +368,7 @@ namespace SaturdayPulse.Controllers
             try
             {
                 var targetYear = year ?? DateTime.Now.Year;
-                var result     = await gameDataService.GetTeamScheduleV2Async(teamId, targetYear, token);
+                var result = await gameDataService.GetTeamScheduleV2Async(teamId, targetYear, token);
                 return Ok(new { summary = result.Summary, games = result.Games });
             }
             catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
