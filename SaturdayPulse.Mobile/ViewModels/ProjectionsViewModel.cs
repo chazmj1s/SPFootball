@@ -12,6 +12,8 @@ namespace SaturdayPulse.ViewModels
         private readonly GameDataApiService           _apiService;
         private readonly SharedNavigationStateService _navState;
 
+        public SandboxViewModel Sandbox { get; }
+
         private List<ChampionshipMatchup> _allChampionships = new();
         private bool   _isBusy;
         private string _selectedView  = "Championship";
@@ -25,6 +27,7 @@ namespace SaturdayPulse.ViewModels
         {
             _apiService = apiService;
             _navState   = navState;
+            Sandbox     = new SandboxViewModel(apiService);
 
             LoadDataCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
 

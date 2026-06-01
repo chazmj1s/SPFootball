@@ -46,6 +46,25 @@ namespace SaturdayPulse.Services
             int year, List<MatchupRequest> matchups, CancellationToken token = default)
             => _predictionService.PredictMatchups(year, matchups, token);
 
+        public Task<GamePrediction> PredictSandboxMatchupAsync(
+            string teamName, int teamYear,
+            string opponentName, int opponentYear,
+            CancellationToken token = default)
+            => _predictionService.PredictSandboxMatchupAsync(
+                teamName, teamYear, opponentName, opponentYear, token);
+
+        public async Task<List<int>> GetTeamAvailableYearsAsync(
+            int teamId, CancellationToken token = default)
+        {
+            var years = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
+            return years
+                .Where(yw => yw.Year >= 1965)
+                .Select(yw => yw.Year)
+                .Distinct()
+                .OrderByDescending(y => y)
+                .ToList();
+        }
+
         // ── Diagnostics ──────────────────────────────────────────────────────────
 
         public async Task<DiagnosticInfo> GetDiagnosticAsync(CancellationToken token = default)

@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:SaturdayPulse.Models"
              xmlns:viewmodels="clr-namespace:SaturdayPulse.ViewModels"
+             xmlns:local="clr-namespace:SaturdayPulse.Converters"
              xmlns:vm="clr-namespace:SaturdayPulse.ViewModels"
              xmlns:chart="clr-namespace:Syncfusion.Maui.Charts;assembly=Syncfusion.Maui.Charts"
              x:Class="SaturdayPulse.Views.ProjectionsPage"
@@ -326,22 +327,677 @@
       </ScrollView>
     </RefreshView>
 
-    <!-- SANDBOX VIEW (stub) -->
-    <VerticalStackLayout Grid.Row="1"
-                         IsVisible="False"
-                         VerticalOptions="Center" HorizontalOptions="Center">
-      <VerticalStackLayout.Triggers>
-        <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsSandboxView}" Value="True">
+    <!-- SANDBOX VIEW -->
+    <ScrollView Grid.Row="1" IsVisible="False">
+      <ScrollView.Triggers>
+        <DataTrigger TargetType="ScrollView" Binding="{Binding IsSandboxView}" Value="True">
           <Setter Property="IsVisible" Value="True" />
         </DataTrigger>
-      </VerticalStackLayout.Triggers>
-      <Label Text="Sandbox" FontSize="18" FontAttributes="Bold"
-             HorizontalOptions="Center"
-             TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-      <Label Text="Coming soon" FontSize="13" Opacity="0.5"
-             HorizontalOptions="Center" Margin="0,4,0,0" />
-    </VerticalStackLayout>
+      </ScrollView.Triggers>
 
+      <VerticalStackLayout Spacing="0" BindingContext="{Binding Sandbox}">
+
+        <!-- Status -->
+        <Label Text="{Binding StatusMessage}"
+               FontSize="11" Opacity="0.6" Padding="12,8"
+               TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+
+        <!-- ── TEAM A — inline label + selector ── -->
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Padding="12,6,12,2" ColumnSpacing="6">
+
+          <Label Grid.Column="0" Text="Team A:" FontSize="11" FontAttributes="Bold"
+                 TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                 VerticalOptions="Center" />
+
+          <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
+            <Grid.GestureRecognizers>
+              <TapGestureRecognizer Command="{Binding SelectTeamACommand}" />
+            </Grid.GestureRecognizers>
+            <Label Grid.Column="0" Text="{Binding TeamALabel}"
+                   FontSize="13" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" LineBreakMode="TailTruncation" />
+            <Label Grid.Column="1" Text=" ▾" FontSize="14"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" />
+          </Grid>
+
+          <Label Grid.Column="2" Text="Year:" FontSize="11" FontAttributes="Bold"
+                 TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                 VerticalOptions="Center" Margin="8,0,0,0" />
+
+          <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto">
+            <Grid.GestureRecognizers>
+              <TapGestureRecognizer Command="{Binding SelectYearACommand}" />
+            </Grid.GestureRecognizers>
+            <Label Grid.Column="0" FontSize="13" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center">
+              <Label.Text><Binding Path="TeamAYear" StringFormat="{}{0}" /></Label.Text>
+            </Label>
+            <Label Grid.Column="1" Text=" ▾" FontSize="14"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" />
+          </Grid>
+
+        </Grid>
+
+        <!-- ── TEAM B — inline label + selector ── -->
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Padding="12,4,12,2" ColumnSpacing="6">
+
+          <Label Grid.Column="0" Text="Team B:" FontSize="11" FontAttributes="Bold"
+                 TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                 VerticalOptions="Center" />
+
+          <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
+            <Grid.GestureRecognizers>
+              <TapGestureRecognizer Command="{Binding SelectTeamBCommand}" />
+            </Grid.GestureRecognizers>
+            <Label Grid.Column="0" Text="{Binding TeamBLabel}"
+                   FontSize="13" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" LineBreakMode="TailTruncation" />
+            <Label Grid.Column="1" Text=" ▾" FontSize="14"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" />
+          </Grid>
+
+          <Label Grid.Column="2" Text="Year:" FontSize="11" FontAttributes="Bold"
+                 TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                 VerticalOptions="Center" Margin="8,0,0,0" />
+
+          <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto">
+            <Grid.GestureRecognizers>
+              <TapGestureRecognizer Command="{Binding SelectYearBCommand}" />
+            </Grid.GestureRecognizers>
+            <Label Grid.Column="0" FontSize="13" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center">
+              <Label.Text><Binding Path="TeamBYear" StringFormat="{}{0}" /></Label.Text>
+            </Label>
+            <Label Grid.Column="1" Text=" ▾" FontSize="14"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" />
+          </Grid>
+
+        </Grid>
+
+        <!-- ── SIMULATE MATCHUP — centered ── -->
+        <Label Text="Simulate Matchup ›"
+               FontSize="13" FontAttributes="Bold"
+               HorizontalOptions="Center"
+               Padding="12,10">
+          <Label.GestureRecognizers>
+            <TapGestureRecognizer Command="{Binding RunMatchupCommand}" />
+          </Label.GestureRecognizers>
+          <Label.Triggers>
+            <DataTrigger TargetType="Label" Binding="{Binding CanRunMatchup}" Value="False">
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding CanRunMatchup}" Value="True">
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+            </DataTrigger>
+          </Label.Triggers>
+        </Label>
+
+        <!-- ── PREDICTION RESULT — Schedule/Scores style ── -->
+        <VerticalStackLayout IsVisible="{Binding HasPrediction}" Spacing="0">
+
+          <!-- Date header -->
+          <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}" Padding="10,4">
+            <Label Text="Neutral Site · End-of-Season Ratings"
+                   FontSize="11" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center" />
+          </Grid>
+
+          <!-- Away (Team A) row -->
+          <Grid ColumnDefinitions="32,*,60,96" Padding="6,5,10,2"
+                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}">
+            <Label Grid.Column="0"
+                   Text="{Binding Prediction.TeamYear}"
+                   FontSize="10"
+                   TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                   HorizontalOptions="Center" VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="{Binding Prediction.TeamName}"
+                   FontSize="13" VerticalOptions="Center"
+                   LineBreakMode="TailTruncation" />
+            <Label Grid.Column="2" Text="{Binding Prediction.TeamScore}"
+                   FontSize="13" FontAttributes="Bold"
+                   HorizontalOptions="End" VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+            <Label Grid.Column="3" Text="{Binding Prediction.MarginDisplay}"
+                   FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+          </Grid>
+
+          <!-- Home (Team B) row -->
+          <Grid ColumnDefinitions="32,*,60,96" Padding="6,2,10,5"
+                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}">
+            <Label Grid.Column="0"
+                   Text="{Binding Prediction.OpponentYear}"
+                   FontSize="10"
+                   TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                   HorizontalOptions="Center" VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="{Binding Prediction.OpponentName}"
+                   FontSize="13" VerticalOptions="Center"
+                   LineBreakMode="TailTruncation" />
+            <Label Grid.Column="2" Text="{Binding Prediction.OppScore}"
+                   FontSize="13" FontAttributes="Bold"
+                   HorizontalOptions="End" VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+            <Label Grid.Column="3">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="± " />
+                  <Span Text="{Binding Prediction.MarginOfError, StringFormat='{0:F1}'}" />
+                  <Span Text=" pts" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.FontSize>11</Label.FontSize>
+              <Label.HorizontalOptions>End</Label.HorizontalOptions>
+              <Label.VerticalOptions>Center</Label.VerticalOptions>
+              <Label.TextColor>
+                <AppThemeBinding Light="#666666" Dark="#999999" />
+              </Label.TextColor>
+            </Label>
+          </Grid>
+
+          <BoxView HeightRequest="1" Opacity="0.10"
+                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+          <!-- Confidence + rivalry note -->
+          <Grid ColumnDefinitions="*,*" Padding="6,3,10,4">
+            <Label Grid.Column="0" Text="{Binding Prediction.Confidence}"
+                   FontSize="10" Opacity="0.6"
+                   TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
+            <Label Grid.Column="1" Text="{Binding Prediction.RivalryNote}"
+                   FontSize="10" Opacity="0.6" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
+          </Grid>
+
+        </VerticalStackLayout>
+
+        <!-- ── TEAM A RANKING CARD ── -->
+        <VerticalStackLayout IsVisible="{Binding HasTeamA}" Spacing="0" Margin="0,8,0,0">
+
+          <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}" Padding="10,4">
+            <Label FontSize="11" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="{Binding TeamARanking.TeamName}" />
+                  <Span Text=" · " />
+                  <Span Text="{Binding TeamAYear}" />
+                </FormattedString>
+              </Label.FormattedText>
+            </Label>
+          </Grid>
+
+          <!-- Column headers -->
+          <Grid ColumnDefinitions="44,22,*,55,70,60" Padding="4,2,0,2">
+            <Label Grid.Column="3" Text="Rec" FontSize="10" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" VerticalOptions="Center" />
+            <Label Grid.Column="4" Text="Rating" FontSize="10" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" VerticalOptions="Center" />
+            <Label Grid.Column="5" Text="SOS" FontSize="10" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" VerticalOptions="Center" />
+          </Grid>
+
+          <Grid Padding="4,3" ColumnDefinitions="44,22,*,55,70,60">
+            <Grid Grid.Column="0" Padding="2,2" HeightRequest="26" WidthRequest="40"
+                  HorizontalOptions="Center" VerticalOptions="Center">
+              <BoxView CornerRadius="3"
+                       Color="{Binding TeamARanking.IsTop25, Converter={StaticResource BoolToColorConverter}}" />
+              <Label Text="{Binding TeamARanking.OverallRank}"
+                     FontSize="11" FontAttributes="Bold" TextColor="White"
+                     HorizontalOptions="Center" VerticalOptions="Center" />
+            </Grid>
+            <Label Grid.Column="1"
+                   Text="{Binding TeamARanking.IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+                   TextColor="{Binding TeamARanking.IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+                   FontSize="{StaticResource TeamIconSize}"
+                   VerticalOptions="Center" HorizontalOptions="Center" />
+            <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
+              <Label Text="{Binding TeamARanking.TeamName}"
+                     FontSize="13" LineBreakMode="TailTruncation" />
+              <Label Text="{Binding TeamARanking.DisplayConferenceTier}"
+                     FontSize="10" Opacity="0.6" LineBreakMode="TailTruncation" />
+            </VerticalStackLayout>
+            <Label Grid.Column="3" Text="{Binding TeamARanking.Record}"
+                   FontSize="11" VerticalOptions="Center" />
+            <Label Grid.Column="4" Text="{Binding TeamARanking.DisplayRank}"
+                   FontSize="11" FontAttributes="Bold" VerticalOptions="Center" />
+            <Label Grid.Column="5" Text="{Binding TeamARanking.DisplaySOS}"
+                   FontSize="11" VerticalOptions="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,*,*" Padding="4,2,8,2">
+            <Label Grid.Column="0" IsVisible="{Binding TeamARanking.HasTrendData}"
+                   FontSize="10" HorizontalOptions="Start"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Trend / Pedigree" /><Span Text="  " />
+                  <Span Text="{Binding TeamARanking.TrendExpandIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleTrendACommand}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Column="1" FontSize="10" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Season Arc" /><Span Text="  " />
+                  <Span Text="{Binding TeamARanking.ArcExpandIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleArcACommand}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Column="2" IsVisible="{Binding TeamARanking.HasOffenseDefenseData}"
+                   FontSize="10" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Offense / Defense" /><Span Text="  " />
+                  <Span Text="{Binding TeamARanking.StatsExpandIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleStatsACommand}" />
+              </Label.GestureRecognizers>
+            </Label>
+          </Grid>
+
+          <!-- Trend / Pedigree expanded -->
+          <Border IsVisible="{Binding TeamARanking.IsTrendExpanded}"
+                  StrokeThickness="1"
+                  Stroke="{AppThemeBinding Light=#D8D8D8, Dark=#3A3A3A}"
+                  BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#202020}"
+                  Margin="4,0,4,6">
+            <VerticalStackLayout Spacing="0">
+              <Grid ColumnDefinitions="*,Auto,Auto" Padding="12,8,12,2">
+                <Label Grid.Column="0" Text="Trend / Pedigree History"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                <Label Grid.Column="1" Text="{Binding TeamARanking.Record}"
+                       FontSize="9" Opacity="0.6" Margin="0,0,10,0" />
+                <VerticalStackLayout Grid.Column="2" Spacing="0">
+                  <Label Text="{Binding TeamARanking.TrendRating, StringFormat='Trend {0:F4}'}"
+                         FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="End"
+                         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                  <Label Text="{Binding TeamARanking.PedigreeRating, StringFormat='Pedigree {0:F4}'}"
+                         FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="End"
+                         TextColor="{AppThemeBinding Light=#3D7AB5, Dark=#5FA8E8}" />
+                </VerticalStackLayout>
+              </Grid>
+              <chart:SfCartesianChart HeightRequest="160" Margin="8,0,8,8">
+                <chart:SfCartesianChart.XAxes>
+                  <chart:CategoryAxis ShowMajorGridLines="False" LabelPlacement="BetweenTicks" />
+                </chart:SfCartesianChart.XAxes>
+                <chart:SfCartesianChart.YAxes>
+                  <chart:NumericalAxis Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="True" />
+                </chart:SfCartesianChart.YAxes>
+                <chart:SplineSeries ItemsSource="{Binding TeamARanking.TrendPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Trend"
+                    Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                    StrokeWidth="3.5" EnableTooltip="True" />
+                <chart:SplineSeries ItemsSource="{Binding TeamARanking.PedigreePoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Pedigree"
+                    Fill="{AppThemeBinding Light=#C89B3C, Dark=#FFD166}"
+                    StrokeWidth="2.5" EnableTooltip="True" />
+                <chart:SfCartesianChart.Legend>
+                  <chart:ChartLegend Placement="Bottom" />
+                </chart:SfCartesianChart.Legend>
+              </chart:SfCartesianChart>
+            </VerticalStackLayout>
+          </Border>
+
+          <!-- Season Arc expanded -->
+          <Border IsVisible="{Binding TeamARanking.IsArcExpanded}"
+                  StrokeThickness="1"
+                  Stroke="{AppThemeBinding Light=#C8E6C9, Dark=#2E4A35}"
+                  BackgroundColor="{AppThemeBinding Light=#F1F8F2, Dark=#1A2A1E}"
+                  Margin="4,0,4,6">
+            <VerticalStackLayout Spacing="0">
+              <Grid ColumnDefinitions="*,Auto" Padding="12,8,12,2">
+                <Label Grid.Column="0" Text="Season Arc"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#2E8B57, Dark=#4CAF84}" />
+                <Label Grid.Column="1" Text="{Binding TeamARanking.Record}"
+                       FontSize="9" Opacity="0.6" />
+              </Grid>
+              <chart:SfCartesianChart HeightRequest="170" Margin="8,0,8,8">
+                <chart:SfCartesianChart.XAxes>
+                  <chart:NumericalAxis ShowMajorGridLines="False" Minimum="1" Interval="2">
+                    <chart:NumericalAxis.Title>
+                      <chart:ChartAxisTitle Text="Week" FontSize="9" />
+                    </chart:NumericalAxis.Title>
+                  </chart:NumericalAxis>
+                </chart:SfCartesianChart.XAxes>
+                <chart:SfCartesianChart.YAxes>
+                  <chart:NumericalAxis x:Name="TeamARatingAxis" Minimum="-1" Maximum="2" Interval="0.5" ShowMajorGridLines="True" />
+                  <chart:NumericalAxis x:Name="TeamAPctAxis" Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="False" CrossesAt="9999" />
+                  <chart:NumericalAxis x:Name="TeamASOSAxis" Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="False" CrossesAt="9999" />
+                </chart:SfCartesianChart.YAxes>
+                <chart:SplineSeries ItemsSource="{Binding TeamARanking.ArcRankingPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Rating"
+                    YAxisName="TeamARatingAxis"
+                    Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                    StrokeWidth="3" EnableTooltip="True" />
+                <chart:SplineSeries ItemsSource="{Binding TeamARanking.ArcSosPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="SOS"
+                    YAxisName="TeamASOSAxis"
+                    Fill="{AppThemeBinding Light=#FF4444, Dark=#FF6B6B}"
+                    StrokeWidth="2.5" EnableTooltip="True" />
+                <chart:SplineSeries ItemsSource="{Binding TeamARanking.ArcWinPctPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Win %"
+                    YAxisName="TeamAPctAxis"
+                    Fill="{AppThemeBinding Light=#FFE500, Dark=#FFE500}"
+                    StrokeWidth="2" EnableTooltip="True" />
+                <chart:SfCartesianChart.Legend>
+                  <chart:ChartLegend Placement="Bottom" />
+                </chart:SfCartesianChart.Legend>
+              </chart:SfCartesianChart>
+            </VerticalStackLayout>
+          </Border>
+
+          <!-- Offense / Defense expanded -->
+          <VerticalStackLayout IsVisible="{Binding TeamARanking.IsStatsExpanded}"
+                               Spacing="0"
+                               BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
+            <Grid ColumnDefinitions="*,*,*" Padding="8,6,8,4" ColumnSpacing="4">
+              <VerticalStackLayout Grid.Column="0" Spacing="1">
+                <Label Text="Offensive Rank" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamARanking.OffensiveRankDisplay}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="1" Spacing="1">
+                <Label Text="Avg. Points Scored" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamARanking.AvgPointsScored, StringFormat='{0:F1}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="2" Spacing="1">
+                <Label Text="Offensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamARanking.OffensiveZScore, StringFormat='{0:F4}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+            </Grid>
+            <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
+                     Color="{AppThemeBinding Light=Black, Dark=White}" />
+            <Grid ColumnDefinitions="*,*,*" Padding="8,4,8,6" ColumnSpacing="4">
+              <VerticalStackLayout Grid.Column="0" Spacing="1">
+                <Label Text="Defensive Rank" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamARanking.DefensiveRankDisplay}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="1" Spacing="1">
+                <Label Text="Avg. Points Allowed" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamARanking.AvgPointsAllowed, StringFormat='{0:F1}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="2" Spacing="1">
+                <Label Text="Defensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamARanking.DefensiveZScore, StringFormat='{0:F4}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+            </Grid>
+          </VerticalStackLayout>
+
+        </VerticalStackLayout>
+
+        <!-- ── TEAM B RANKING CARD ── -->
+        <VerticalStackLayout IsVisible="{Binding HasTeamB}" Spacing="0" Margin="0,4,0,0">
+
+          <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}" Padding="10,4">
+            <Label FontSize="11" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   VerticalOptions="Center">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="{Binding TeamBRanking.TeamName}" />
+                  <Span Text=" · " />
+                  <Span Text="{Binding TeamBYear}" />
+                </FormattedString>
+              </Label.FormattedText>
+            </Label>
+          </Grid>
+
+          <!-- Column headers -->
+          <Grid ColumnDefinitions="44,22,*,55,70,60" Padding="4,2,0,2">
+            <Label Grid.Column="3" Text="Rec" FontSize="10" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" VerticalOptions="Center" />
+            <Label Grid.Column="4" Text="Rating" FontSize="10" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" VerticalOptions="Center" />
+            <Label Grid.Column="5" Text="SOS" FontSize="10" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" VerticalOptions="Center" />
+          </Grid>
+
+          <Grid Padding="4,3" ColumnDefinitions="44,22,*,55,70,60">
+            <Grid Grid.Column="0" Padding="2,2" HeightRequest="26" WidthRequest="40"
+                  HorizontalOptions="Center" VerticalOptions="Center">
+              <BoxView CornerRadius="3"
+                       Color="{Binding TeamBRanking.IsTop25, Converter={StaticResource BoolToColorConverter}}" />
+              <Label Text="{Binding TeamBRanking.OverallRank}"
+                     FontSize="11" FontAttributes="Bold" TextColor="White"
+                     HorizontalOptions="Center" VerticalOptions="Center" />
+            </Grid>
+            <Label Grid.Column="1"
+                   Text="{Binding TeamBRanking.IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+                   TextColor="{Binding TeamBRanking.IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+                   FontSize="{StaticResource TeamIconSize}"
+                   VerticalOptions="Center" HorizontalOptions="Center" />
+            <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
+              <Label Text="{Binding TeamBRanking.TeamName}"
+                     FontSize="13" LineBreakMode="TailTruncation" />
+              <Label Text="{Binding TeamBRanking.DisplayConferenceTier}"
+                     FontSize="10" Opacity="0.6" LineBreakMode="TailTruncation" />
+            </VerticalStackLayout>
+            <Label Grid.Column="3" Text="{Binding TeamBRanking.Record}"
+                   FontSize="11" VerticalOptions="Center" />
+            <Label Grid.Column="4" Text="{Binding TeamBRanking.DisplayRank}"
+                   FontSize="11" FontAttributes="Bold" VerticalOptions="Center" />
+            <Label Grid.Column="5" Text="{Binding TeamBRanking.DisplaySOS}"
+                   FontSize="11" VerticalOptions="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,*,*" Padding="4,2,8,2">
+            <Label Grid.Column="0" IsVisible="{Binding TeamBRanking.HasTrendData}"
+                   FontSize="10" HorizontalOptions="Start"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Trend / Pedigree" /><Span Text="  " />
+                  <Span Text="{Binding TeamBRanking.TrendExpandIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleTrendBCommand}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Column="1" FontSize="10" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Season Arc" /><Span Text="  " />
+                  <Span Text="{Binding TeamBRanking.ArcExpandIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleArcBCommand}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Column="2" IsVisible="{Binding TeamBRanking.HasOffenseDefenseData}"
+                   FontSize="10" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Offense / Defense" /><Span Text="  " />
+                  <Span Text="{Binding TeamBRanking.StatsExpandIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleStatsBCommand}" />
+              </Label.GestureRecognizers>
+            </Label>
+          </Grid>
+
+          <!-- Trend / Pedigree expanded -->
+          <Border IsVisible="{Binding TeamBRanking.IsTrendExpanded}"
+                  StrokeThickness="1"
+                  Stroke="{AppThemeBinding Light=#D8D8D8, Dark=#3A3A3A}"
+                  BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#202020}"
+                  Margin="4,0,4,6">
+            <VerticalStackLayout Spacing="0">
+              <Grid ColumnDefinitions="*,Auto,Auto" Padding="12,8,12,2">
+                <Label Grid.Column="0" Text="Trend / Pedigree History"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                <Label Grid.Column="1" Text="{Binding TeamBRanking.Record}"
+                       FontSize="9" Opacity="0.6" Margin="0,0,10,0" />
+                <VerticalStackLayout Grid.Column="2" Spacing="0">
+                  <Label Text="{Binding TeamBRanking.TrendRating, StringFormat='Trend {0:F4}'}"
+                         FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="End"
+                         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                  <Label Text="{Binding TeamBRanking.PedigreeRating, StringFormat='Pedigree {0:F4}'}"
+                         FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="End"
+                         TextColor="{AppThemeBinding Light=#3D7AB5, Dark=#5FA8E8}" />
+                </VerticalStackLayout>
+              </Grid>
+              <chart:SfCartesianChart HeightRequest="160" Margin="8,0,8,8">
+                <chart:SfCartesianChart.XAxes>
+                  <chart:CategoryAxis ShowMajorGridLines="False" LabelPlacement="BetweenTicks" />
+                </chart:SfCartesianChart.XAxes>
+                <chart:SfCartesianChart.YAxes>
+                  <chart:NumericalAxis Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="True" />
+                </chart:SfCartesianChart.YAxes>
+                <chart:SplineSeries ItemsSource="{Binding TeamBRanking.TrendPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Trend"
+                    Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                    StrokeWidth="3.5" EnableTooltip="True" />
+                <chart:SplineSeries ItemsSource="{Binding TeamBRanking.PedigreePoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Pedigree"
+                    Fill="{AppThemeBinding Light=#C89B3C, Dark=#FFD166}"
+                    StrokeWidth="2.5" EnableTooltip="True" />
+                <chart:SfCartesianChart.Legend>
+                  <chart:ChartLegend Placement="Bottom" />
+                </chart:SfCartesianChart.Legend>
+              </chart:SfCartesianChart>
+            </VerticalStackLayout>
+          </Border>
+
+          <!-- Season Arc expanded -->
+          <Border IsVisible="{Binding TeamBRanking.IsArcExpanded}"
+                  StrokeThickness="1"
+                  Stroke="{AppThemeBinding Light=#C8E6C9, Dark=#2E4A35}"
+                  BackgroundColor="{AppThemeBinding Light=#F1F8F2, Dark=#1A2A1E}"
+                  Margin="4,0,4,6">
+            <VerticalStackLayout Spacing="0">
+              <Grid ColumnDefinitions="*,Auto" Padding="12,8,12,2">
+                <Label Grid.Column="0" Text="Season Arc"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#2E8B57, Dark=#4CAF84}" />
+                <Label Grid.Column="1" Text="{Binding TeamBRanking.Record}"
+                       FontSize="9" Opacity="0.6" />
+              </Grid>
+              <chart:SfCartesianChart HeightRequest="170" Margin="8,0,8,8">
+                <chart:SfCartesianChart.XAxes>
+                  <chart:NumericalAxis ShowMajorGridLines="False" Minimum="1" Interval="2">
+                    <chart:NumericalAxis.Title>
+                      <chart:ChartAxisTitle Text="Week" FontSize="9" />
+                    </chart:NumericalAxis.Title>
+                  </chart:NumericalAxis>
+                </chart:SfCartesianChart.XAxes>
+                <chart:SfCartesianChart.YAxes>
+                  <chart:NumericalAxis x:Name="TeamBRatingAxis" Minimum="-1" Maximum="2" Interval="0.5" ShowMajorGridLines="True" />
+                  <chart:NumericalAxis x:Name="TeamBPctAxis" Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="False" CrossesAt="9999" />
+                  <chart:NumericalAxis x:Name="TeamBSOSAxis" Minimum="0" Maximum="1.2" Interval="0.2" ShowMajorGridLines="False" CrossesAt="9999" />
+                </chart:SfCartesianChart.YAxes>
+                <chart:SplineSeries ItemsSource="{Binding TeamBRanking.ArcRankingPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Rating"
+                    YAxisName="TeamBRatingAxis"
+                    Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                    StrokeWidth="3" EnableTooltip="True" />
+                <chart:SplineSeries ItemsSource="{Binding TeamBRanking.ArcSosPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="SOS"
+                    YAxisName="TeamBSOSAxis"
+                    Fill="{AppThemeBinding Light=#FF4444, Dark=#FF6B6B}"
+                    StrokeWidth="2.5" EnableTooltip="True" />
+                <chart:SplineSeries ItemsSource="{Binding TeamBRanking.ArcWinPctPoints}"
+                    XBindingPath="Index" YBindingPath="Value" Label="Win %"
+                    YAxisName="TeamBPctAxis"
+                    Fill="{AppThemeBinding Light=#FFE500, Dark=#FFE500}"
+                    StrokeWidth="2" EnableTooltip="True" />
+                <chart:SfCartesianChart.Legend>
+                  <chart:ChartLegend Placement="Bottom" />
+                </chart:SfCartesianChart.Legend>
+              </chart:SfCartesianChart>
+            </VerticalStackLayout>
+          </Border>
+
+          <!-- Offense / Defense expanded -->
+          <VerticalStackLayout IsVisible="{Binding TeamBRanking.IsStatsExpanded}"
+                               Spacing="0"
+                               BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
+            <Grid ColumnDefinitions="*,*,*" Padding="8,6,8,4" ColumnSpacing="4">
+              <VerticalStackLayout Grid.Column="0" Spacing="1">
+                <Label Text="Offensive Rank" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamBRanking.OffensiveRankDisplay}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="1" Spacing="1">
+                <Label Text="Avg. Points Scored" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamBRanking.AvgPointsScored, StringFormat='{0:F1}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="2" Spacing="1">
+                <Label Text="Offensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamBRanking.OffensiveZScore, StringFormat='{0:F4}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+            </Grid>
+            <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
+                     Color="{AppThemeBinding Light=Black, Dark=White}" />
+            <Grid ColumnDefinitions="*,*,*" Padding="8,4,8,6" ColumnSpacing="4">
+              <VerticalStackLayout Grid.Column="0" Spacing="1">
+                <Label Text="Defensive Rank" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamBRanking.DefensiveRankDisplay}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="1" Spacing="1">
+                <Label Text="Avg. Points Allowed" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamBRanking.AvgPointsAllowed, StringFormat='{0:F1}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+              <VerticalStackLayout Grid.Column="2" Spacing="1">
+                <Label Text="Defensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
+                <Label Text="{Binding TeamBRanking.DefensiveZScore, StringFormat='{0:F4}'}"
+                       FontSize="10" FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+              </VerticalStackLayout>
+            </Grid>
+          </VerticalStackLayout>
+
+        </VerticalStackLayout>
+
+      </VerticalStackLayout>
+    </ScrollView>
     <!-- TITLE GAME VIEW -->
     <RefreshView Grid.Row="1"
                  Command="{Binding RefreshCommand}"
