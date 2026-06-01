@@ -141,10 +141,12 @@
                         <VerticalStackLayout Spacing="0">
 
                           <!-- Day header -->
-                          <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}" Padding="12,5">
+                          <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}"
+                                Padding="10,4">
                             <Label Text="{Binding DateLabel}"
                                    FontSize="11" FontAttributes="Bold"
-                                   TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
+                                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                   VerticalOptions="Center" />
                           </Grid>
 
                           <!-- Games on this day -->
@@ -154,16 +156,16 @@
                                 <VerticalStackLayout Spacing="0">
 
                                   <!-- Away team -->
-                                  <Grid ColumnDefinitions="*,60,96" Padding="16,6,12,2">
+                                  <Grid ColumnDefinitions="*,60,96" Padding="6,5,10,2">
                                     <Label Grid.Column="0"
                                            Text="{Binding VisitorNameWithConf}"
-                                           FontSize="13" FontAttributes="Bold"
-                                           VerticalOptions="Center"
+                                           FontSize="13" VerticalOptions="Center"
                                            LineBreakMode="TailTruncation" />
                                     <Label Grid.Column="1"
                                            Text="{Binding DisplayVisitorScore}"
-                                           FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                                           FontSize="13" FontAttributes="Bold"
+                                           HorizontalOptions="End" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
                                     <Label Grid.Column="2"
                                            Text="{Binding DisplayMargin}"
                                            FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
@@ -171,16 +173,16 @@
                                   </Grid>
 
                                   <!-- Home team -->
-                                  <Grid ColumnDefinitions="*,60,96" Padding="16,2,12,8">
+                                  <Grid ColumnDefinitions="*,60,96" Padding="6,2,10,5">
                                     <Label Grid.Column="0"
                                            Text="{Binding HomeNameWithConf}"
-                                           FontSize="13" FontAttributes="Bold"
-                                           VerticalOptions="Center"
+                                           FontSize="13" VerticalOptions="Center"
                                            LineBreakMode="TailTruncation" />
                                     <Label Grid.Column="1"
                                            Text="{Binding DisplayHomeScore}"
-                                           FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                                           FontSize="13" FontAttributes="Bold"
+                                           HorizontalOptions="End" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
                                     <Label Grid.Column="2"
                                            Text="{Binding DisplayOU}"
                                            FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
@@ -230,66 +232,90 @@
                  Margin="0,40,0,0"
                  TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
 
-          <!-- Bowl games by date -->
+          <!-- Bowl games by weekend then day -->
           <VerticalStackLayout IsVisible="{Binding HasBowlData}"
-                               BindableLayout.ItemsSource="{Binding BowlDays}"
+                               BindableLayout.ItemsSource="{Binding BowlWeekends}"
                                Spacing="0">
             <BindableLayout.ItemTemplate>
-              <DataTemplate x:DataType="vm:BowlDayGroup">
+              <DataTemplate x:DataType="vm:BowlWeekendGroup">
 
                 <VerticalStackLayout Spacing="0">
-                  <!-- Date group header -->
-                  <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}" Padding="10,6">
-                    <Label Text="{Binding DateLabel}" FontSize="12" FontAttributes="Bold"
-                           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+
+                  <!-- Weekend header — purple like playoff round header -->
+                  <Grid BackgroundColor="{AppThemeBinding Light=#6B4EAE, Dark=#2A2040}" Padding="12,8">
+                    <Label Text="{Binding WeekendLabel}"
+                           FontSize="13" FontAttributes="Bold"
+                           TextColor="White" />
                   </Grid>
 
-                  <!-- Games on this day -->
-                  <VerticalStackLayout BindableLayout.ItemsSource="{Binding Games}" Spacing="0">
+                  <!-- Days within this weekend -->
+                  <VerticalStackLayout BindableLayout.ItemsSource="{Binding Days}" Spacing="0">
                     <BindableLayout.ItemTemplate>
-                      <DataTemplate x:DataType="models:GameResult">
+                      <DataTemplate x:DataType="vm:BowlDayGroup">
+
                         <VerticalStackLayout Spacing="0">
 
-                          <!-- Away team -->
-                          <Grid ColumnDefinitions="*,80,96" Padding="12,4,12,2">
-                            <Label Grid.Column="0"
-                                   Text="{Binding VisitorNameWithConf}"
-                                   FontSize="13" FontAttributes="Bold"
-                                   VerticalOptions="Center"
-                                   LineBreakMode="TailTruncation" />
-                            <Label Grid.Column="1"
-                                   FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                                   Text="{Binding DisplayVisitorScore}"
-                                   TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
-                            <Label Grid.Column="2"
-                                   Text="{Binding DisplayMargin}"
-                                   FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                          <!-- Day header — gray like playoff day header -->
+                          <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}"
+                                Padding="10,4">
+                            <Label Text="{Binding DateLabel}"
+                                   FontSize="11" FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                   VerticalOptions="Center" />
                           </Grid>
 
-                          <!-- Home team -->
-                          <Grid ColumnDefinitions="*,80,96" Padding="12,2,12,6">
-                            <Label Grid.Column="0"
-                                   Text="{Binding HomeNameWithConf}"
-                                   FontSize="13" FontAttributes="Bold"
-                                   VerticalOptions="Center"
-                                   LineBreakMode="TailTruncation" />
-                            <Label Grid.Column="1"
-                                   FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                                   Text="{Binding DisplayHomeScore}"
-                                   TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
-                            <Label Grid.Column="2"
-                                   Text="{Binding DisplayOU}"
-                                   FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
-                          </Grid>
+                          <!-- Games on this day -->
+                          <VerticalStackLayout BindableLayout.ItemsSource="{Binding Games}" Spacing="0">
+                            <BindableLayout.ItemTemplate>
+                              <DataTemplate x:DataType="models:GameResult">
+                                <VerticalStackLayout Spacing="0">
 
-                          <BoxView HeightRequest="1" Opacity="0.12"
-                                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+                                  <!-- Away team -->
+                                  <Grid ColumnDefinitions="*,60,96" Padding="6,5,10,2">
+                                    <Label Grid.Column="0"
+                                           Text="{Binding VisitorNameWithConf}"
+                                           FontSize="13" VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding DisplayVisitorScore}"
+                                           FontSize="13" FontAttributes="Bold"
+                                           HorizontalOptions="End" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                    <Label Grid.Column="2"
+                                           Text="{Binding DisplayMargin}"
+                                           FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                                  </Grid>
+
+                                  <!-- Home team -->
+                                  <Grid ColumnDefinitions="*,60,96" Padding="6,2,10,5">
+                                    <Label Grid.Column="0"
+                                           Text="{Binding HomeNameWithConf}"
+                                           FontSize="13" VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding DisplayHomeScore}"
+                                           FontSize="13" FontAttributes="Bold"
+                                           HorizontalOptions="End" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                    <Label Grid.Column="2"
+                                           Text="{Binding DisplayOU}"
+                                           FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                                  </Grid>
+
+                                  <BoxView HeightRequest="1" Opacity="0.08"
+                                           Color="{AppThemeBinding Light=Black, Dark=White}" />
+                                </VerticalStackLayout>
+                              </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                          </VerticalStackLayout>
+
                         </VerticalStackLayout>
                       </DataTemplate>
                     </BindableLayout.ItemTemplate>
                   </VerticalStackLayout>
+
                 </VerticalStackLayout>
 
               </DataTemplate>
@@ -334,7 +360,7 @@
 
               <Grid ColumnDefinitions="*,120,90" Padding="12,6,16,3">
                 <Label Grid.Column="0" Text="{Binding Qualifier1.TeamName}"
-                       FontSize="12" FontAttributes="Bold"
+                       FontSize="13"
                        VerticalOptions="Center" LineBreakMode="TailTruncation" />
                 <Label Grid.Column="1"
                        FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
@@ -359,7 +385,7 @@
 
               <Grid ColumnDefinitions="*,120,90" Padding="12,3,16,6">
                 <Label Grid.Column="0" Text="{Binding Qualifier2.TeamName}"
-                       FontSize="12" FontAttributes="Bold"
+                       FontSize="13"
                        VerticalOptions="Center" LineBreakMode="TailTruncation" />
                 <Label Grid.Column="1"
                        FontSize="11" HorizontalOptions="End" VerticalOptions="Center"

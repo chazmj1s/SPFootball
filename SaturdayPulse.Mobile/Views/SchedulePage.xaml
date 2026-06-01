@@ -85,7 +85,7 @@
 
                 <Label Grid.Row="0" Grid.Column="2"
                        Text="{Binding VisitorName}"
-                       FontSize="14" VerticalOptions="Center"
+                       FontSize="13" VerticalOptions="Center"
                        LineBreakMode="TailTruncation" />
 
                 <Label Grid.Row="0" Grid.Column="3"
@@ -114,7 +114,7 @@
                 </controls:FollowTeamIcon>
 
                 <Label Grid.Row="1" Grid.Column="2"
-                       FontSize="14" VerticalOptions="Center"
+                       FontSize="13" VerticalOptions="Center"
                        LineBreakMode="TailTruncation">
                   <Label.FormattedText>
                     <FormattedString>

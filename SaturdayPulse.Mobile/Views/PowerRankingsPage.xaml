@@ -97,7 +97,7 @@
                 <!-- Team + Conf · Tier -->
                 <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
                   <Label Text="{Binding TeamName}"
-                         FontSize="12" FontAttributes="Bold" LineBreakMode="TailTruncation"/>
+                         FontSize="13" LineBreakMode="TailTruncation"/>
                   <Label Text="{Binding DisplayConferenceTier}"
                          FontSize="10" Opacity="0.6" LineBreakMode="TailTruncation"/>
                 </VerticalStackLayout>

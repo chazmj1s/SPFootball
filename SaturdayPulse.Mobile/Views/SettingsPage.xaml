@@ -240,7 +240,7 @@
                                             <Grid ColumnDefinitions="*,Auto,32" Padding="10,5,10,2">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding RivalryName}"
-                                                       FontSize="12" FontAttributes="Bold"
+                                                       FontSize="13"
                                                        VerticalOptions="Center"
                                                        LineBreakMode="TailTruncation" />
                                                 <Label Grid.Column="1"

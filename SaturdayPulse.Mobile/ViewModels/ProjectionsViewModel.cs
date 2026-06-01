@@ -50,7 +50,7 @@ namespace SaturdayPulse.ViewModels
 
         public ObservableCollection<ChampionshipMatchup> Championships { get; } = new();
         public ObservableCollection<PlayoffRound> PlayoffRounds { get; } = new();
-        public ObservableCollection<BowlDayGroup> BowlDays { get; } = new();
+        public ObservableCollection<BowlWeekendGroup> BowlWeekends { get; } = new();
         private bool _playoffLoaded;
         private bool _bowlsLoaded;
 
@@ -65,7 +65,7 @@ namespace SaturdayPulse.ViewModels
         public bool IsLoading => _isBusy;
         public bool HasLoaded       { get; set; }
         public bool HasPlayoffData  => PlayoffRounds.Any();
-        public bool HasBowlData     => BowlDays.Any();
+        public bool HasBowlData     => BowlWeekends.Any();
 
         public string StatusMessage
         {
@@ -147,7 +147,8 @@ namespace SaturdayPulse.ViewModels
                                     .Select(dayGrp => new PlayoffDayGroup(dayGrp.Key, dayGrp.ToList()))
                                     .ToList();
                                 return new PlayoffRound(label, days);
-                            });
+                            })
+                            .ToList();
 
                         PlayoffRounds.Clear();
                         foreach (var round in playoffRounds)
@@ -155,14 +156,42 @@ namespace SaturdayPulse.ViewModels
                         _playoffLoaded = true;
                         OnPropertyChanged(nameof(HasPlayoffData));
 
-                        var bowlGroups = postseason
-                            .Where(g => g.SeasonType == "postseason")
-                            .GroupBy(g => g.GameDate ?? "TBD")
-                            .OrderBy(g => g.Key);
+                        // Group bowl games by weekend (Fri–Sun), then by day within each weekend
+                        static DateTime WeekendSaturday(DateTime d)
+                        {
+                            int daysToSat = ((int)DayOfWeek.Saturday - (int)d.DayOfWeek + 7) % 7;
+                            return d.AddDays(daysToSat).Date;
+                        }
 
-                        BowlDays.Clear();
-                        foreach (var grp in bowlGroups)
-                            BowlDays.Add(new BowlDayGroup(grp.Key, grp.OrderBy(g => g.GameDate).ToList()));
+                        var bowlWeekends = postseason
+                            .Where(g => g.SeasonType == "postseason")
+                            .GroupBy(g =>
+                            {
+                                var d = g.GameDate.ToDateTime();
+                                return d.HasValue ? WeekendSaturday(d.Value) : DateTime.MaxValue;
+                            })
+                            .OrderBy(g => g.Key)
+                            .Select(wkGrp =>
+                            {
+                                var label = wkGrp.Key == DateTime.MaxValue
+                                    ? "TBD"
+                                    : $"Weekend of {wkGrp.Key:ddd, MMM d}";
+                                var days = wkGrp
+                                    .GroupBy(g => g.GroupHeader)
+                                    .OrderBy(g =>
+                                    {
+                                        var first = g.First().GameDate.ToDateTime();
+                                        return first ?? DateTime.MaxValue;
+                                    })
+                                    .Select(dayGrp => new BowlDayGroup(dayGrp.Key, dayGrp.ToList()))
+                                    .ToList();
+                                return new BowlWeekendGroup(label, days);
+                            })
+                            .ToList();
+
+                        BowlWeekends.Clear();
+                        foreach (var wk in bowlWeekends)
+                            BowlWeekends.Add(wk);
                         _bowlsLoaded = true;
                         OnPropertyChanged(nameof(HasBowlData));
                     }
@@ -207,7 +236,7 @@ namespace SaturdayPulse.ViewModels
                 _playoffLoaded = false;
                 _bowlsLoaded   = false;
                 PlayoffRounds.Clear();
-                BowlDays.Clear();
+                BowlWeekends.Clear();
             }
 
             // Week and conference changes only affect Championship view
@@ -251,7 +280,7 @@ namespace SaturdayPulse.ViewModels
         }
     }
 
-    /// <summary>One calendar day of bowl games.</summary>
+    /// <summary>One calendar day of bowl games within a weekend.</summary>
     public class BowlDayGroup
     {
         public string DateLabel { get; }
@@ -260,6 +289,18 @@ namespace SaturdayPulse.ViewModels
         {
             DateLabel = dateLabel;
             Games     = games;
+        }
+    }
+
+    /// <summary>One weekend window of bowl games (Fri–Sun), containing day sub-groups.</summary>
+    public class BowlWeekendGroup
+    {
+        public string WeekendLabel { get; }
+        public List<BowlDayGroup> Days { get; }
+        public BowlWeekendGroup(string label, List<BowlDayGroup> days)
+        {
+            WeekendLabel = label;
+            Days         = days;
         }
     }
 }
