@@ -247,6 +247,42 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// Sandbox: predicts a matchup between two teams from potentially different years.
+        /// </summary>
+        public async Task<Models.SandboxPrediction?> GetSandboxPredictionAsync(
+            string teamName, int teamYear, string opponentName, int opponentYear)
+        {
+            try
+            {
+                var url = $"sandbox/predict?teamName={Uri.EscapeDataString(teamName)}&teamYear={teamYear}" +
+                          $"&opponentName={Uri.EscapeDataString(opponentName)}&opponentYear={opponentYear}";
+                return await _httpClient.GetFromJsonAsync<Models.SandboxPrediction>(url);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Sandbox predict error: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Returns the years a team has WeeklyRankings data for — used by sandbox year picker.
+        /// </summary>
+        public async Task<List<int>?> GetTeamAvailableYearsAsync(int teamId)
+        {
+            try
+            {
+                return await _httpClient.GetFromJsonAsync<List<int>>(
+                    $"sandbox/team-years?teamId={teamId}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Team years error: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Gets all named rivalries with series metadata.
         /// </summary>
         public async Task<List<Models.RivalryInfo>?> GetNamedRivalriesAsync()

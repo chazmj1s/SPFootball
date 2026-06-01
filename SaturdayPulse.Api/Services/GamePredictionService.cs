@@ -67,6 +67,40 @@ namespace SaturdayPulse.Services
                 rivalries, avgTeamScore, year, week);
         }
 
+        /// <summary>
+        /// Sandbox: predicts a matchup between two teams from potentially different years.
+        /// Each team's ratings are loaded from their respective year's end-of-season snapshot.
+        /// Always neutral site (location = 'N'), week = 0.
+        /// </summary>
+        public async Task<GamePrediction> PredictSandboxMatchupAsync(
+            string teamName, int teamYear,
+            string opponentName, int opponentYear,
+            CancellationToken token = default)
+        {
+            var team     = await _uow.Teams.GetByNameAsync(teamName,     token)
+                           ?? throw new ArgumentException($"Team not found: {teamName}");
+            var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
+                           ?? throw new ArgumentException($"Team not found: {opponentName}");
+
+            // Load each team's end-of-season ratings from their respective year
+            var teamRecords = await GetEndOfSeasonRatingsAsync(teamYear,     token);
+            var oppRecords  = await GetEndOfSeasonRatingsAsync(opponentYear, token);
+
+            if (!teamRecords.TryGetValue(team.TeamId,     out var teamRecord))
+                throw new ArgumentException($"No ratings found for {teamName} in {teamYear}.");
+            if (!oppRecords.TryGetValue(opponent.TeamId,  out var oppRecord))
+                throw new ArgumentException($"No ratings found for {opponentName} in {opponentYear}.");
+
+            var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            // Average team score across both years for realistic scoring context
+            var avgTeamScore = await GetAverageTeamScoreAsync(Math.Min(teamYear, opponentYear), token);
+
+            return CalculatePrediction(
+                teamRecord, oppRecord, team, opponent, 'N',
+                rivalries, avgTeamScore,
+                Math.Max(teamYear, opponentYear), 0);
+        }
+
         /// <summary>Predicts scores for multiple matchups in a single DB round-trip.</summary>
         public async Task<List<GamePrediction>> PredictMatchups(
             int year, List<MatchupRequest> matchups, CancellationToken token = default)
@@ -129,6 +163,26 @@ namespace SaturdayPulse.Services
         }
 
         // ── Ratings loader ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns end-of-season ratings for a team's year — uses the highest
+        /// available WeeklyRankings snapshot for that year, giving full season strength.
+        /// Falls back to week 0 (preseason) if no in-season snapshots exist.
+        /// </summary>
+        private async Task<Dictionary<int, TeamRecord>> GetEndOfSeasonRatingsAsync(
+            int year, CancellationToken token)
+        {
+            var yearWeeks = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
+            var maxWeek   = yearWeeks
+                .Where(yw => yw.Year == year)
+                .Select(yw => yw.Week)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            return await GetRatingsForWeekAsync(year, maxWeek, token);
+        }
+
+        // ── Ratings loader (original) ─────────────────────────────────────────────
 
         /// <summary>
         /// Returns the team ratings dictionary to use for prediction at a given week.

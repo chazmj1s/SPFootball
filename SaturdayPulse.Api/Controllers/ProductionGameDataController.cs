@@ -102,6 +102,71 @@ namespace SaturdayPulse.Controllers
 
         #endregion
 
+        /// <summary>
+        /// Sandbox: predicts a matchup between two teams from potentially different years.
+        /// Example: GET /api/productiongamedata/sandbox/predict?teamName=Texas&teamYear=1969&opponentName=Texas&opponentYear=2005
+        /// </summary>
+        [HttpGet("sandbox/predict")]
+        public async Task<IActionResult> SandboxPredict(
+            [FromQuery] string teamName,
+            [FromQuery] int    teamYear,
+            [FromQuery] string opponentName,
+            [FromQuery] int    opponentYear,
+            CancellationToken  token = default)
+        {
+            if (string.IsNullOrEmpty(teamName) || string.IsNullOrEmpty(opponentName))
+                return BadRequest("Both teamName and opponentName are required.");
+
+            try
+            {
+                var prediction = await gameDataService.PredictSandboxMatchupAsync(
+                    teamName, teamYear, opponentName, opponentYear, token);
+
+                return Ok(new
+                {
+                    teamName            = prediction.TeamName,
+                    teamYear,
+                    opponentName        = prediction.OpponentName,
+                    opponentYear,
+                    predictedTeamScore  = prediction.PredictedTeamScore,
+                    predictedOppScore   = prediction.PredictedOpponentScore,
+                    expectedMargin      = prediction.ExpectedMargin,
+                    marginOfError       = prediction.MarginOfError,
+                    confidence          = prediction.Confidence,
+                    rivalryNote         = prediction.RivalryNote,
+                    summary             = prediction.PredictionSummary
+                });
+            }
+            catch (ArgumentException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error in sandbox prediction");
+                return StatusCode(500, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Returns the distinct years a team has WeeklyRankings data for.
+        /// Used to populate the year picker in the sandbox team selector.
+        /// Example: GET /api/productiongamedata/sandbox/team-years?teamId=47
+        /// </summary>
+        [HttpGet("sandbox/team-years")]
+        public async Task<IActionResult> SandboxTeamYears(
+            [FromQuery] int       teamId,
+            CancellationToken     token = default)
+        {
+            try
+            {
+                var years = await gameDataService.GetTeamAvailableYearsAsync(teamId, token);
+                return Ok(years);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving available years for team {TeamId}", teamId);
+                return StatusCode(500, ex.Message);
+            }
+        }
+
         #region Diagnostics and Queries
 
         /// <summary>
