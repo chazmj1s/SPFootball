@@ -1,0 +1,103 @@
+<div class="page-header">
+  <h1>Postseason Tagging</h1>
+</div>
+
+<div class="controls-row">
+  <mat-form-field appearance="outline" class="year-field">
+    <mat-label>Year</mat-label>
+    <input matInput type="number" [(ngModel)]="year" [disabled]="running" />
+  </mat-form-field>
+
+  <button mat-stroked-button (click)="loadPostseason()" [disabled]="running" class="action-btn">
+    <mat-icon>{{ running ? 'hourglass_top' : 'cloud_download' }}</mat-icon>
+    {{ running ? 'Loading...' : 'Load Postseason' }}
+  </button>
+
+  <div class="divider">|</div>
+
+  <button mat-stroked-button (click)="fetchGames()" [disabled]="running" class="action-btn">
+    <mat-icon>refresh</mat-icon> Refresh List
+  </button>
+
+  <span class="spacer"></span>
+
+  <button mat-flat-button color="primary"
+          (click)="save()"
+          [disabled]="saving || running || dirtyCount === 0"
+          class="action-btn">
+    <mat-icon>save</mat-icon>
+    Save ({{ dirtyCount }} playoff)
+  </button>
+
+  @if (log.length > 0 && !running) {
+    <button mat-icon-button (click)="clearLog()" title="Clear log">
+      <mat-icon>delete_outline</mat-icon>
+    </button>
+  }
+</div>
+
+@if (running) {
+  <mat-progress-bar mode="indeterminate" class="progress-bar" />
+}
+
+@if (log.length > 0) {
+  <div class="console-panel" #logPanel>
+    @for (entry of log; track $index) {
+      <div class="log-entry" [class]="'log-' + entry.status">
+        <span class="log-time">{{ entry.time }}</span>
+        <span class="log-message">{{ entry.message }}</span>
+      </div>
+    }
+  </div>
+}
+
+@if (!running && gamesByWeek.length > 0) {
+  <p class="instructions">
+    Check each CFP playoff game. Bowl games should remain unchecked. Hit <strong>Save</strong> when done.
+  </p>
+
+  @for (group of gamesByWeek; track group.week) {
+    <div class="week-group">
+
+      <div class="week-label" (click)="toggleWeek(group.week)">
+        <mat-icon class="chevron">{{ isCollapsed(group.week) ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <span class="week-title">Week {{ group.week }}</span>
+        <span class="week-counts">
+          @if (group.bowlCount > 0) {
+            <span class="count-bowl">Bowls ({{ group.bowlCount }})</span>
+          }
+          @if (group.bowlCount > 0 && group.playoffCount > 0) {
+            <span class="count-sep">·</span>
+          }
+          @if (group.playoffCount > 0) {
+            <span class="count-playoff">Playoffs ({{ group.playoffCount }})</span>
+          }
+        </span>
+      </div>
+
+      @if (!isCollapsed(group.week)) {
+        <div class="game-list">
+          @for (game of group.games; track game.id) {
+            <div class="game-row" [class.tagged]="isChecked(game.id)">
+              <mat-checkbox
+                [checked]="isChecked(game.id)"
+                (change)="toggle(game.id, $event.checked)">
+              </mat-checkbox>
+              <span class="matchup">{{ game.awayName }} @ {{ game.homeName }}</span>
+              <span class="game-date">{{ game.gameDay }}, {{ game.gameDate }}</span>
+              <span class="season-type" [class]="'type-' + game.seasonType">{{ game.seasonType }}</span>
+            </div>
+          }
+        </div>
+      }
+
+    </div>
+  }
+}
+
+@if (!running && gamesByWeek.length === 0 && log.length === 0) {
+  <div class="empty-state">
+    <mat-icon>sports_football</mat-icon>
+    <p>Set a year and click Load Postseason to fetch games from CFBD.</p>
+  </div>
+}

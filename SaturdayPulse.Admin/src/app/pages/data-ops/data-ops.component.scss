@@ -1,0 +1,112 @@
+.page-layout {
+  display: flex;
+  gap: 24px;
+  height: calc(100vh - 120px);
+}
+
+// ── Left sections ──────────────────────────────────────────────
+.sections {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.page-title {
+  margin: 0 0 20px;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.section {
+  padding: 16px 0;
+}
+
+.section-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 12px;
+}
+
+.section-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  .param-field {
+    width: 100px;
+    &.narrow { width: 80px; }
+  }
+
+  .action-btn {
+    height: 40px;
+    margin-bottom: 16px; // offset for mat-form-field label space
+  }
+
+  .btn-divider {
+    color: var(--mat-sys-outline-variant);
+    margin-bottom: 16px;
+    user-select: none;
+  }
+}
+
+// ── Right log sidebar ──────────────────────────────────────────
+.log-sidebar {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--mat-sys-outline-variant);
+  padding-left: 24px;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 10px;
+}
+
+.console-panel {
+  flex: 1;
+  background-color: #0d0d0d;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.log-empty {
+  color: #444;
+  font-style: italic;
+}
+
+.log-entry {
+  display: flex;
+  gap: 10px;
+
+  .log-time {
+    color: #444;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  &.log-info    .log-message { color: #888; }
+  &.log-running .log-message { color: #7eb8f7; }
+  &.log-success .log-message { color: #6dbf7e; }
+  &.log-error   .log-message { color: #f77e7e; }
+}

@@ -70,6 +70,8 @@ builder.Services.AddLogging(loggingBuilder =>
 builder.Services.Configure<CustomSettings>(builder.Configuration.GetSection("CustomSettings"));
 builder.Services.Configure<MetricsConfiguration>(builder.Configuration.GetSection("MetricsConfiguration"));
 
+builder.Services.AddCors();
+
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
 
@@ -95,6 +97,12 @@ else
 app.UseHsts();
 app.UseHttpsRedirection();
 app.UseRouting();
+
+app.UseCors(policy => policy
+    .WithOrigins("http://localhost:4200")
+    .AllowAnyMethod()
+    .AllowAnyHeader());
+
 app.UseAuthorization();
 app.MapStaticAssets();
 

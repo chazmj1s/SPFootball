@@ -5,6 +5,7 @@ namespace SaturdayPulse.Interfaces
 {
     public interface IGameDataService
     {
+        Task<int> SetSeasonTypeAsync(List<int> gameIds, string seasonType, CancellationToken token = default);
         Task UpdateTeamRecordsAsync(int? targetYear = null, CancellationToken token = default);
 
         // ── CFBD V2 — Single load ─────────────────────────────────────────────

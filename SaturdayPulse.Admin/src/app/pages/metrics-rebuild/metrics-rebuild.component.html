@@ -1,0 +1,135 @@
+<div class="page-layout">
+
+  <div class="sections">
+    <div class="page-title-row">
+      <h1 class="page-title">Metrics Rebuild</h1>
+    </div>
+
+    <div class="run-row">
+      <button mat-stroked-button (click)="selectAll()" [disabled]="running" class="small-btn">Select All</button>
+      <button mat-stroked-button (click)="clearAll()"  [disabled]="running" class="small-btn">Clear</button>
+      <span class="spacer"></span>
+      @if (estimateLabel) {
+        <span class="estimate-label">Est. {{ estimateLabel }}</span>
+      }
+      <button mat-flat-button color="warn"
+              (click)="runSelected()"
+              [disabled]="running || selectedOps.length === 0"
+              class="run-btn">
+        <mat-icon>{{ running ? 'hourglass_top' : 'play_arrow' }}</mat-icon>
+        Run Selected ({{ selectedOps.length }})
+      </button>
+    </div>
+
+    @for (tier of tiers; track tier.key) {
+      <div class="tier">
+
+        <div class="tier-header" (click)="toggleTier(tier)">
+          <mat-icon class="chevron">{{ tier.collapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+          <mat-checkbox
+            [checked]="isTierChecked(tier)"
+            [indeterminate]="isTierIndeterminate(tier)"
+            (change)="onTierToggle(tier, $event.checked)"
+            (click)="$event.stopPropagation()"
+            [disabled]="running">
+          </mat-checkbox>
+          <span class="tier-label">{{ tier.label }}</span>
+
+          <select class="param-select wide tier-select"
+                  [ngModel]="tier.tierYear"
+                  (ngModelChange)="onTierYearChange(tier, $event)"
+                  (click)="$event.stopPropagation()"
+                  [disabled]="running">
+            <option [ngValue]="undefined">Year</option>
+            @for (y of years; track y) {
+              <option [ngValue]="y">{{ y }}</option>
+            }
+          </select>
+
+          @if (tierSelectedCount(tier) > 0) {
+            <span class="tier-count">{{ tierSelectedCount(tier) }} selected</span>
+          }
+        </div>
+
+        @if (!tier.collapsed) {
+          <div class="op-list">
+            @for (op of tier.ops; track op.key) {
+              <div class="op-row" [class.auto-selected]="op.autoSelected">
+
+                <mat-checkbox
+                  [checked]="op.selected"
+                  (change)="onToggle(op, $event.checked)"
+                  [disabled]="running">
+                </mat-checkbox>
+
+                <span class="op-label">{{ op.label }}</span>
+
+                @if (op.paramTypes.includes('year')) {
+                  <select class="param-select wide"
+                          [ngModel]="op.params.year"
+                          (ngModelChange)="onChildYearChange(tier, op, $event)"
+                          [disabled]="running">
+                    @if (!op.yearRequired) {
+                      <option [ngValue]="undefined">Year</option>
+                    }
+                    @for (y of years; track y) {
+                      <option [ngValue]="y">{{ y }}</option>
+                    }
+                  </select>
+                }
+
+                @if (op.paramTypes.includes('week')) {
+                  <select class="param-select narrow"
+                          [(ngModel)]="op.params.week"
+                          [disabled]="running || tier.tierYear !== undefined">
+                    <option [ngValue]="undefined">Week</option>
+                    @for (w of weeks; track w) {
+                      <option [ngValue]="w">Wk {{ w }}</option>
+                    }
+                  </select>
+                }
+
+                <span class="op-estimate">~{{ op.estimateMinutes < 1 ? '<1' : op.estimateMinutes }} min</span>
+
+                @if (op.autoSelected) {
+                  <span class="auto-tag" [matTooltip]="'Auto-selected: required dependency'">auto</span>
+                }
+
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <mat-divider />
+    }
+  </div>
+
+  <!-- Right: log panel -->
+  <div class="log-sidebar">
+    <div class="log-header">
+      <span>Activity Log</span>
+      @if (log.length > 0 && !running) {
+        <button mat-icon-button (click)="clearLog()" title="Clear log">
+          <mat-icon>delete_outline</mat-icon>
+        </button>
+      }
+    </div>
+
+    @if (running) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+
+    <div class="console-panel" #logPanel>
+      @if (log.length === 0) {
+        <span class="log-empty">No activity yet.</span>
+      }
+      @for (entry of log; track $index) {
+        <div class="log-entry" [class]="'log-' + entry.status">
+          <span class="log-time">{{ entry.time }}</span>
+          <span class="log-message">{{ entry.message }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+</div>
