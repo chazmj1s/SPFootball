@@ -682,6 +682,18 @@ namespace SaturdayPulse.Services
 
         #endregion
 
+        public async Task<int> SetSeasonTypeAsync(List<int> gameIds, string seasonType, CancellationToken token = default)
+        {
+            var games = await _uow.Games.GetByIds(gameIds, token);
+
+            foreach (var game in games)
+                game.SeasonType = seasonType;
+
+            await _uow.SaveChangesAsync(token);
+            return games.Count;
+        }
+
+
         public async Task UpdateTeamRecordsAsync(int? targetYear = null, CancellationToken token = default)
         {
             try

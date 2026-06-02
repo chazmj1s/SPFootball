@@ -1,0 +1,100 @@
+<div class="page-header">
+  <h1>Metrics Rebuild</h1>
+  <mat-form-field appearance="outline" class="year-field">
+    <mat-label>Start Year</mat-label>
+    <input matInput type="number" [(ngModel)]="startYear" />
+  </mat-form-field>
+</div>
+
+<div class="warning-banner">
+  <mat-icon>warning</mat-icon>
+  Long-running operations. Use only when a critical recalculation is needed.
+</div>
+
+<div class="ops-grid">
+
+  <mat-card class="danger-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>refresh</mat-icon>
+      <mat-card-title>Backfill All Metrics</mat-card-title>
+      <mat-card-subtitle>Full rebuild: SOS, Power Rating, Ranking</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['allmetrics']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="warn" (click)="backfillAllMetrics()" [disabled]="busy['allmetrics']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card class="danger-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>trending_up</mat-icon>
+      <mat-card-title>Backfill Rolling Averages</mat-card-title>
+      <mat-card-subtitle>Rebuild Seed / Trend / Pedigree from scratch</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['rolling']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="warn" (click)="backfillRollingAverages()" [disabled]="busy['rolling']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card class="danger-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>history</mat-icon>
+      <mat-card-title>Backfill Weekly Rankings</mat-card-title>
+      <mat-card-subtitle>Rebuild all WeeklyRankings snapshots</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['weekly']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="warn" (click)="backfillWeeklyRankings()" [disabled]="busy['weekly']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card class="danger-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>analytics</mat-icon>
+      <mat-card-title>Backfill Projections</mat-card-title>
+      <mat-card-subtitle>Rebuild all projection rows — several minutes</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['projections']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="warn" (click)="backfillProjections()" [disabled]="busy['projections']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>score</mat-icon>
+      <mat-card-title>Build Score Differentials</mat-card-title>
+      <mat-card-subtitle>Rebuild AvgScoreDifferentials lookup table</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['scorediff']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="buildAvgScoreDifferentials()" [disabled]="busy['scorediff']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>percent</mat-icon>
+      <mat-card-title>Recalculate Score Deltas</mat-card-title>
+      <mat-card-subtitle>Recalculate AvgScoreDeltas win-% buckets</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['scoredelta']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="recalculateScoreDeltas()" [disabled]="busy['scoredelta']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>compare_arrows</mat-icon>
+      <mat-card-title>Matchup Histories</mat-card-title>
+      <mat-card-subtitle>Rebuild rivalry matchup records</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['matchup']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="calculateMatchupHistories()" [disabled]="busy['matchup']">Run</button>
+    </mat-card-actions>
+  </mat-card>
+
+</div>

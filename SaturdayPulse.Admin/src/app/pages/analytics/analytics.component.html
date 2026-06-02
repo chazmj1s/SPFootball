@@ -1,0 +1,81 @@
+<div class="page-header">
+  <h1>Analytics</h1>
+  <div class="year-range">
+    <mat-form-field appearance="outline" class="year-field">
+      <mat-label>Start Year</mat-label>
+      <input matInput type="number" [(ngModel)]="startYear" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="year-field">
+      <mat-label>End Year</mat-label>
+      <input matInput type="number" [(ngModel)]="endYear" />
+    </mat-form-field>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2>Projection Accuracy</h2>
+    <button mat-stroked-button (click)="loadProjectionAccuracy()" [disabled]="loading['proj']">
+      <mat-icon>query_stats</mat-icon> Load
+    </button>
+  </div>
+
+  @if (loading['proj']) { <div class="centered"><mat-spinner diameter="32" /></div> }
+
+  @if (projectionAccuracy && !loading['proj']) {
+    <div class="stats-grid">
+      <mat-card>
+        <mat-card-content>
+          <p class="stat-label">MAE</p>
+          <p class="stat-value">{{ projectionAccuracy.mae | number:'1.2-2' }}</p>
+        </mat-card-content>
+      </mat-card>
+      <mat-card>
+        <mat-card-content>
+          <p class="stat-label">Winner Accuracy</p>
+          <p class="stat-value">{{ projectionAccuracy.winnerAccuracy | percent:'1.1-1' }}</p>
+        </mat-card-content>
+      </mat-card>
+      <mat-card>
+        <mat-card-content>
+          <p class="stat-label">Spread Bias</p>
+          <p class="stat-value">{{ projectionAccuracy.spreadBias | number:'1.2-2' }}</p>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  }
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2>Team Performance</h2>
+    <button mat-stroked-button (click)="loadAnalytics()" [disabled]="loading['analytics']">
+      <mat-icon>bar_chart</mat-icon> Load
+    </button>
+  </div>
+
+  @if (loading['analytics']) { <div class="centered"><mat-spinner diameter="32" /></div> }
+
+  @if (analytics && !loading['analytics']) {
+    <div class="stats-grid">
+      <mat-card>
+        <mat-card-content>
+          <p class="stat-label">Records</p>
+          <p class="stat-value">{{ analytics.totalRecords | number }}</p>
+        </mat-card-content>
+      </mat-card>
+      <mat-card>
+        <mat-card-content>
+          <p class="stat-label">Avg Power Rating</p>
+          <p class="stat-value">{{ analytics.averagePowerRating | number:'1.2-2' }}</p>
+        </mat-card-content>
+      </mat-card>
+      <mat-card>
+        <mat-card-content>
+          <p class="stat-label">Avg SOS</p>
+          <p class="stat-value">{{ analytics.averageSOS | number:'1.2-2' }}</p>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  }
+</div>

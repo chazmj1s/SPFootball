@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Models;
 using SaturdayPulse.Utilities;
+using SQLitePCL;
 using System.Diagnostics;
 
 namespace SaturdayPulse.Services
@@ -1013,7 +1014,6 @@ namespace SaturdayPulse.Services
         }
 
         // ── Postseason ───────────────────────────────────────────────────────────
-
         public async Task<ScheduleResult> GetPostseasonGamesV2Async(int? year, CancellationToken token = default)
         {
             var targetYear = year ?? DateTime.Now.Year;

@@ -146,6 +146,8 @@ namespace SaturdayPulse.Services
                 year           = targetYear, week, liveSwapActive = week.HasValue
             };
         }
+        public async Task<int> SetSeasonTypeAsync(List<int> gameIds, string seasonType, CancellationToken token = default)
+            => await _gameDataService.SetSeasonTypeAsync(gameIds, seasonType, token);
 
         // ── Team Records and Metrics ──────────────────────────────────────────────
 

@@ -1,0 +1,80 @@
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <button mat-stroked-button (click)="loadDiagnostic()">
+    <mat-icon>refresh</mat-icon> Refresh
+  </button>
+</div>
+
+@if (loading) {
+  <div class="centered"><mat-spinner /></div>
+}
+
+@if (error) {
+  <mat-card class="error-card">
+    <mat-card-content>{{ error }}</mat-card-content>
+  </mat-card>
+}
+
+@if (diagnostic && !loading) {
+  <div class="stats-grid">
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>storage</mat-icon>
+        <mat-card-title>Database</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="stat-value">{{ diagnostic.database }}</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>groups</mat-icon>
+        <mat-card-title>Total Teams</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="stat-value">{{ diagnostic.totalTeams | number }}</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>sports_football</mat-icon>
+        <mat-card-title>Total Games</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="stat-value">{{ diagnostic.totalGames | number }}</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>leaderboard</mat-icon>
+        <mat-card-title>Total Records</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="stat-value">{{ diagnostic.totalRecords | number }}</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>bolt</mat-icon>
+        <mat-card-title>With Power Rating</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="stat-value">{{ diagnostic.recordsWithPowerRating | number }}</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>calendar_month</mat-icon>
+        <mat-card-title>Years with Data</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="stat-value">{{ diagnostic.yearsWithData[0] }} – {{ diagnostic.yearsWithData[diagnostic.yearsWithData.length - 1] }}</p>
+      </mat-card-content>
+    </mat-card>
+  </div>
+}

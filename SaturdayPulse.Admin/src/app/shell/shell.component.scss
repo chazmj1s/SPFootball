@@ -1,0 +1,93 @@
+.sidenav-container {
+  height: 100vh;
+}
+
+.sidenav {
+  width: 220px;
+  border-right: 1px solid var(--mat-sys-outline-variant);
+  background-color: var(--mat-sys-surface-container-low);
+
+  .sidenav-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 16px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    gap: 4px;
+
+    .app-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+  }
+
+    .app-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--mat-sys-on-surface);
+      letter-spacing: 0.5px;
+    }
+
+    .app-subtitle {
+      font-size: 0.7rem;
+      color: var(--mat-sys-on-surface-variant);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+  }
+
+  mat-nav-list {
+    padding-top: 8px;
+  }
+
+  .active-link {
+    background-color: var(--mat-sys-secondary-container) !important;
+    color: var(--mat-sys-on-secondary-container) !important;
+    border-radius: 0 24px 24px 0;
+
+    mat-icon {
+      color: var(--mat-sys-on-secondary-container) !important;
+    }
+  }
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.top-toolbar {
+  background-color: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+
+  .toolbar-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .env-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background-color: var(--mat-sys-tertiary-container);
+    color: var(--mat-sys-on-tertiary-container);
+  }
+}
+
+.page-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}

@@ -1,0 +1,68 @@
+<div class="page-header">
+  <h1>Postseason Tagging</h1>
+  <div class="header-actions">
+    <mat-form-field appearance="outline" class="year-field">
+      <mat-label>Year</mat-label>
+      <input matInput type="number" [(ngModel)]="year" (change)="loadGames()" />
+    </mat-form-field>
+    <button mat-stroked-button (click)="loadGames()">
+      <mat-icon>refresh</mat-icon> Reload
+    </button>
+    <button mat-flat-button color="primary"
+            (click)="save()"
+            [disabled]="saving || dirtyCount === 0">
+      @if (saving) { <mat-spinner diameter="18" /> }
+      @else { <mat-icon>save</mat-icon> }
+      Save ({{ dirtyCount }} playoff)
+    </button>
+  </div>
+</div>
+
+<p class="instructions">
+  Check each game that is a CFP playoff game. Bowl games should remain unchecked.
+  Hit <strong>Save</strong> to update <code>SeasonType</code> in the database.
+</p>
+
+@if (loading) {
+  <div class="centered"><mat-spinner /></div>
+}
+
+@if (error) {
+  <mat-card class="error-card">
+    <mat-card-content>{{ error }}</mat-card-content>
+  </mat-card>
+}
+
+@if (!loading && gamesByWeek.length === 0 && !error) {
+  <mat-card>
+    <mat-card-content>No postseason games found for {{ year }}.</mat-card-content>
+  </mat-card>
+}
+
+@for (group of gamesByWeek; track group.week) {
+  <div class="week-group">
+    <h2 class="week-label">Week {{ group.week }}</h2>
+    <div class="game-list">
+      @for (game of group.games; track game.id) {
+        <mat-card class="game-card" [class.tagged]="isChecked(game.id)">
+          <mat-card-content class="game-row">
+            <mat-checkbox
+              [checked]="isChecked(game.id)"
+              (change)="toggle(game.id, $event.checked)">
+            </mat-checkbox>
+            <div class="game-info">
+              <span class="matchup">{{ game.awayTeam }} @ {{ game.homeTeam }}</span>
+              <span class="game-date">{{ game.gameDate | date:'MMM d, yyyy' }}</span>
+            </div>
+            @if (game.notes) {
+              <span class="notes">{{ game.notes }}</span>
+            }
+            <mat-chip [class]="'chip-' + game.seasonType">
+              {{ game.seasonType }}
+            </mat-chip>
+          </mat-card-content>
+        </mat-card>
+      }
+    </div>
+  </div>
+}

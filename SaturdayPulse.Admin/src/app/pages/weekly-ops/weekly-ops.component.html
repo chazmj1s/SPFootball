@@ -1,0 +1,105 @@
+<div class="page-header">
+  <h1>Weekly Operations</h1>
+</div>
+
+<mat-card class="params-card">
+  <mat-card-header><mat-card-title>Parameters</mat-card-title></mat-card-header>
+  <mat-card-content class="params-row">
+    <mat-form-field appearance="outline">
+      <mat-label>Year</mat-label>
+      <input matInput type="number" [(ngModel)]="year" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Week</mat-label>
+      <input matInput type="number" [(ngModel)]="week" />
+    </mat-form-field>
+  </mat-card-content>
+</mat-card>
+
+<div class="ops-grid">
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>sync</mat-icon>
+      <mat-card-title>Weekly Refresh</mat-card-title>
+      <mat-card-subtitle>Load games + lines for one week</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['refresh']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="weeklyRefresh()" [disabled]="busy['refresh']">
+        Run
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>groups</mat-icon>
+      <mat-card-title>Update Team Records</mat-card-title>
+      <mat-card-subtitle>Rebuild win/loss records from results</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['records']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="updateTeamRecords()" [disabled]="busy['records']">
+        Run
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>calculate</mat-icon>
+      <mat-card-title>Update Weekly Metrics</mat-card-title>
+      <mat-card-subtitle>Recalculate SOS, Power Rating, Ranking</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['metrics']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="updateWeeklyMetrics()" [disabled]="busy['metrics']">
+        Run
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>save</mat-icon>
+      <mat-card-title>Compute Weekly Snapshot</mat-card-title>
+      <mat-card-subtitle>Save WeeklyRankings snapshot for this week</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['compute']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="computeWeekly()" [disabled]="busy['compute']">
+        Run
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>trending_up</mat-icon>
+      <mat-card-title>Rolling Averages</mat-card-title>
+      <mat-card-subtitle>Update Seed / Trend / Pedigree ratings</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['rolling']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="primary" (click)="calcRollingAverages()" [disabled]="busy['rolling']">
+        Run
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar>emoji_events</mat-icon>
+      <mat-card-title>Assign Postseason Weeks</mat-card-title>
+      <mat-card-subtitle>Fix CFBD week=1 for postseason games</mat-card-subtitle>
+    </mat-card-header>
+    @if (busy['postseason']) { <mat-progress-bar mode="indeterminate" /> }
+    <mat-card-actions>
+      <button mat-flat-button color="accent" (click)="assignPostseasonWeeks()" [disabled]="busy['postseason']">
+        Run
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+</div>

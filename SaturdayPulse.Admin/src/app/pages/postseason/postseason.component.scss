@@ -1,0 +1,104 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  h1 { margin: 0; font-size: 1.5rem; font-weight: 500; }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .year-field { width: 100px; }
+  }
+}
+
+.instructions {
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 24px;
+  font-size: 0.9rem;
+}
+
+.centered {
+  display: flex;
+  justify-content: center;
+  padding: 48px;
+}
+
+.week-group {
+  margin-bottom: 24px;
+
+  .week-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+}
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-card {
+  transition: background-color 0.2s ease;
+
+  &.tagged {
+    background-color: var(--mat-sys-primary-container);
+  }
+
+  .game-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 4px 0;
+
+    .game-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      .matchup {
+        font-weight: 500;
+        font-size: 0.95rem;
+      }
+
+      .game-date {
+        font-size: 0.8rem;
+        color: var(--mat-sys-on-surface-variant);
+      }
+    }
+
+    .notes {
+      font-size: 0.8rem;
+      color: var(--mat-sys-on-surface-variant);
+      font-style: italic;
+    }
+  }
+}
+
+.chip-playoff {
+  background-color: var(--mat-sys-primary) !important;
+  color: var(--mat-sys-on-primary) !important;
+}
+
+.chip-postseason {
+  background-color: var(--mat-sys-secondary-container) !important;
+  color: var(--mat-sys-on-secondary-container) !important;
+}
+
+.error-card {
+  background-color: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}

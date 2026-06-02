@@ -1,0 +1,43 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  h1 { margin: 0; font-size: 1.5rem; font-weight: 500; flex: 1; }
+  .year-range { display: flex; gap: 12px; }
+  .year-field { width: 110px; }
+}
+.section {
+  margin-bottom: 32px;
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    h2 { margin: 0; font-size: 1.1rem; font-weight: 500; }
+  }
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0 0 4px;
+}
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--mat-sys-primary);
+  margin: 0;
+}
+.centered {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}

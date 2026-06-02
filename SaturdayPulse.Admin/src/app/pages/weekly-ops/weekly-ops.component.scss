@@ -1,0 +1,25 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  h1 { margin: 0; font-size: 1.5rem; font-weight: 500; }
+}
+
+.params-card {
+  margin-bottom: 24px;
+  .params-row {
+    display: flex;
+    gap: 16px;
+    padding-top: 8px;
+    mat-form-field { width: 120px; }
+  }
+}
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+
+  mat-card { display: flex; flex-direction: column; }
+  mat-card-actions { margin-top: auto; }
+}

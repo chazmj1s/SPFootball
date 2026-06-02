@@ -11,4 +11,5 @@
     public record MatchupHistoriesResult(string Message, int MatchupsCreated, int RivalriesProcessed, string NextStep);
     public record WeeklyRankingsBackfillResult(string Message, int Processed, int? StartYear);
     public record ComputeWeeklyResult(string Message, int? Year, int? Week);
+    public record GameSeasonTypeRequest(List<int> GameIds);
 }

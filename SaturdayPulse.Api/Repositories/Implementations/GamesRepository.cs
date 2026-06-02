@@ -129,6 +129,12 @@ namespace SaturdayPulse.Repositories.Implementations
                 .OrderBy(g => g.SeasonType)
                 .ThenBy(g => g.Week)
                 .ToListAsync(token);
+        
+        public async Task<List<Games>> GetByIds(List<int> gameIds, CancellationToken token = default)
+            => await _context.Games
+                        .Where(g => gameIds.Contains(g.GameId))
+                        .ToListAsync(token);
+
 
         public async Task UpsertRangeAsync(IEnumerable<Games> games, CancellationToken token = default)
         {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 
@@ -971,5 +972,61 @@ namespace SaturdayPulse.Controllers
         }
 
         #endregion    
+        #region Postseason Tagging
+
+        /// <summary>
+        /// Tags the specified games as SeasonType = "playoff" (CFP games).
+        /// Called from the admin console postseason tagging page.
+        /// Example: POST /api/developer/tagAsPlayoff
+        /// Body: { "gameIds": [401628123, 401628124] }
+        /// </summary>
+        [HttpPost("tagAsPlayoff")]
+        [Tags("Postseason Tagging")]
+        public async Task<IActionResult> TagAsPlayoff(
+            [FromBody] GameSeasonTypeRequest request,
+            CancellationToken token = default)
+        {
+            if (request?.GameIds == null || request.GameIds.Count == 0)
+                return BadRequest("At least one gameId is required.");
+
+            try
+            {
+                var count = await developerService.SetSeasonTypeAsync(request.GameIds, "playoff", token);
+                return Ok(new { message = $"{count} game(s) tagged as playoff", gamesUpdated = count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error tagging games as playoff");
+                return StatusCode(500, "An error occurred while tagging playoff games.");
+            }
+        }
+
+        /// <summary>
+        /// Reverts the specified games from SeasonType = "playoff" back to "postseason".
+        /// Example: POST /api/developer/untagAsPlayoff
+        /// Body: { "gameIds": [401628123] }
+        /// </summary>
+        [HttpPost("untagAsPlayoff")]
+        [Tags("Postseason Tagging")]
+        public async Task<IActionResult> UntagAsPlayoff(
+            [FromBody] GameSeasonTypeRequest request,
+            CancellationToken token = default)
+        {
+            if (request?.GameIds == null || request.GameIds.Count == 0)
+                return BadRequest("At least one gameId is required.");
+
+            try
+            {
+                var count = await developerService.SetSeasonTypeAsync(request.GameIds, "postseason", token);
+                return Ok(new { message = $"{count} game(s) reverted to postseason", gamesUpdated = count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error reverting games from playoff");
+                return StatusCode(500, "An error occurred while reverting playoff games.");
+            }
+        }
+
+        #endregion
     }
-    }
+}
