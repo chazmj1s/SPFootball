@@ -15,10 +15,15 @@ export class AdminApiService {
   }
 
   // ── Weekly Ops ─────────────────────────────────────────────────
-  weeklyRefresh(year: number, week: number): Observable<any> {
-    return this.http.post(`${this.base}/developer/weeklyRefresh`, null,
+  loadGames(year: number, week: number): Observable<any> {
+    return this.http.post(`${this.base}/developer/loadGames`, null,
       { params: { year, week } });
   }
+  
+  loadLines(year: number, week: number): Observable<any> {
+  return this.http.post(`${this.base}/developer/loadLines`, null,
+    { params: { year, week } });
+}
 
   updateTeamRecords(year?: number): Observable<any> {
     const params: any = year ? { year } : {};
@@ -52,7 +57,11 @@ export class AdminApiService {
   }
 
   // ── Postseason Tagging ─────────────────────────────────────────
-  getPostseasonGames(year: number): Observable<any> {
+  loadPostseasonGames(year: number): Observable<any> {
+    return this.http.post(`${this.base}/developer/loadGames`, null,
+      { params: { year, seasonType: 'postseason' } });
+  }
+ getPostseasonGames(year: number): Observable<any> {
     return this.http.get(`${this.base}/productiongamedata/postseason/v2`, { params: { year } });
   }
 
@@ -124,6 +133,34 @@ export class AdminApiService {
   calculateMatchupHistories(): Observable<any> {
     return this.http.post(`${this.base}/developer/calculateMatchupHistories`, null);
   }
+  loadTeamsBulk(startYear: number): Observable<any> {
+  return this.http.post(`${this.base}/developer/loadTeamsBulk`, null, { params: { startYear } });
+}
+ 
+loadGamesBulk(startYear: number): Observable<any> {
+  return this.http.post(`${this.base}/developer/loadGamesBulk`, null, { params: { startYear } });
+}
+ 
+loadLinesBulk(startYear: number): Observable<any> {
+  return this.http.post(`${this.base}/developer/loadLinesBulk`, null, { params: { startYear } });
+}
+ 
+setSOS(year?: number, week?: number): Observable<any> {
+  const params: any = {};
+  if (year) params['year'] = year;
+  if (week) params['week'] = week;
+  return this.http.post(`${this.base}/developer/setSOS`, null, { params });
+}
+ 
+calculatePowerRatings(startYear?: number): Observable<any> {
+  const params: any = startYear ? { startYear } : {};
+  return this.http.post(`${this.base}/developer/calculatePowerRatings`, null, { params });
+}
+ 
+calculateRankings(startYear?: number): Observable<any> {
+  const params: any = startYear ? { startYear } : {};
+  return this.http.post(`${this.base}/developer/calculateRankings`, null, { params });
+}
 
   // ── Analytics ──────────────────────────────────────────────────
   getProjectionAccuracy(startYear?: number, endYear?: number): Observable<any> {
@@ -139,4 +176,11 @@ export class AdminApiService {
     if (endYear) params['endYear'] = endYear;
     return this.http.get(`${this.base}/developer/analytics`, { params });
   }
+
+  getPortalAccuracy(startYear?: number, endYear?: number): Observable<any> {
+  const params: any = {};
+  if (startYear) params['startYear'] = startYear;
+  if (endYear) params['endYear'] = endYear;
+  return this.http.get(`${this.base}/developer/portalAccuracy`, { params });
+}
 }

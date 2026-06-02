@@ -8,19 +8,14 @@ export const routes: Routes = [
       import('./pages/dashboard/dashboard.component').then(m => m.DashboardComponent),
   },
   {
-    path: 'weekly-ops',
+    path: 'data-ops',
     loadComponent: () =>
-      import('./pages/weekly-ops/weekly-ops.component').then(m => m.WeeklyOpsComponent),
+      import('./pages/data-ops/data-ops.component').then(m => m.DataOpsComponent),
   },
   {
     path: 'postseason',
     loadComponent: () =>
       import('./pages/postseason/postseason.component').then(m => m.PostseasonComponent),
-  },
-  {
-    path: 'season-setup',
-    loadComponent: () =>
-      import('./pages/season-setup/season-setup.component').then(m => m.SeasonSetupComponent),
   },
   {
     path: 'metrics-rebuild',

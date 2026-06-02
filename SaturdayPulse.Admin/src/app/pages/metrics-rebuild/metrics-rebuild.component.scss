@@ -1,26 +1,191 @@
-.page-header {
+.page-layout {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
-  h1 { margin: 0; font-size: 1.5rem; font-weight: 500; flex: 1; }
-  .year-field { width: 120px; }
+  gap: 24px;
+  height: calc(100vh - 120px);
 }
-.warning-banner {
+
+// ── Left ───────────────────────────────────────────────────────
+.sections {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.page-title-row {
+  margin-bottom: 6px;
+  .page-title { margin: 0; font-size: 1.5rem; font-weight: 500; }
+}
+
+.run-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
-  padding: 10px 16px;
-  border-radius: 8px;
-  margin-bottom: 24px;
-  font-size: 0.9rem;
+  margin-bottom: 6px;
+
+  .spacer { flex: 1; }
+  .small-btn { height: 26px; font-size: 0.73rem; }
+  .estimate-label { font-size: 0.8rem; color: var(--mat-sys-on-surface-variant); font-style: italic; }
+  .run-btn { height: 30px; }
 }
-.ops-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  mat-card { display: flex; flex-direction: column; }
-  mat-card-actions { margin-top: auto; }
+
+.tier { padding: 2px 0 0; }
+
+.tier-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  margin-bottom: 0;
+
+  &:hover .tier-label { color: var(--mat-sys-primary); }
+
+  .chevron { font-size: 1rem; width: 1rem; height: 1rem; color: var(--mat-sys-on-surface-variant); }
+
+  .tier-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mat-sys-on-surface-variant);
+    transition: color 0.15s;
+  }
+
+  .tier-count { font-size: 0.68rem; color: var(--mat-sys-primary); font-weight: 500; margin-left: auto; }
+}
+
+.op-list {
+  display: flex;
+  flex-direction: column;
+  padding-left: 24px;
+}
+
+.op-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  height: 22px;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+
+  &.auto-selected { background-color: var(--mat-sys-surface-container); }
+
+  .op-label {
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .op-estimate {
+    flex: 1;
+    font-size: 0.68rem;
+    color: var(--mat-sys-on-surface-variant);
+    text-align: right;
+    white-space: nowrap;
+    padding-right: 4px;
+  }
+
+  .auto-tag {
+    font-size: 0.58rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--mat-sys-tertiary);
+    border: 1px solid var(--mat-sys-tertiary);
+    border-radius: 3px;
+    padding: 0 3px;
+  }
+}
+
+// ── Native inline select — borderless, blue, flush ─────────────
+.param-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  color: var(--mat-sys-primary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 0 14px 0 0;
+  height: 20px;
+  line-height: 20px;
+
+  // Custom dropdown arrow in primary color
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath fill='%237c9ccf' d='M0 0l4 5 4-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 2px center;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  option {
+    background-color: #1e1e2e;
+    color: #e0e0e0;
+  }
+
+  &.narrow { width: 50px; }
+  &.wide   { width: 66px; }
+}
+
+// ── Tier header year select — slightly muted until set ─────────
+.tier-select {
+  opacity: 0.6;
+  font-size: 0.72rem;
+  &:not([ngmodel="undefined"]) { opacity: 1; }
+}
+
+// ── Right log sidebar ──────────────────────────────────────────
+.log-sidebar {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--mat-sys-outline-variant);
+  padding-left: 24px;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 8px;
+}
+
+.console-panel {
+  flex: 1;
+  background-color: #0d0d0d;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+
+.log-empty { color: #444; font-style: italic; }
+
+.log-entry {
+  display: flex;
+  gap: 10px;
+  .log-time { color: #444; flex-shrink: 0; user-select: none; }
+  &.log-info    .log-message { color: #888; }
+  &.log-running .log-message { color: #7eb8f7; }
+  &.log-success .log-message { color: #6dbf7e; }
+  &.log-error   .log-message { color: #f77e7e; }
 }

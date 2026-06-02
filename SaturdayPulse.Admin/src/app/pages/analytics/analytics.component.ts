@@ -1,13 +1,10 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTableModule } from '@angular/material/table';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatDividerModule } from '@angular/material/divider';
 import { AdminApiService } from '../../services/admin-api.service';
 
 @Component({
@@ -15,35 +12,66 @@ import { AdminApiService } from '../../services/admin-api.service';
   standalone: true,
   imports: [
     CommonModule, FormsModule,
-    MatCardModule, MatButtonModule, MatIconModule,
-    MatInputModule, MatFormFieldModule,
-    MatProgressSpinnerModule, MatTableModule,
+    MatButtonModule, MatIconModule,
+    MatProgressBarModule, MatDividerModule,
   ],
   templateUrl: './analytics.component.html',
   styleUrl: './analytics.component.scss',
 })
 export class AnalyticsComponent {
-  startYear: number = 2015;
-  endYear: number = new Date().getFullYear();
-  projectionAccuracy: any = null;
-  analytics: any = null;
-  loading: { [key: string]: boolean } = {};
+  readonly currentYear = new Date().getFullYear();
+  readonly years: number[] = Array.from({ length: this.currentYear - 1964 }, (_, i) => this.currentYear - i);
+
+  // Projection Accuracy
+  projStartYear: number | undefined = 2015;
+  projEndYear: number | undefined = this.currentYear;
+  projData: any = null;
+  projLoading = false;
+
+  // Portal Accuracy
+  portalStartYear: number | undefined = 2021;
+  portalEndYear: number | undefined = this.currentYear;
+  portalData: any = null;
+  portalLoading = false;
+
+  // Collapsible sections — all start collapsed
+  collapsedSections = new Set<string>([
+    'proj-byYear', 'proj-byWeek', 'proj-byConference', 'proj-byPhase', 'portal-byGroup'
+  ]);
 
   constructor(private api: AdminApiService) {}
 
+  toggleSection(key: string) {
+    if (this.collapsedSections.has(key)) this.collapsedSections.delete(key);
+    else this.collapsedSections.add(key);
+  }
+
+  isCollapsed(key: string): boolean {
+    return this.collapsedSections.has(key);
+  }
+
   loadProjectionAccuracy() {
-    this.loading['proj'] = true;
-    this.api.getProjectionAccuracy(this.startYear, this.endYear).subscribe({
-      next: data => { this.projectionAccuracy = data; this.loading['proj'] = false; },
-      error: () => { this.loading['proj'] = false; },
+    this.projLoading = true;
+    this.projData = null;
+    this.api.getProjectionAccuracy(this.projStartYear, this.projEndYear).subscribe({
+      next: d => { this.projData = d; this.projLoading = false; },
+      error: () => this.projLoading = false,
     });
   }
 
-  loadAnalytics() {
-    this.loading['analytics'] = true;
-    this.api.getAnalytics(this.startYear, this.endYear).subscribe({
-      next: data => { this.analytics = data; this.loading['analytics'] = false; },
-      error: () => { this.loading['analytics'] = false; },
+  loadPortalAccuracy() {
+    this.portalLoading = true;
+    this.portalData = null;
+    this.api.getPortalAccuracy(this.portalStartYear, this.portalEndYear).subscribe({
+      next: d => { this.portalData = d; this.portalLoading = false; },
+      error: () => this.portalLoading = false,
     });
+  }
+
+  // Portal winner vs loser rows for a given period
+  portalRow(group: string, period: string): any {
+    return this.portalData?.byPortalGroup?.find(
+      (r: any) => r.portalGroup === group && r.period === period
+    );
   }
 }

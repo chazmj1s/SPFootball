@@ -229,7 +229,7 @@ namespace SaturdayPulse.Services
 
             var overperformers = records
                 .Where(tr => tr.Wins > (tr.CombinedSOS ?? 0) * 12)
-                .OrderByDescending(tr => tr.Wins - (tr.CombinedSOS ?? 0) * 12)
+                .OrderByDescending(tr => tr.Wins - (double?)(tr.CombinedSOS ?? 0) * 12)
                 .Take(10)
                 .Select(tr => (object)new
                 {
@@ -240,7 +240,7 @@ namespace SaturdayPulse.Services
 
             var underperformers = records
                 .Where(tr => tr.Wins < (tr.CombinedSOS ?? 0) * 12)
-                .OrderBy(tr => tr.Wins - (tr.CombinedSOS ?? 0) * 12)
+                .OrderBy(tr => tr.Wins - (double?)(tr.CombinedSOS ?? 0) * 12)
                 .Take(10)
                 .Select(tr => (object)new
                 {

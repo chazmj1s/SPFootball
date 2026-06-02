@@ -1,7 +1,7 @@
 # Feature Ideas & Product Backlog
 
-Last updated: 2026-05-07
-Project: NCAA Power Ratings (.NET 9 API + .NET MAUI app + web console)
+Last updated: 2026-06-02
+Project: NCAA Power Ratings (.NET 9 API + .NET MAUI app + SaturdayPulse.Admin console)
 
 ## How to Use This File
 - Keep ideas here until they're promoted to implementation tasks.
@@ -18,6 +18,7 @@ Project: NCAA Power Ratings (.NET 9 API + .NET MAUI app + web console)
 ## Priority Snapshot
 
 ### Now
+- Bug C — FollowGameIcon / FollowTeamIcon not persisting (favoriting broken)
 - Idea 8 — Conference Table in DB (fragile string matching is a recurring pain point)
 - Idea 1 — Preseason Power Ratings (engine exists, needs seeding endpoint)
 - Idea 4 — Following Tab
@@ -32,6 +33,8 @@ Project: NCAA Power Ratings (.NET 9 API + .NET MAUI app + web console)
 ### Later
 - Ideas 12–17 (integrations, monetization, deployment)
 - Idea 18 — SSAS Analytics Layer (Azure migration dependency)
+- Idea 19 — Era-Normalized Scoring (AvgScoreDifferential)
+- Idea 20 — Game Metrics Expand Panel (Scores/Schedule tab)
 
 ---
 
@@ -50,9 +53,9 @@ season data in.
 - `TeamMetricsService.CalculateProjectedWins` already computes 10-year weighted average
   and drives SOS seeding at week 0
 - `FifoDoubleQueue` (capacity 10, most-recent-weighted) already built for rolling average
+- `RollingAverageService` built and wired into backfill pipeline
+- `calculateRollingAverages` and `backfillRollingAverages` endpoints operational in admin console
 **What's missing:**
-- `RollingAverageService` — computes 10-year rolling averages per team for PPG, PAG,
-  PowerRating, and win percentage
 - Admin endpoint: `GET /preseason-ratings?year=` — returns projected ratings
 - Admin endpoint/job to seed `TeamRecords` with rolling average projections for upcoming year
 - Week 7 switchover logic in `GamePredictionService` to blend prior-year and
@@ -90,7 +93,7 @@ Toggle/dropdown: Teams | Games | Rivalries. Gold `+` above Wk on game card to fo
 game. Followed games pinned at top of Following → Games above EPIC tier. Followed games
 tier icon = gold `+`. Tapping team/game opens expanded detail card.
 **Notes:** Strong user-retention feature. `FollowTeamIcon` and `FollowGameIcon` controls
-already built.
+already built. Blocked by Bug C (favoriting not persisting).
 
 ---
 
@@ -101,6 +104,9 @@ already built.
 Add Playoffs view alongside Standings and Title Game. Tab order:
 `Standings | Title Game | Playoffs`. Apply CFP autobid rules to project full bracket.
 Projected games show `P` badge.
+**Notes:** `postseason/v2` endpoint now splits `PlayoffDays` and `BowlDayGroup` by
+`SeasonType`. Admin console postseason tagging page operational for manually flagging
+CFP games. Dependency on Idea 2/3 for forward-looking bracket projection.
 
 ---
 
@@ -119,6 +125,8 @@ When CFP bracket is set, add projected scores for each playoff game. Use existin
 **Summary:**
 Mix and match any two teams at current season state. Show projected outcome. Sandbox
 games can be followed with `P` badge.
+**Notes:** `sandbox/predict` endpoint operational (`GET /api/productiongamedata/sandbox/predict`).
+Frontend implementation still needed.
 
 ---
 
@@ -136,9 +144,10 @@ fragile string matching throughout codebase. Support historical conference switc
 - [ ] `GetConferenceTier` replaced with DB lookup
 - [ ] Historical membership rows for teams that switched conferences
 - [ ] `WeeklyRankingsService` and controllers updated to use FK
-**Notes:** `GetConferenceTier` was patched today to match full conference name strings
+**Notes:** `GetConferenceTier` was patched to match full conference name strings
 (e.g. "Southeastern Conference") — that fix works but this is the real solution.
-High-value structural fix that unblocks clean trend graphs and analytics.
+`TeamsConferenceHistory` table already tracks historical affiliation — this idea
+extends that with a proper Conference entity.
 
 ---
 
@@ -154,27 +163,10 @@ reacting to nav changes. Config tab UI includes toggles.
 ---
 
 ### Idea 10 — Rankings throughWeek Support
-**Status:** Done
+**Status:** Done ✓
 **Type:** API Enhancement
-**Summary:**
-Added `throughWeek` parameter to power rankings endpoint. Pre-computed `WeeklyRankings`
-table populated by `WeeklyRankingsService` pipeline (SOS → PowerRating → Ranking) scoped
-to games through selected week. Mobile app passes `SelectedWeek` through to API.
-**What shipped:**
-- `WeeklyRanking` model + `WeeklyRankings` table
-- `WeeklyRankingsService.ComputeAndSaveAsync` — full SOS/PowerRating/Ranking pipeline
-  per week, including `OffensiveZScore`, `DefensiveZScore`, `OffensiveRank`,
-  `DefensiveRank`, `AvgPointsScored`, `AvgPointsAllowed`
-- `WeeklyRankingsService.BackfillYearAsync` — single year backfill
-- `DeveloperController.BackfillWeeklyRankings` — full historical backfill
-- `GetPowerRankings` updated to query `WeeklyRankings` when `throughWeek` provided,
-  `TeamRecords` otherwise
-- `PowerRankingsViewModel` fires reload on `SelectedWeek` change
-- Offense / Defense expand panel added to Rankings tab (chevron toggle per team row)
-- Six new columns added to both `WeeklyRankings` and `TeamRecords`
-- Conference tier detection fixed for full conference name strings
-- `DisplayRank` binding fixed (was incorrectly bound to `OverallRank`)
-- Backfill validated across full 1965–2025 history
+**Notes:** Shipped. `WeeklyRankings` table fully backfilled 1965–2025. `throughWeek`
+parameter operational. Offense/Defense expand panel in Rankings tab. See decision log.
 
 ---
 
@@ -187,12 +179,11 @@ Overlay current season against prior year(s) at the same week. Projected traject
 dashed line past current week. Conference-switch annotations on historical charts.
 **Data available:**
 - 61 years of `WeeklyRankings` (1965–2025) fully backfilled
-- 10-year rolling average already computed in `TeamMetricsService`
-- Projection engine available via `GamePredictionService`
-**Notes:** Proof-of-concept chart for Texas 2025 showed rank, power rating, and SOS arc
-clearly tells the team's story. High value-add for users; differentiator vs
-ESPN/247Sports. `calculateTrends` endpoint exists but is currently a placeholder —
-full implementation is the main build task here.
+- 10-year rolling average computed in `TeamMetricsService`
+- `teamseason` endpoint returns week-by-week arc data per team/year
+- `calculateTrends` endpoint exists but is a placeholder — full implementation needed
+**Notes:** High value-add differentiator. Admin console Analytics page is the natural
+home for a prototype before MAUI implementation.
 
 ---
 
@@ -211,6 +202,8 @@ divergence (teams the model rates higher/lower than human voters).
 **Summary:**
 Use free API for Sun/Wed updates. Store odds in `Game` table. Compare model projection
 vs Vegas line. Premium unlock candidate.
+**Notes:** Vegas closing/opening line data already flowing through CFBD into projections.
+Full real-time odds integration is the next step.
 
 ---
 
@@ -231,8 +224,10 @@ already built in UI.
 API to Azure App Service. GitHub Actions CI/CD on push to main. React+TypeScript web
 frontend to Azure Static Web Apps. Migrate SQLite to Azure SQL (rename singular tables
 to plural convention at this point).
-**Notes:** Table rename (`Game` → `Games`, `Team` → `Teams`) planned for this migration
-to fix naming convention debt.
+**Notes:** SQLite locking issues observed under concurrent load — Azure SQL migration
+is the correct fix before real user traffic. Table rename (`Game` → `Games`,
+`Team` → `Teams`) planned for migration. Admin console (Angular) is a candidate for
+Azure Static Web Apps alongside the public web frontend.
 
 ---
 
@@ -269,22 +264,74 @@ program trajectory without C# computation overhead.
 **Potential cube dimensions:** Team, Conference, Year, Week, Tier
 **Potential measures:** Ranking, PowerRating, CombinedSOS, Wins, Losses, WinPct,
 RankMovement, OffensiveZScore, DefensiveZScore
-**Use cases:**
-- "Where is this program headed over the next 3 years" macro projections
-- Conference strength trends over decades
-- Historical context overlays on current season charts (Idea 11)
-- Win rate by conference over time, scoring trends, upset frequency by week
-**Notes:** Complements (not replaces) the custom prediction engine — SSAS handles
-historical trend analysis and macro projections; `GamePredictionService` handles
-week-by-week game predictions where rivalry adjustments and home field factors matter.
-Requires SQL Server Enterprise or Developer edition. High lift, high payoff.
+**Notes:** Complements (not replaces) the custom prediction engine. Requires SQL Server
+Enterprise or Developer edition. High lift, high payoff. Azure SQL migration is a
+hard prerequisite.
+
+---
+
+### Idea 19 — Era-Normalized Scoring in AvgScoreDifferential
+**Status:** Idea
+**Type:** Projection Engine
+**Summary:**
+`AvgScoreDifferential` is currently a single flat table with no concept of era.
+Lower-scoring pre-1980 games pull the baseline down, contributing to the consistent
+~-3pt spread bias seen in projection accuracy reporting. Potential approaches:
+1. **Reporting-only normalization** — add `normalizedMAE` (error as % of total scoring)
+   to `projectionAccuracy` endpoint for era-aware benchmarking without touching the model.
+2. **Era-bucketed differentials** — segment `AvgScoreDifferential` by era
+   (pre-1980, 1980-2000, 2000-2015, 2015+) so lookups adapt to scoring inflation.
+**Risk:** Era bucketing splits a statistically significant 60-year dataset into smaller,
+noisier buckets — could hurt modern projections more than the fix helps. Requires
+holdout testing before committing.
+**Recommended first step:** Option 1 (reporting normalization) — zero model risk,
+immediate analytical value. Option 2 is a future investigation item pending test results.
+**Notes:** Current 69.6% winner accuracy and consistent (not variable) bias suggest the
+model is healthy. Do not change what's working without data to support the change.
+
+---
+
+### Idea 20 — Game Metrics Expand Panel (Scores / Schedule Tab)
+**Status:** Idea
+**Type:** MAUI UX + API
+**Summary:**
+Tap a chevron on a Scores/Schedule game card to expand an inline metrics panel —
+same interaction pattern as the Offense/Defense expand panel on the Rankings tab.
+Panel shows pertinent metrics and projections for that specific game without
+navigating away from the list.
+**Suggested panel content:**
+- Projected scores (home / away) with margin
+- Over/Under projection vs Vegas line (if available)
+- Confidence rating
+- Home and away Power Rating + SOS at time of game
+- Home and away Pedigree / Trend / Seed ratings
+- Rivalry note (if applicable)
+- For played games: actual result vs projected, spread delta
+**Implementation notes:**
+- Follows the same chevron-toggle + DataTrigger pattern used in Rankings
+- `predictMatchup` endpoint (`GET /api/productiongamedata/predictMatchup`) already
+  returns projected scores, margin, confidence, rivalry note, and summary
+- `ProjectionCacheService` / `Projections` table has pre-computed projections
+  available for historical and current games — prefer cached data over live calls
+- Free tier: show actual scores only; premium unlock reveals projections
+  (aligns with Idea 14 freemium model and Idea 16)
+- Panel should collapse on second tap, same as Rankings
+**Acceptance:**
+- [ ] Chevron toggle added to game card in Scores/Schedule XAML
+- [ ] Expand panel XAML with metrics layout
+- [ ] ViewModel wires up projection data (cached preferred, live fallback)
+- [ ] Played games show actual vs projected comparison
+- [ ] Unplayed games show projection only
+- [ ] Premium gate applied to projection fields (free tier sees blanks or `( )`)
+**Notes:** Pairs with Idea 16 (Expanded Game Metrics Panel) which describes the
+same feature from the premium surface perspective. These can be built together.
 
 ---
 
 ## Known Bugs
 
 ### Bug A — Alternating row shading wrong when filtered
-**Status:** Done
+**Status:** Done ✓
 **Fix:** Re-stamped `IsOddRow` based on filtered position index in `ApplyFiltersAndSort`.
 
 ### Bug B — Data loading through AbsoluteLayout page host
@@ -292,9 +339,31 @@ Requires SQL Server Enterprise or Developer edition. High lift, high payoff.
 **Fix direction:** Re-test navigation + load lifecycle in page host and confirm event
 ordering.
 
+### Bug C — FollowGameIcon / FollowTeamIcon not persisting
+**Status:** Open
+**Symptoms:** Tapping the star/heart to follow a game or team appears to work in the UI
+but the state does not persist across navigation or app restart. Follow state reverts
+on return.
+**Fix direction:**
+- Verify the follow/unfollow API call is firing and returning success
+- Check whether `IsFollowed` is being written back to local state after the API response
+- Confirm the ViewModel is re-querying followed state on page load/navigation
+- Check `FollowIcon` DataTrigger binding — may be one-time rather than reactive
+**Notes:** `FollowGameIcon` (★/☆, Gold/Gray) and `FollowTeamIcon` (♥/♡, #FF6666/#666666)
+controls are built. The visual toggle works; persistence is the failure point. Blocks Idea 4.
+
 ---
 
 ## Decision Log
+- 2026-06-02: Era-normalized scoring added as Idea 19. Consensus: reporting-only
+  normalization first, model change only after holdout test validates improvement.
+  Current spread bias (-3.11) is consistent and acceptable; do not break what works.
+- 2026-06-02: Admin console (SaturdayPulse.Admin) scaffolded as Angular 19 + Angular
+  Material dark theme. Pages: Dashboard, Data Operations, Postseason Tagging, Metrics
+  Rebuild, Analytics. All major data pipeline operations accessible via console.
+- 2026-06-02: Postseason tagging workflow implemented — `tagAsPlayoff` /
+  `untagAsPlayoff` endpoints added to DeveloperController. Admin console postseason
+  page supports load, checklist tag, and save in one workflow.
 - 2026-05-07: `updateWeekGames` (web fetch) and `updateWeekGamesFromFile` (local file)
   intentionally kept as separate endpoints until a reliable live data source is confirmed.
   Previous source blacklisted the server after a 60-year bulk scrape.

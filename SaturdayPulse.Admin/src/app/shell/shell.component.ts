@@ -31,9 +31,8 @@ interface NavItem {
 export class ShellComponent {
   navItems: NavItem[] = [
     { label: 'Dashboard',        icon: 'dashboard',      route: '/dashboard'       },
-    { label: 'Weekly Ops',       icon: 'update',         route: '/weekly-ops'      },
+    { label: 'Data Operations', icon: 'storage', route: '/data-ops' },
     { label: 'Postseason',       icon: 'emoji_events',   route: '/postseason'      },
-    { label: 'Season Setup',     icon: 'calendar_today', route: '/season-setup'    },
     { label: 'Metrics Rebuild',  icon: 'build',          route: '/metrics-rebuild' },
     { label: 'Analytics',        icon: 'bar_chart',      route: '/analytics'       },
   ];

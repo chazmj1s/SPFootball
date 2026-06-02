@@ -1,100 +1,135 @@
-<div class="page-header">
-  <h1>Metrics Rebuild</h1>
-  <mat-form-field appearance="outline" class="year-field">
-    <mat-label>Start Year</mat-label>
-    <input matInput type="number" [(ngModel)]="startYear" />
-  </mat-form-field>
-</div>
+<div class="page-layout">
 
-<div class="warning-banner">
-  <mat-icon>warning</mat-icon>
-  Long-running operations. Use only when a critical recalculation is needed.
-</div>
+  <div class="sections">
+    <div class="page-title-row">
+      <h1 class="page-title">Metrics Rebuild</h1>
+    </div>
 
-<div class="ops-grid">
+    <div class="run-row">
+      <button mat-stroked-button (click)="selectAll()" [disabled]="running" class="small-btn">Select All</button>
+      <button mat-stroked-button (click)="clearAll()"  [disabled]="running" class="small-btn">Clear</button>
+      <span class="spacer"></span>
+      @if (estimateLabel) {
+        <span class="estimate-label">Est. {{ estimateLabel }}</span>
+      }
+      <button mat-flat-button color="warn"
+              (click)="runSelected()"
+              [disabled]="running || selectedOps.length === 0"
+              class="run-btn">
+        <mat-icon>{{ running ? 'hourglass_top' : 'play_arrow' }}</mat-icon>
+        Run Selected ({{ selectedOps.length }})
+      </button>
+    </div>
 
-  <mat-card class="danger-card">
-    <mat-card-header>
-      <mat-icon mat-card-avatar>refresh</mat-icon>
-      <mat-card-title>Backfill All Metrics</mat-card-title>
-      <mat-card-subtitle>Full rebuild: SOS, Power Rating, Ranking</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['allmetrics']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="warn" (click)="backfillAllMetrics()" [disabled]="busy['allmetrics']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+    @for (tier of tiers; track tier.key) {
+      <div class="tier">
 
-  <mat-card class="danger-card">
-    <mat-card-header>
-      <mat-icon mat-card-avatar>trending_up</mat-icon>
-      <mat-card-title>Backfill Rolling Averages</mat-card-title>
-      <mat-card-subtitle>Rebuild Seed / Trend / Pedigree from scratch</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['rolling']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="warn" (click)="backfillRollingAverages()" [disabled]="busy['rolling']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+        <div class="tier-header" (click)="toggleTier(tier)">
+          <mat-icon class="chevron">{{ tier.collapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+          <mat-checkbox
+            [checked]="isTierChecked(tier)"
+            [indeterminate]="isTierIndeterminate(tier)"
+            (change)="onTierToggle(tier, $event.checked)"
+            (click)="$event.stopPropagation()"
+            [disabled]="running">
+          </mat-checkbox>
+          <span class="tier-label">{{ tier.label }}</span>
 
-  <mat-card class="danger-card">
-    <mat-card-header>
-      <mat-icon mat-card-avatar>history</mat-icon>
-      <mat-card-title>Backfill Weekly Rankings</mat-card-title>
-      <mat-card-subtitle>Rebuild all WeeklyRankings snapshots</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['weekly']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="warn" (click)="backfillWeeklyRankings()" [disabled]="busy['weekly']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+          <select class="param-select wide tier-select"
+                  [ngModel]="tier.tierYear"
+                  (ngModelChange)="onTierYearChange(tier, $event)"
+                  (click)="$event.stopPropagation()"
+                  [disabled]="running">
+            <option [ngValue]="undefined">Year</option>
+            @for (y of years; track y) {
+              <option [ngValue]="y">{{ y }}</option>
+            }
+          </select>
 
-  <mat-card class="danger-card">
-    <mat-card-header>
-      <mat-icon mat-card-avatar>analytics</mat-icon>
-      <mat-card-title>Backfill Projections</mat-card-title>
-      <mat-card-subtitle>Rebuild all projection rows — several minutes</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['projections']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="warn" (click)="backfillProjections()" [disabled]="busy['projections']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+          @if (tierSelectedCount(tier) > 0) {
+            <span class="tier-count">{{ tierSelectedCount(tier) }} selected</span>
+          }
+        </div>
 
-  <mat-card>
-    <mat-card-header>
-      <mat-icon mat-card-avatar>score</mat-icon>
-      <mat-card-title>Build Score Differentials</mat-card-title>
-      <mat-card-subtitle>Rebuild AvgScoreDifferentials lookup table</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['scorediff']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="primary" (click)="buildAvgScoreDifferentials()" [disabled]="busy['scorediff']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+        @if (!tier.collapsed) {
+          <div class="op-list">
+            @for (op of tier.ops; track op.key) {
+              <div class="op-row" [class.auto-selected]="op.autoSelected">
 
-  <mat-card>
-    <mat-card-header>
-      <mat-icon mat-card-avatar>percent</mat-icon>
-      <mat-card-title>Recalculate Score Deltas</mat-card-title>
-      <mat-card-subtitle>Recalculate AvgScoreDeltas win-% buckets</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['scoredelta']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="primary" (click)="recalculateScoreDeltas()" [disabled]="busy['scoredelta']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+                <mat-checkbox
+                  [checked]="op.selected"
+                  (change)="onToggle(op, $event.checked)"
+                  [disabled]="running">
+                </mat-checkbox>
 
-  <mat-card>
-    <mat-card-header>
-      <mat-icon mat-card-avatar>compare_arrows</mat-icon>
-      <mat-card-title>Matchup Histories</mat-card-title>
-      <mat-card-subtitle>Rebuild rivalry matchup records</mat-card-subtitle>
-    </mat-card-header>
-    @if (busy['matchup']) { <mat-progress-bar mode="indeterminate" /> }
-    <mat-card-actions>
-      <button mat-flat-button color="primary" (click)="calculateMatchupHistories()" [disabled]="busy['matchup']">Run</button>
-    </mat-card-actions>
-  </mat-card>
+                <span class="op-label">{{ op.label }}</span>
+
+                @if (op.paramTypes.includes('year')) {
+                  <select class="param-select wide"
+                          [ngModel]="op.params.year"
+                          (ngModelChange)="onChildYearChange(tier, op, $event)"
+                          [disabled]="running">
+                    @if (!op.yearRequired) {
+                      <option [ngValue]="undefined">Year</option>
+                    }
+                    @for (y of years; track y) {
+                      <option [ngValue]="y">{{ y }}</option>
+                    }
+                  </select>
+                }
+
+                @if (op.paramTypes.includes('week')) {
+                  <select class="param-select narrow"
+                          [(ngModel)]="op.params.week"
+                          [disabled]="running || tier.tierYear !== undefined">
+                    <option [ngValue]="undefined">Week</option>
+                    @for (w of weeks; track w) {
+                      <option [ngValue]="w">Wk {{ w }}</option>
+                    }
+                  </select>
+                }
+
+                <span class="op-estimate">~{{ op.estimateMinutes < 1 ? '<1' : op.estimateMinutes }} min</span>
+
+                @if (op.autoSelected) {
+                  <span class="auto-tag" [matTooltip]="'Auto-selected: required dependency'">auto</span>
+                }
+
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <mat-divider />
+    }
+  </div>
+
+  <!-- Right: log panel -->
+  <div class="log-sidebar">
+    <div class="log-header">
+      <span>Activity Log</span>
+      @if (log.length > 0 && !running) {
+        <button mat-icon-button (click)="clearLog()" title="Clear log">
+          <mat-icon>delete_outline</mat-icon>
+        </button>
+      }
+    </div>
+
+    @if (running) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+
+    <div class="console-panel" #logPanel>
+      @if (log.length === 0) {
+        <span class="log-empty">No activity yet.</span>
+      }
+      @for (entry of log; track $index) {
+        <div class="log-entry" [class]="'log-' + entry.status">
+          <span class="log-time">{{ entry.time }}</span>
+          <span class="log-message">{{ entry.message }}</span>
+        </div>
+      }
+    </div>
+  </div>
 
 </div>

@@ -1,0 +1,79 @@
+<div class="page-layout">
+
+  <!-- Left: sections -->
+  <div class="sections">
+
+    <h1 class="page-title">Data Operations</h1>
+
+    <!-- Weekly Operations -->
+    <div class="section">
+      <div class="section-header">Weekly Operations</div>
+      <div class="section-row">
+        <mat-form-field appearance="outline" class="param-field">
+          <mat-label>Year</mat-label>
+          <input matInput type="number" [(ngModel)]="weeklyYear" [disabled]="running" />
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="param-field narrow">
+          <mat-label>Week</mat-label>
+          <input matInput type="number" [(ngModel)]="weeklyWeek" [disabled]="running" />
+        </mat-form-field>
+        <button mat-stroked-button (click)="runWeeklyRefresh()" [disabled]="running" class="action-btn">
+          <mat-icon>{{ running ? 'hourglass_top' : 'play_arrow' }}</mat-icon>
+          Run Weekly Refresh
+        </button>
+        <span class="btn-divider">|</span>
+        <button mat-stroked-button (click)="runLoadLines()" [disabled]="running" class="action-btn">
+          <mat-icon>price_change</mat-icon>
+          Load Lines
+        </button>
+      </div>
+    </div>
+
+    <mat-divider />
+
+    <!-- Season Setup -->
+    <div class="section">
+      <div class="section-header">Season Setup</div>
+      <div class="section-row">
+        <mat-form-field appearance="outline" class="param-field">
+          <mat-label>Year</mat-label>
+          <input matInput type="number" [(ngModel)]="seasonYear" [disabled]="running" />
+        </mat-form-field>
+        <button mat-stroked-button (click)="runSeasonSetup()" [disabled]="running" class="action-btn">
+          <mat-icon>{{ running ? 'hourglass_top' : 'play_arrow' }}</mat-icon>
+          Run Season Setup
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right: log panel -->
+  <div class="log-sidebar">
+    <div class="log-header">
+      <span>Activity Log</span>
+      @if (log.length > 0 && !running) {
+        <button mat-icon-button (click)="clearLog()" title="Clear log">
+          <mat-icon>delete_outline</mat-icon>
+        </button>
+      }
+    </div>
+
+    @if (running) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+
+    <div class="console-panel" #logPanel>
+      @if (log.length === 0) {
+        <span class="log-empty">No activity yet.</span>
+      }
+      @for (entry of log; track $index) {
+        <div class="log-entry" [class]="'log-' + entry.status">
+          <span class="log-time">{{ entry.time }}</span>
+          <span class="log-message">{{ entry.message }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+</div>

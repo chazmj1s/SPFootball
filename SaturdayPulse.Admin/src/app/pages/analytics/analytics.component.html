@@ -1,81 +1,404 @@
-<div class="page-header">
-  <h1>Analytics</h1>
-  <div class="year-range">
-    <mat-form-field appearance="outline" class="year-field">
-      <mat-label>Start Year</mat-label>
-      <input matInput type="number" [(ngModel)]="startYear" />
-    </mat-form-field>
-    <mat-form-field appearance="outline" class="year-field">
-      <mat-label>End Year</mat-label>
-      <input matInput type="number" [(ngModel)]="endYear" />
-    </mat-form-field>
-  </div>
-</div>
+<div class="page-layout">
 
-<div class="section">
-  <div class="section-header">
-    <h2>Projection Accuracy</h2>
-    <button mat-stroked-button (click)="loadProjectionAccuracy()" [disabled]="loading['proj']">
-      <mat-icon>query_stats</mat-icon> Load
-    </button>
-  </div>
+  <!-- Left: sections -->
+  <div class="sections">
+    <h1 class="page-title">Analytics</h1>
 
-  @if (loading['proj']) { <div class="centered"><mat-spinner diameter="32" /></div> }
+    <!-- ── Projection Accuracy ─────────────────────────────── -->
+    <div class="section">
+      <div class="section-row">
+        <span class="section-label">Projection Accuracy</span>
+        <select class="param-select" [(ngModel)]="projStartYear">
+          <option [ngValue]="undefined">Year</option>
+          @for (y of years; track y) { <option [ngValue]="y">{{ y }}</option> }
+        </select>
+        <span class="range-sep">—</span>
+        <select class="param-select" [(ngModel)]="projEndYear">
+          <option [ngValue]="undefined">Year</option>
+          @for (y of years; track y) { <option [ngValue]="y">{{ y }}</option> }
+        </select>
+        <button mat-stroked-button class="load-btn" (click)="loadProjectionAccuracy()" [disabled]="projLoading">
+          <mat-icon>{{ projLoading ? 'hourglass_top' : 'play_arrow' }}</mat-icon> Load
+        </button>
+      </div>
 
-  @if (projectionAccuracy && !loading['proj']) {
-    <div class="stats-grid">
-      <mat-card>
-        <mat-card-content>
-          <p class="stat-label">MAE</p>
-          <p class="stat-value">{{ projectionAccuracy.mae | number:'1.2-2' }}</p>
-        </mat-card-content>
-      </mat-card>
-      <mat-card>
-        <mat-card-content>
-          <p class="stat-label">Winner Accuracy</p>
-          <p class="stat-value">{{ projectionAccuracy.winnerAccuracy | percent:'1.1-1' }}</p>
-        </mat-card-content>
-      </mat-card>
-      <mat-card>
-        <mat-card-content>
-          <p class="stat-label">Spread Bias</p>
-          <p class="stat-value">{{ projectionAccuracy.spreadBias | number:'1.2-2' }}</p>
-        </mat-card-content>
-      </mat-card>
+      @if (projLoading) { <mat-progress-bar mode="indeterminate" class="progress" /> }
+
+      @if (projData) {
+        <div class="result-card">
+
+          <!-- Summary -->
+          <div class="result-group">
+            <div class="result-row">
+              <span class="result-label">Year Range</span>
+              <span class="result-value">{{ projData.startYear }} – {{ projData.endYear }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Total Games</span>
+              <span class="result-value">{{ projData.totalGames | number }}</span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <!-- Accuracy -->
+          <div class="result-group">
+            <div class="result-row">
+              <span class="result-label">MAE (snapshot)</span>
+              <span class="result-value accent">{{ projData.mae | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">MAE (total)</span>
+              <span class="result-value accent">{{ projData.totalMAE | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Winner Accuracy</span>
+              <span class="result-value accent">{{ projData.winnerAccuracyPct }}%</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Spread Bias</span>
+              <span class="result-value" [class.positive]="projData.spreadBias > 0" [class.negative]="projData.spreadBias < 0">
+                {{ projData.spreadBias | number:'1.2-2' }}
+              </span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <!-- vs Vegas -->
+          <div class="result-group">
+            <span class="result-sublabel">vs Vegas (closing line · {{ projData.vegasGames | number }} games)</span>
+            <div class="result-row">
+              <span class="result-label">Vegas MAE</span>
+              <span class="result-value">{{ projData.vegasMAE | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Vegas Winner Accuracy</span>
+              <span class="result-value">{{ projData.vegasWinnerAccuracy }}%</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Our MAE vs Vegas MAE</span>
+              <span class="result-value" [class.negative]="projData.mae > projData.vegasMAE" [class.positive]="projData.mae <= projData.vegasMAE">
+                {{ projData.mae - projData.vegasMAE | number:'1.2-2' }}
+              </span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <!-- vs Vegas Opening line -->
+          <div class="result-group">
+            <span class="result-sublabel">vs Vegas (opening line · {{ projData.vegasOpenGames | number }} games)</span>
+            <div class="result-row">
+              <span class="result-label">Vegas Open MAE</span>
+              <span class="result-value">{{ projData.vegasOpenMAE | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Vegas Open Winner Accuracy</span>
+              <span class="result-value">{{ projData.vegasOpenWinnerAccuracy }}%</span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <!-- By Phase -->
+          <div class="collapsible-header" (click)="toggleSection('proj-byPhase')">
+            <mat-icon class="chevron">{{ isCollapsed('proj-byPhase') ? 'chevron_right' : 'expand_more' }}</mat-icon>
+            <span class="result-sublabel">By Phase</span>
+          </div>
+          @if (!isCollapsed('proj-byPhase')) {
+            <table class="data-table">
+              <thead>
+                <tr><th>Phase</th><th>Games</th><th>MAE</th><th>Winner%</th><th>Vegas MAE</th></tr>
+              </thead>
+              <tbody>
+                @for (row of projData.byPhase; track row.phase) {
+                  <tr>
+                    <td>{{ row.phase }}</td>
+                    <td class="num">{{ row.games | number }}</td>
+                    <td class="num accent">{{ row.mae | number:'1.2-2' }}</td>
+                    <td class="num" [class.good]="row.winnerAccuracy >= 65" [class.warn]="row.winnerAccuracy < 50">{{ row.winnerAccuracy }}%</td>
+                    <td class="num">{{ row.vegasMAE ? (row.vegasMAE | number:'1.2-2') : '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <mat-divider />
+
+          <!-- By Conference -->
+          <div class="collapsible-header" (click)="toggleSection('proj-byConference')">
+            <mat-icon class="chevron">{{ isCollapsed('proj-byConference') ? 'chevron_right' : 'expand_more' }}</mat-icon>
+            <span class="result-sublabel">By Conference Tier</span>
+          </div>
+          @if (!isCollapsed('proj-byConference')) {
+            <table class="data-table">
+              <thead>
+                <tr><th>Tier</th><th>Games</th><th>MAE</th><th>Winner%</th></tr>
+              </thead>
+              <tbody>
+                @for (row of projData.byConference; track row.conference) {
+                  <tr>
+                    <td>{{ row.conference }}</td>
+                    <td class="num">{{ row.games | number }}</td>
+                    <td class="num accent">{{ row.mae | number:'1.2-2' }}</td>
+                    <td class="num" [class.good]="row.winnerAccuracy >= 65">{{ row.winnerAccuracy }}%</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <mat-divider />
+
+          <!-- By Year -->
+          <div class="collapsible-header" (click)="toggleSection('proj-byYear')">
+            <mat-icon class="chevron">{{ isCollapsed('proj-byYear') ? 'chevron_right' : 'expand_more' }}</mat-icon>
+            <span class="result-sublabel">By Year</span>
+          </div>
+          @if (!isCollapsed('proj-byYear')) {
+            <table class="data-table">
+              <thead>
+                <tr><th>Year</th><th>Games</th><th>MAE</th><th>Winner%</th><th>Bias</th></tr>
+              </thead>
+              <tbody>
+                @for (row of projData.byYear; track row.year) {
+                  <tr>
+                    <td>{{ row.year }}</td>
+                    <td class="num">{{ row.games | number }}</td>
+                    <td class="num accent">{{ row.mae | number:'1.2-2' }}</td>
+                    <td class="num" [class.good]="row.winnerAccuracy >= 65">{{ row.winnerAccuracy }}%</td>
+                    <td class="num" [class.negative]="row.spreadBias < 0" [class.positive]="row.spreadBias > 0">{{ row.spreadBias | number:'1.2-2' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <mat-divider />
+
+          <!-- By Week -->
+          <div class="collapsible-header" (click)="toggleSection('proj-byWeek')">
+            <mat-icon class="chevron">{{ isCollapsed('proj-byWeek') ? 'chevron_right' : 'expand_more' }}</mat-icon>
+            <span class="result-sublabel">By Snapshot Week</span>
+          </div>
+          @if (!isCollapsed('proj-byWeek')) {
+            <table class="data-table">
+              <thead>
+                <tr><th>Week</th><th>Games</th><th>MAE</th><th>Winner%</th></tr>
+              </thead>
+              <tbody>
+                @for (row of projData.byWeek; track row.snapshotWeek) {
+                  <tr>
+                    <td>{{ row.snapshotWeek === 0 ? 'Pre-season' : 'Wk ' + row.snapshotWeek }}</td>
+                    <td class="num">{{ row.games | number }}</td>
+                    <td class="num accent">{{ row.mae | number:'1.2-2' }}</td>
+                    <td class="num" [class.good]="row.winnerAccuracy >= 65" [class.warn]="row.winnerAccuracy < 50">{{ row.winnerAccuracy }}%</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+        </div>
+      }
     </div>
-  }
-</div>
 
-<div class="section">
-  <div class="section-header">
-    <h2>Team Performance</h2>
-    <button mat-stroked-button (click)="loadAnalytics()" [disabled]="loading['analytics']">
-      <mat-icon>bar_chart</mat-icon> Load
-    </button>
+    <mat-divider />
+
+    <!-- ── Portal Accuracy ─────────────────────────────────── -->
+    <div class="section">
+      <div class="section-row">
+        <span class="section-label">Portal Accuracy</span>
+        <select class="param-select" [(ngModel)]="portalStartYear">
+          <option [ngValue]="undefined">Year</option>
+          @for (y of years; track y) { <option [ngValue]="y">{{ y }}</option> }
+        </select>
+        <span class="range-sep">—</span>
+        <select class="param-select" [(ngModel)]="portalEndYear">
+          <option [ngValue]="undefined">Year</option>
+          @for (y of years; track y) { <option [ngValue]="y">{{ y }}</option> }
+        </select>
+        <button mat-stroked-button class="load-btn" (click)="loadPortalAccuracy()" [disabled]="portalLoading">
+          <mat-icon>{{ portalLoading ? 'hourglass_top' : 'play_arrow' }}</mat-icon> Load
+        </button>
+      </div>
+
+      @if (portalLoading) { <mat-progress-bar mode="indeterminate" class="progress" /> }
+
+      @if (portalData) {
+        <div class="result-card">
+
+          <!-- Summary -->
+          <div class="result-group">
+            <div class="result-row">
+              <span class="result-label">Year Range</span>
+              <span class="result-value">{{ portalData.startYear }} – {{ portalData.endYear }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Total Games</span>
+              <span class="result-value">{{ portalData.totalGames | number }}</span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <!-- MAE Gap summary -->
+          <div class="result-group">
+            <span class="result-sublabel">Model Improvement Over Season</span>
+            <div class="result-row">
+              <span class="result-label">Portal Winner MAE Gap</span>
+              <span class="result-value accent">{{ portalData.winnerMAEGap | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Portal Loser MAE Gap</span>
+              <span class="result-value accent">{{ portalData.loserMAEGap | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Winner Early MAE</span>
+              <span class="result-value">{{ portalData.winnerEarlyMAE | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Winner Late MAE</span>
+              <span class="result-value">{{ portalData.winnerLateMAE | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Loser Early MAE</span>
+              <span class="result-value">{{ portalData.loserEarlyMAE | number:'1.2-2' }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Loser Late MAE</span>
+              <span class="result-value">{{ portalData.loserLateMAE | number:'1.2-2' }}</span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <!-- By Portal Group -->
+          <div class="collapsible-header" (click)="toggleSection('portal-byGroup')">
+            <mat-icon class="chevron">{{ isCollapsed('portal-byGroup') ? 'chevron_right' : 'expand_more' }}</mat-icon>
+            <span class="result-sublabel">By Group × Season Period</span>
+          </div>
+          @if (!isCollapsed('portal-byGroup')) {
+            <table class="data-table">
+              <thead>
+                <tr><th>Group</th><th>Period</th><th>Games</th><th>MAE</th><th>Winner%</th></tr>
+              </thead>
+              <tbody>
+                @for (row of portalData.byPortalGroup; track row.portalGroup + row.period) {
+                  <tr>
+                    <td [class.positive]="row.portalGroup === 'Portal Winner'" [class.negative]="row.portalGroup === 'Portal Loser'">
+                      {{ row.portalGroup }}
+                    </td>
+                    <td>{{ row.period }}</td>
+                    <td class="num">{{ row.games | number }}</td>
+                    <td class="num accent">{{ row.mae | number:'1.2-2' }}</td>
+                    <td class="num" [class.good]="row.winnerAccuracy >= 65">{{ row.winnerAccuracy }}%</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+        </div>
+      }
+    </div>
+
   </div>
 
-  @if (loading['analytics']) { <div class="centered"><mat-spinner diameter="32" /></div> }
+  <!-- Right: Glossary -->
+  <div class="glossary-sidebar">
+    <div class="glossary-header">Glossary</div>
 
-  @if (analytics && !loading['analytics']) {
-    <div class="stats-grid">
-      <mat-card>
-        <mat-card-content>
-          <p class="stat-label">Records</p>
-          <p class="stat-value">{{ analytics.totalRecords | number }}</p>
-        </mat-card-content>
-      </mat-card>
-      <mat-card>
-        <mat-card-content>
-          <p class="stat-label">Avg Power Rating</p>
-          <p class="stat-value">{{ analytics.averagePowerRating | number:'1.2-2' }}</p>
-        </mat-card-content>
-      </mat-card>
-      <mat-card>
-        <mat-card-content>
-          <p class="stat-label">Avg SOS</p>
-          <p class="stat-value">{{ analytics.averageSOS | number:'1.2-2' }}</p>
-        </mat-card-content>
-      </mat-card>
+    <div class="glossary-section">
+      <div class="glossary-title">Projection Metrics</div>
+      <div class="glossary-entry">
+        <span class="term">MAE</span>
+        <span class="definition">Mean Absolute Error — average points difference between projected and actual score. Lower is better. MAE of 15 means projections are off by ~15 points on average.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">MAE (snapshot)</span>
+        <span class="definition">MAE calculated using the projection that existed at each week's snapshot — reflects how good the model was at the time of the game.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">MAE (total)</span>
+        <span class="definition">MAE using the final end-of-season projection for all games. Generally lower since it uses more complete data.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Winner Accuracy</span>
+        <span class="definition">Percentage of games where the model correctly predicted the winner. 65%+ is strong for college football. Drops significantly for postseason games.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Spread Bias</span>
+        <span class="definition">Systematic lean in projections. Negative = model projects scores too low on average. Ideally close to 0. Our consistent negative bias suggests the model underestimates scoring.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Vegas MAE</span>
+        <span class="definition">Same metric but using the Vegas closing line. Used to benchmark our model — we're currently running about 3 points behind Vegas on MAE.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Vegas Open MAE</span>
+        <span class="definition">MAE using the opening line rather than the closing line. Useful to see how much the market moves between open and close.</span>
+      </div>
     </div>
-  }
+
+    <mat-divider />
+
+    <div class="glossary-section">
+      <div class="glossary-title">Rating Metrics</div>
+      <div class="glossary-entry">
+        <span class="term">Power Rating</span>
+        <span class="definition">Composite score representing a team's overall strength relative to all FBS teams for a given week. Higher is better.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">SOS</span>
+        <span class="definition">Strength of Schedule — weighted average of opponents' power ratings. Higher means a tougher schedule.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Z-Score</span>
+        <span class="definition">How many standard deviations a team's performance is from the mean. Used to normalize comparisons across eras.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Seed</span>
+        <span class="definition">Long-term baseline rating built from historical performance going back multiple seasons. Slow to change — represents a program's sustained quality.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Trend</span>
+        <span class="definition">Short-term momentum indicator based on recent weeks. Rises and falls faster than Seed — reflects hot or cold streaks.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Pedigree</span>
+        <span class="definition">Weighted blend of Seed and Trend — the primary rating used in game projections. Balances long-term program quality with recent form.</span>
+      </div>
+    </div>
+
+    <mat-divider />
+
+    <div class="glossary-section">
+      <div class="glossary-title">Portal Metrics</div>
+      <div class="glossary-entry">
+        <span class="term">Portal Winner / Loser</span>
+        <span class="definition">Teams grouped by whether they net-gained (Winner) or net-lost (Loser) talent through the transfer portal in a given offseason.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">MAE Gap</span>
+        <span class="definition">Difference between Early-season MAE and Late-season MAE for a group. A larger gap means the model takes longer to calibrate to portal-affected teams.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">Early / Mid / Late Period</span>
+        <span class="definition">Season split by snapshot week: Early = weeks 0–3, Mid = weeks 4–8, Late = weeks 9+. MAE typically drops from Early to Late as the model learns each team's true strength.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">PortalDelta</span>
+        <span class="definition">Net change in roster quality from transfer portal activity. Positive = net gain, negative = net loss.</span>
+      </div>
+      <div class="glossary-entry">
+        <span class="term">RosterStrength</span>
+        <span class="definition">Composite measure of incoming transfer talent relative to what was lost. Used to adjust pre-season power ratings.</span>
+      </div>
+    </div>
+
+  </div>
+
 </div>
