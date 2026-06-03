@@ -67,6 +67,12 @@ namespace SaturdayPulse.ViewModels
                 game.IsGameFavorited = _personalGameService.IsFavorited(game.AwayId, game.HomeId);
             });
 
+            ToggleDetailsCommand = new Microsoft.Maui.Controls.Command<GameResult>(game =>
+            {
+                if (game == null) return;
+                game.IsDetailsExpanded = !game.IsDetailsExpanded;
+            });
+
             _navState.PropertyChanged                += OnNavStateChanged;
             _followService.TeamFollowChanged         += OnTeamFollowChanged;
             _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
@@ -111,6 +117,8 @@ namespace SaturdayPulse.ViewModels
         public ICommand PreviousWeekCommand       { get; }
         public ICommand NextWeekCommand           { get; }
         public ICommand TogglePersonalGameCommand { get; }
+        public ICommand ToggleDetailsCommand       { get; }
+
 
 
 

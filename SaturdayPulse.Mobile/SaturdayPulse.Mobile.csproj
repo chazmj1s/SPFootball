@@ -67,6 +67,9 @@
 
     <!-- Images -->
     <MauiImage Include="Resources\Images\*" />
+    <MauiImage Update="Resources\Images\applogo.png">
+      <Color>#0D0D1A</Color>
+    </MauiImage>
     <MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
     <!-- Custom Fonts -->
