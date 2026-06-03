@@ -67,15 +67,15 @@ namespace SaturdayPulse.Models
             ? $"{HomeScore} ({ProjHomeScore})"
             : $"({ProjHomeScore})";
 
-        public int    ActualMargin      => HomePoints - AwayPoints;
+        public int    ActualMargin      => AwayPoints - HomePoints;
         public string DisplayProjMargin => HasProjection
-            ? $"{Math.Round((HomeProjScore!.Value - AwayProjScore!.Value) * 2, MidpointRounding.AwayFromZero) / 2:F1}" : "–";
+            ? $"{Math.Round((AwayProjScore!.Value - HomeProjScore!.Value) * 2, MidpointRounding.AwayFromZero) / 2:F1}" : "–";
         public string DisplayProjOU     => ProjOU.HasValue
-            ? $"{(int)Math.Round(ProjOU.Value)}" : "–";
+            ? $"{(int)Math.Round(ProjOU.Value * 2, MidpointRounding.AwayFromZero) / 2:F1}" : "–";
 
         public string DisplayMargin => IsPlayed
-            ? $"margin: {ActualMargin} ({DisplayProjMargin})"
-            : $"margin: ({DisplayProjMargin})";
+            ? $"Spread: {ActualMargin} ({DisplayProjMargin})"
+            : $"Spread: ({DisplayProjMargin})";
         public string DisplayOU => IsPlayed
             ? $"O/U: {ActualOU} ({DisplayProjOU})"
             : $"O/U: ({DisplayProjOU})";
@@ -126,6 +126,49 @@ namespace SaturdayPulse.Models
             get => _isGameFavorited;
             set { _isGameFavorited = value; OnPropertyChanged(); }
         }
+        
+        // ── Game detail expand ────────────────────────────────────────────
+
+        private bool _isDetailsExpanded;
+        public bool IsDetailsExpanded
+        {
+            get => _isDetailsExpanded;
+            set { _isDetailsExpanded = value; OnPropertyChanged(); OnPropertyChanged(nameof(DetailsExpandIcon)); }
+        }
+
+        public string DetailsExpandIcon => _isDetailsExpanded ? "▲" : "▼";
+
+        private GameTeamStats? _homeStats;
+        public GameTeamStats? HomeStats
+        {
+            get => _homeStats;
+            set { _homeStats = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasStats)); }
+        }
+
+        private GameTeamStats? _awayStats;
+        public GameTeamStats? AwayStats
+        {
+            get => _awayStats;
+            set { _awayStats = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasStats)); }
+        }
+
+        private GameLines? _lines;
+        public GameLines? VegasLines
+        {
+            get => _lines;
+            set { _lines = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasStats)); }
+        }
+
+        public bool HasStats => HomeStats != null && AwayStats != null;
+
+        // ── Inter-division / detail visibility ────────────────────────────
+
+        /// <summary>True when only one team has stats — FBS vs FCS matchup.</summary>
+        public bool IsInterDivision =>
+            (HomeStats == null) != (AwayStats == null);
+
+        /// <summary>Show the Details toggle if we have stats OR it's inter-division.</summary>
+        public bool ShowDetails => HasStats || IsInterDivision;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null)

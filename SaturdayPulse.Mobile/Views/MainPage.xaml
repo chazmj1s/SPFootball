@@ -12,16 +12,22 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 0: App title                                    -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <Label Grid.Row="0"
-           Text="Saturday Pulse"
-           FontSize="16"
-           FontAttributes="Bold"
-           Padding="12,8"
-           HorizontalOptions="Center"
-           HorizontalTextAlignment="Center"
-           TextColor="White" />
+        <Grid Grid.Row="0" ColumnDefinitions="44,*,44" Padding="8,6,8,6">
+            <Image Grid.Column="0"
+             Source="applogo.png"
+             Aspect="AspectFit"
+             VerticalOptions="Fill" 
+             HorizontalOptions="Start" />
+            <Label Grid.Column="1"
+             Text="SP Football"
+             FontSize="16" FontAttributes="Bold"
+             HorizontalOptions="Center"
+             HorizontalTextAlignment="Center"
+             VerticalOptions="Center"
+             TextColor="White" />
+        </Grid>
 
-    <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 1: Year pill + Week strip                       -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="1"
