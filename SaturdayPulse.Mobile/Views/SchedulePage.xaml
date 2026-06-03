@@ -78,7 +78,7 @@
                   <controls:FollowTeamIcon.GestureRecognizers>
                     <TapGestureRecognizer
                           Command="{Binding Source={x:Reference ThisPage},
-                                  Path=BindingContext.TogglePersonalGameCommand}"
+                                  Path=BindingContext.ToggleFollowCommand}"
                           CommandParameter="{Binding .}" />
                   </controls:FollowTeamIcon.GestureRecognizers>
                 </controls:FollowTeamIcon>
@@ -108,7 +108,7 @@
                   <controls:FollowTeamIcon.GestureRecognizers>
                     <TapGestureRecognizer
                           Command="{Binding Source={x:Reference ThisPage},
-                                  Path=BindingContext.TogglePersonalGameCommand}"
+                                  Path=BindingContext.ToggleFollowCommand}"
                           CommandParameter="{Binding .}" />
                   </controls:FollowTeamIcon.GestureRecognizers>
                 </controls:FollowTeamIcon>
