@@ -401,17 +401,143 @@ namespace SaturdayPulse.Services
         /// <summary>
         /// V2: Projected championship qualifiers from Games + TeamsConferenceHistory tables.
         /// Legacy equivalent: GetProjectedChampionshipQualifiersAsync().
+        ///
+        /// When CFBD has published the scheduled title game for a conference,
+        /// the matchup includes a Game object shaped identically to GetScheduleV2Async
+        /// (projected scores, team stats, Vegas lines). The client renders the
+        /// game card above the qualifier rows.
         /// </summary>
         public async Task<ChampionshipQualifiersResult> GetProjectedChampionshipQualifiersV2Async(
             int? year, int? throughWeek, CancellationToken token = default)
         {
-            var targetYear            = year ?? DateTime.Now.Year;
+            var targetYear = year ?? DateTime.Now.Year;
             var standingsByConference = await BuildProjectedConferenceStandingsV2Async(targetYear, throughWeek, token);
-            var service               = new ConferenceChampionshipService();
-            var results               = BuildQualifierResponse(standingsByConference, service, includeContenders: true, throughWeek: throughWeek);
-            return new ChampionshipQualifiersResult(results);
-        }
+            var service = new ConferenceChampionshipService();
+            var qualifierResults = BuildQualifierResponse(standingsByConference, service, includeContenders: true, throughWeek: throughWeek);
 
+            // ── TeamId lookup per conference — needed to match the title game ─────
+            // BuildQualifierResponse anonymous-types Qualifier1/2 and drops TeamId,
+            // so we capture IDs here directly from standingsByConference.
+            var teamIdsByConference = standingsByConference
+                .Where(kvp => kvp.Value.Count >= 2)
+                .Select(kvp => service.GetQualifiers(kvp.Key, kvp.Value))
+                .Where(r => r.Qualifier1 != null && r.Qualifier2 != null)
+                .ToDictionary(
+                    r => r.Conference,
+                    r => (Q1: r.Qualifier1.TeamId, Q2: r.Qualifier2.TeamId));
+
+            // ── Supporting data for the game card — same lookups as GetScheduleV2Async ─
+            var allGames = await _uow.Games.GetByYearAsync(targetYear, token);
+            var teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+            var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
+
+            string GetConfAbbr(Teams? t)
+            {
+                if (t?.ConferenceId == null) return string.Empty;
+                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                return conf?.Abbreviation ?? string.Empty;
+            }
+
+            string GetConfName(Teams? t)
+            {
+                if (t?.ConferenceId == null) return string.Empty;
+                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                return conf?.Name ?? string.Empty;
+            }
+
+            // ── WeeklyRankings lookup — same shape as GetScheduleV2Async ──────────
+            var availableWeeks = (await _uow.WeeklyRankings
+                .GetDistinctYearWeeksAsync(token))
+                .Where(yw => yw.Year == targetYear)
+                .Select(yw => yw.Week)
+                .OrderBy(w => w)
+                .ToList();
+            var maxAvailableWeek = availableWeeks.Any() ? availableWeeks.Max() : 0;
+
+            int LookupWeek(int gameWeek)
+            {
+                var desired = Math.Max(0, gameWeek - 1);
+                return availableWeeks.Contains(desired) ? desired : maxAvailableWeek;
+            }
+
+            // Find candidate title games up front (so we know which weeks to query
+            // for stats and lines — typically just the conference championship week)
+            var titleGamesByConf = new Dictionary<string, Games>();
+            foreach (var kvp in teamIdsByConference)
+            {
+                var (q1, q2) = kvp.Value;
+                var game = allGames.FirstOrDefault(g =>
+                    (g.HomeId == q1 && g.AwayId == q2) ||
+                    (g.HomeId == q2 && g.AwayId == q1));
+                if (game != null) titleGamesByConf[kvp.Key] = game;
+            }
+
+            var titleGames = titleGamesByConf.Values.ToList();
+            var titleGameWeeks = titleGames.Select(g => g.Week).Distinct().ToList();
+
+            // ── WeeklyRankings snapshots for title game teams ────────────────────
+            var titleGameTeamIds = titleGames
+                .SelectMany(g => new[] { g.HomeId ?? 0, g.AwayId ?? 0 })
+                .Where(id => id > 0).Distinct().ToList();
+
+            var rankingsByWeek = new Dictionary<int, Dictionary<int, WeeklyRanking>>();
+            if (titleGameTeamIds.Count > 0)
+            {
+                var distinctLookupWeeks = titleGames.Select(g => LookupWeek(g.Week)).Distinct().ToList();
+                foreach (var w in distinctLookupWeeks)
+                {
+                    rankingsByWeek[w] = await _uow.WeeklyRankings
+                        .GetByTeamsAndYearAndWeekAsync(titleGameTeamIds, targetYear, w, token);
+                }
+            }
+
+            // ── Vegas lines — same year-and-week aggregation as GetScheduleV2Async ──
+            var linesByGameId = new Dictionary<int, List<Lines>>();
+            foreach (var w in titleGameWeeks)
+            {
+                var weekLines = await _uow.Lines.GetByYearAndWeekAsync(targetYear, w, token);
+                foreach (var line in weekLines)
+                {
+                    if (!linesByGameId.ContainsKey(line.GameId))
+                        linesByGameId[line.GameId] = new List<Lines>();
+                    linesByGameId[line.GameId].Add(line);
+                }
+            }
+
+            // ── Build the enriched response ──────────────────────────────────────
+            var enriched = new List<object>();
+
+            foreach (var raw in qualifierResults)
+            {
+                var r = (dynamic)raw;
+                var conf = (string)r.Conference;
+
+                object? gameObj = null;
+
+                if (titleGamesByConf.TryGetValue(conf, out var titleGame))
+                    gameObj = BuildTitleGameObject(
+                        titleGame, teams, allProjections, rankingsByWeek,
+                        linesByGameId, LookupWeek, GetConfAbbr, GetConfName);
+
+                enriched.Add(new
+                {
+                    r.Conference,
+                    r.Format,
+                    r.Qualifier1,
+                    r.Qualifier2,
+                    r.Qualifier1Method,
+                    r.Qualifier2Method,
+                    r.TiebreakerLog,
+                    r.StubsApplied,
+                    r.SimulatedThrough,
+                    r.Contenders,
+                    Game = gameObj,
+                });
+            }
+
+            return new ChampionshipQualifiersResult(enriched);
+        }
         /// <summary>
         /// V2: Projected conference standings for all FBS teams.
         /// Legacy equivalent: GetProjectedStandingsAsync() which reads from Game + Team tables.

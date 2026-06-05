@@ -227,6 +227,7 @@ namespace SaturdayPulse.Models
         public List<string>          StubsApplied     { get; set; } = new();
         public string                SimulatedThrough { get; set; }
         public List<ChampionshipContender> Contenders { get; set; } = new();
+        public GameResult? Game { get; set; }
 
         public bool HasTiebreaker => TiebreakerLog.Any(l => l.Contains("TB"));
         public bool HasStubs      => StubsApplied.Any();
@@ -257,6 +258,9 @@ namespace SaturdayPulse.Models
         public string TiebreakerSummary => HasTiebreaker
             ? "Tiebreaker applied"
             : "Outright qualifiers";
+
+        public IReadOnlyList<GameResult> GameList =>
+            Game == null ? Array.Empty<GameResult>() : new[] { Game };
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null)

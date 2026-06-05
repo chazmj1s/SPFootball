@@ -2,9 +2,9 @@ using SaturdayPulse.ViewModels;
 
 namespace SaturdayPulse.Views
 {
-    public partial class ProjectionsPage : ContentPage
+    public partial class PostseasonPage : ContentPage
     {
-        public ProjectionsPage(ProjectionsViewModel viewModel)
+        public PostseasonPage(PostseasonViewModel viewModel)
         {
             InitializeComponent();
             BindingContext = viewModel;

@@ -325,6 +325,153 @@ namespace SaturdayPulse.Services
                 }).ToList();
         }
 
+        // ════════════════════════════════════════════════════════════════════════
+        // Helper — builds a single game object in the same shape as
+        // GetScheduleV2Async's results. Used for the championship title game.
+        // Once the schedule method itself is refactored to call this helper,
+        // the duplication goes away.
+        // ════════════════════════════════════════════════════════════════════════
+
+        private object BuildTitleGameObject(
+            Games g,
+            IReadOnlyDictionary<int, Teams> teams,
+            IReadOnlyDictionary<int, GamePrediction> allProjections,
+            Dictionary<int, Dictionary<int, WeeklyRanking>> rankingsByWeek,
+            Dictionary<int, List<Lines>> linesByGameId,
+            Func<int, int> lookupWeek,
+            Func<Teams?, string> getConfAbbr,
+            Func<Teams?, string> getConfName)
+        {
+            teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+            teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+
+            var homePoints = g.HomePoints ?? 0;
+            var awayPoints = g.AwayPoints ?? 0;
+            var isPlayed = homePoints > 0 || awayPoints > 0;
+            var actualOU = homePoints + awayPoints;
+            char location = g.NeutralSite == true ? 'N' : 'H';
+
+            double? projHome = null, projAway = null;
+            if (allProjections.TryGetValue(g.GameId, out var pred))
+            {
+                projHome = Math.Max(0, Math.Round(pred.PredictedTeamScore, 1));
+                projAway = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
+            }
+
+            var projOU = projHome.HasValue && projAway.HasValue
+                         ? (double?)Math.Round(projHome.Value + projAway.Value, 1) : null;
+
+            // ── Team stats ────────────────────────────────────────────────────
+            var snapshotWeek = lookupWeek(g.Week);
+            rankingsByWeek.TryGetValue(snapshotWeek, out var snapshot);
+
+            object? homeStats = null;
+            object? awayStats = null;
+            bool isWeek1 = g.Week == 1;
+
+            if (snapshot != null)
+            {
+                if (snapshot.TryGetValue(g.HomeId ?? 0, out var hwr))
+                    homeStats = new
+                    {
+                        TeamId = hwr.TeamID,
+                        TeamName = homeTeam?.TeamName ?? g.HomeName,
+                        OverallRank = isWeek1 ? 0 : hwr.OverallRank,
+                        Record = isWeek1 ? "0-0" : $"{hwr.Wins}-{hwr.Losses}",
+                        PowerRating = isWeek1 ? (double?)null : (double?)hwr.Ranking,
+                        CombinedSOS = isWeek1 ? (double?)null : (double?)hwr.CombinedSOS,
+                        OffensiveRank = isWeek1 ? (int?)null : hwr.OffensiveRank,
+                        AvgPointsScored = isWeek1 ? (double?)null : (double?)hwr.AvgPointsScored,
+                        OffensiveZScore = isWeek1 ? (double?)null : (double?)hwr.OffensiveZScore,
+                        DefensiveRank = isWeek1 ? (int?)null : hwr.DefensiveRank,
+                        AvgPointsAllowed = isWeek1 ? (double?)null : (double?)hwr.AvgPointsAllowed,
+                        DefensiveZScore = isWeek1 ? (double?)null : (double?)hwr.DefensiveZScore,
+                    };
+
+                if (snapshot.TryGetValue(g.AwayId ?? 0, out var awr))
+                    awayStats = new
+                    {
+                        TeamId = awr.TeamID,
+                        TeamName = awayTeam?.TeamName ?? g.AwayName,
+                        OverallRank = isWeek1 ? 0 : awr.OverallRank,
+                        Record = isWeek1 ? "0-0" : $"{awr.Wins}-{awr.Losses}",
+                        PowerRating = isWeek1 ? (double?)null : (double?)awr.Ranking,
+                        CombinedSOS = isWeek1 ? (double?)null : (double?)awr.CombinedSOS,
+                        OffensiveRank = isWeek1 ? (int?)null : awr.OffensiveRank,
+                        AvgPointsScored = isWeek1 ? (double?)null : (double?)awr.AvgPointsScored,
+                        OffensiveZScore = isWeek1 ? (double?)null : (double?)awr.OffensiveZScore,
+                        DefensiveRank = isWeek1 ? (int?)null : awr.DefensiveRank,
+                        AvgPointsAllowed = isWeek1 ? (double?)null : (double?)awr.AvgPointsAllowed,
+                        DefensiveZScore = isWeek1 ? (double?)null : (double?)awr.DefensiveZScore,
+                    };
+            }
+
+            // ── Vegas lines — average across providers ────────────────────────
+            object? vegasLines = null;
+            if (linesByGameId.TryGetValue(g.GameId, out var gameLines) && gameLines.Count > 0)
+            {
+                var spreads = gameLines.Where(l => l.Spread.HasValue).Select(l => l.Spread!.Value).ToList();
+                var spreadsOpen = gameLines.Where(l => l.SpreadOpen.HasValue).Select(l => l.SpreadOpen!.Value).ToList();
+                var ous = gameLines.Where(l => l.OverUnder.HasValue).Select(l => l.OverUnder!.Value).ToList();
+                var ousOpen = gameLines.Where(l => l.OverUnderOpen.HasValue).Select(l => l.OverUnderOpen!.Value).ToList();
+                var homeMoneylines = gameLines.Where(l => l.HomeMoneyline.HasValue).Select(l => l.HomeMoneyline!.Value).ToList();
+                var awayMoneylines = gameLines.Where(l => l.AwayMoneyline.HasValue).Select(l => l.AwayMoneyline!.Value).ToList();
+
+                vegasLines = new
+                {
+                    Spread = spreads.Count > 0 ? (decimal?)Math.Round(spreads.Average(), 1) : null,
+                    SpreadOpen = spreadsOpen.Count > 0 ? (decimal?)Math.Round(spreadsOpen.Average(), 1) : null,
+                    OverUnder = ous.Count > 0 ? (decimal?)Math.Round(ous.Average(), 1) : null,
+                    OverUnderOpen = ousOpen.Count > 0 ? (decimal?)Math.Round(ousOpen.Average(), 1) : null,
+                    HomeMoneyline = homeMoneylines.Count > 0 ? (int?)Math.Round(homeMoneylines.Average()) : null,
+                    AwayMoneyline = awayMoneylines.Count > 0 ? (int?)Math.Round(awayMoneylines.Average()) : null,
+                    ProviderCount = gameLines.Count,
+                };
+            }
+
+            // Shape matches GetScheduleV2Async exactly so the client deserialises
+            // into the same GameResult model with no special handling.
+            return new
+            {
+                Id = g.GameId,
+                g.Year,
+                g.Week,
+                GameDate = g.GameDate,
+                GameDay = g.GameDay,
+                HomeName = g.HomeName,
+                HomeId = g.HomeId,
+                HomeConf = getConfAbbr(homeTeam),
+                HomeTier = RatingCalculator.GetConferenceTier(getConfName(homeTeam), g.HomeName),
+                HomePoints = homePoints,
+                HomeProjScore = projHome,
+                AwayName = g.AwayName,
+                AwayId = g.AwayId,
+                AwayConf = getConfAbbr(awayTeam),
+                AwayTier = RatingCalculator.GetConferenceTier(getConfName(awayTeam), g.AwayName),
+                AwayPoints = awayPoints,
+                AwayProjScore = projAway,
+                Location = location,
+                IsPlayed = isPlayed,
+                ActualOU = actualOU,
+                ProjOU = projOU,
+                SeasonType = g.SeasonType,
+                HomeStats = homeStats,
+                AwayStats = awayStats,
+                VegasLines = vegasLines,
+
+                // Legacy fields — mirrors GetScheduleV2Async for binding consistency
+                WinnerName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
+                WinnerShortName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
+                WinnerId = homePoints >= awayPoints ? g.HomeId : g.AwayId,
+                WinnerConf = homePoints >= awayPoints ? getConfAbbr(homeTeam) : getConfAbbr(awayTeam),
+                WPoints = homePoints >= awayPoints ? homePoints : awayPoints,
+                LoserName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
+                LoserShortName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
+                LoserId = homePoints >= awayPoints ? g.AwayId : g.HomeId,
+            };
+        }
+
+
         internal static void EnrichSOS(List<ConferenceStanding> standings)
         {
             foreach (var standing in standings)
