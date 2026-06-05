@@ -44,15 +44,22 @@ namespace SaturdayPulse.Views
             for (int i = 0; i < labels.Length; i++)
                 _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == 0 });
 
-            // Add pages to AbsoluteLayout — each fills the entire host.
-            // ORDER MUST MATCH labels[] above.
+            // Add pages to AbsoluteLayout — order matches labels[] above.
             AddPageToHost(_schedulePage);    // 0 — Scores
             AddPageToHost(_rankingsPage);    // 1 — Rankings
             AddPageToHost(_postseasonPage);  // 2 — Postseason
             AddPageToHost(_sandboxPage);     // 3 — Sandbox
             AddPageToHost(_SettingsPage);    // 4 — Settings
 
-            // Sync tab underline + page visibility on index change
+            // ── Wire loading state FIRST, before any load fires ──
+            // This must happen before SchedulePage's LoadDataAsync runs,
+            // otherwise the IsBusy=true that kicks off the load slips past
+            // an un-subscribed event handler and the indicator never starts.
+            WireLoadingState(_schedulePage);
+            WireLoadingState(_rankingsPage);
+            WireLoadingState(_postseasonPage);
+
+            // ── ViewModel + nav state subscriptions ──
             _vm.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(MainViewModel.SelectedIndex))
@@ -66,7 +73,6 @@ namespace SaturdayPulse.Views
                     UpdateLoadingAnimation(_vm.IsLoading);
             };
 
-            // Year change — reset all pages so they reload fresh on next visit
             _navState.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
@@ -76,18 +82,17 @@ namespace SaturdayPulse.Views
                 }
             };
 
-            // Show initial page
-            SyncPage(0);
+            // ── Show the initial page (visibility only, no lazy-load call) ──
+            // We don't go through SyncPage here because SyncPage would also
+            // fire a lazy-load, which would race with the explicit kickoff below.
+            for (int i = 0; i < PageHost.Count; i++)
+                if (PageHost.Children[i] is VisualElement ve)
+                    ve.IsVisible = i == 0;
 
-            // Wire loading state after pages are initialized
-            WireLoadingState(_schedulePage);
-            WireLoadingState(_rankingsPage);
-            WireLoadingState(_postseasonPage);
-
-            // Trigger initial data load
+            // ── Kick off initial Schedule load ──
+            // Other tabs lazy-load on first tap via SyncPage.
             MainThread.BeginInvokeOnMainThread(async () =>
             {
-                await Task.Delay(200);
                 if (_schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded)
                     await svm.LoadDataAsync();
             });
