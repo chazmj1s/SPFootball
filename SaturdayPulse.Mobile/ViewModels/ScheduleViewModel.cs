@@ -10,10 +10,10 @@ namespace SaturdayPulse.ViewModels
     public class ScheduleViewModel : BaseViewModel
     {
         private readonly GameDataApiService           _apiService;
+        private readonly GameDataCacheService         _cache;
         private readonly SharedNavigationStateService _navState;
         private readonly PersonalGameService          _personalGameService;
 
-        private List<GameResult>                 _allGames = new();
         private ObservableCollection<GameResult> _games    = new();
         private bool   _isBusy;
         private string _activeFilter   = "All";
@@ -22,17 +22,19 @@ namespace SaturdayPulse.ViewModels
 
         public ScheduleViewModel(
             GameDataApiService apiService,
+            GameDataCacheService cache,
             FollowService followService,
             SharedNavigationStateService navState,
             PersonalGameService personalGameService)
             : base(followService)
         {
             _apiService          = apiService;
+            _cache               = cache;
             _navState            = navState;
             _personalGameService = personalGameService;
 
             LoadDataCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync(forceReload: true));
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
@@ -41,7 +43,7 @@ namespace SaturdayPulse.ViewModels
                     "Filter", "Cancel", null, options.ToArray());
                 if (result != null && result != "Cancel")
                 {
-                    _activeFilter = result;
+                    _activeFilter  = result;
                     SelectedFilter = result;
                     ApplyFiltersAndSort();
                 }
@@ -73,9 +75,8 @@ namespace SaturdayPulse.ViewModels
                 game.IsDetailsExpanded = !game.IsDetailsExpanded;
             });
 
-            _navState.PropertyChanged                += OnNavStateChanged;
-            _followService.TeamFollowChanged         += OnTeamFollowChanged;
-            _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
+            _navState.PropertyChanged += OnNavStateChanged;
+            _cache.CacheUpdated       += OnCacheUpdated;
         }
 
         // ── Bindable collections ──────────────────────────────────────────
@@ -95,7 +96,7 @@ namespace SaturdayPulse.ViewModels
         }
 
         public bool   IsLoading => _isBusy;
-        public bool   HasLoaded { get; set; }  // public setter so MainPage can reset on year change
+        public bool   HasLoaded { get; set; }
 
         public string StatusMessage
         {
@@ -117,14 +118,11 @@ namespace SaturdayPulse.ViewModels
         public ICommand PreviousWeekCommand       { get; }
         public ICommand NextWeekCommand           { get; }
         public ICommand TogglePersonalGameCommand { get; }
-        public ICommand ToggleDetailsCommand       { get; }
-
-
-
+        public ICommand ToggleDetailsCommand      { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 
-        public async Task LoadDataAsync()
+        public async Task LoadDataAsync(bool forceReload = false)
         {
             if (IsBusy) return;
             IsBusy = true;
@@ -132,24 +130,11 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var games = await _apiService.GetScheduleAsync(_navState.SelectedYear);
+                var games = await _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload);
                 if (games == null || games.Count == 0)
                 {
                     StatusMessage = "No games found";
                     return;
-                }
-
-                for (int i = 0; i < games.Count; i++)
-                    games[i].SequenceNumber = i + 1;
-
-                _allGames = games;
-
-                var followedIds = _followService.GetFollowedIds();
-                foreach (var g in _allGames)
-                {
-                    g.HomeIsFollowed    = followedIds.Contains(g.HomeId);
-                    g.VisitorIsFollowed = followedIds.Contains(g.AwayId);
-                    g.IsGameFavorited   = _personalGameService.IsFavorited(g.AwayId, g.HomeId);
                 }
 
                 var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
@@ -174,7 +159,6 @@ namespace SaturdayPulse.ViewModels
             }
             finally
             {
-
                 IsBusy = false;
             }
         }
@@ -183,7 +167,7 @@ namespace SaturdayPulse.ViewModels
 
         private void ApplyFiltersAndSort()
         {
-            IEnumerable<GameResult> filtered = _allGames;
+            IEnumerable<GameResult> filtered = _cache.AllGames;
 
             filtered = filtered.Where(g => g.Week == _navState.SelectedWeek);
 
@@ -220,7 +204,7 @@ namespace SaturdayPulse.ViewModels
                 sorted = filtered.OrderBy(g => g.SequenceNumber).ToList();
             }
 
-            string lastHeader = null;
+            string? lastHeader = null;
             foreach (var g in sorted)
             {
                 g.ShowGroupHeader = g.GroupHeader != lastHeader;
@@ -232,9 +216,8 @@ namespace SaturdayPulse.ViewModels
 
         // ── Event handlers ────────────────────────────────────────────────
 
-        private void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
+        private void OnNavStateChanged(object? sender, PropertyChangedEventArgs e)
         {
-            // User week tap — re-filter client-side only, no server call
             if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
                 ApplyFiltersAndSort();
 
@@ -243,37 +226,10 @@ namespace SaturdayPulse.ViewModels
                 ApplyFiltersAndSort();
         }
 
-        private void OnTeamFollowChanged(int teamId, bool isFollowed)
+        private void OnCacheUpdated()
         {
-            foreach (var g in _allGames)
-            {
-                if (g.HomeId == teamId) g.HomeIsFollowed    = isFollowed;
-                if (g.AwayId == teamId) g.VisitorIsFollowed = isFollowed;
-            }
-
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (_activeFilter == "My Teams" || _navState.ShowFavoritesFirst)
-                    ApplyFiltersAndSort();
-                else
-                {
-                    var temp = Games;
-                    Games = null;
-                    Games = temp;
-                }
-            });
-        }
-
-        private void OnGameFavoritedChange(string key, bool isFollowed)
-        {
-            foreach (var g in _allGames)
-            {
-                if (PersonalGameService.Key(g.AwayId, g.HomeId) == key)
-                    g.IsGameFavorited = isFollowed;
-            }
-
-            if (_navState.ShowFavoritesFirst)
-                MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
+            // Cache re-stamped follow/favorite flags — refilter to update UI
+            MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
         }
     }
 

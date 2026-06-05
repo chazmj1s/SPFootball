@@ -24,5 +24,6 @@ namespace SaturdayPulse.Models
         public bool ConferenceGame { get; set; }
         public int? Attendance { get; set; }
         public string? Venue      { get; set; }
+        public int? CfpSeed { get; set; }
     }
 }

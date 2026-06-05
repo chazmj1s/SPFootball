@@ -34,6 +34,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<FollowService>();
         builder.Services.AddSingleton<PersonalGameService>();
         builder.Services.AddSingleton<SharedNavigationStateService>();
+        builder.Services.AddSingleton<GameDataCacheService>();
 
         // Register Services
         builder.Services.AddHttpClient<GameDataApiService>(client =>
@@ -56,14 +57,16 @@ public static class MauiProgram
         builder.Services.AddSingleton<PowerRankingsViewModel>();
         builder.Services.AddSingleton<ScheduleViewModel>();
         builder.Services.AddSingleton<SettingsViewModel>();
-        builder.Services.AddSingleton<ProjectionsViewModel>();
+        builder.Services.AddSingleton<PostseasonViewModel>();
+        builder.Services.AddSingleton<SandboxViewModel>();
         builder.Services.AddSingleton<MainViewModel>();
 
         // Register Pages
         builder.Services.AddSingleton<PowerRankingsPage>();
         builder.Services.AddSingleton<SchedulePage>();
         builder.Services.AddSingleton<SettingsPage>();
-        builder.Services.AddSingleton<ProjectionsPage>();
+        builder.Services.AddSingleton<PostseasonPage>();
+        builder.Services.AddSingleton<SandboxPage>();
         builder.Services.AddSingleton<MainPage>();
 
 #if DEBUG

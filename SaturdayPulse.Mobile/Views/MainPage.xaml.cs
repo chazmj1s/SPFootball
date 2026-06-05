@@ -11,7 +11,8 @@ namespace SaturdayPulse.Views
         private readonly SchedulePage                 _schedulePage;
         private readonly PowerRankingsPage            _rankingsPage;
         private readonly SettingsPage                 _SettingsPage;
-        private readonly ProjectionsPage              _projectionsPage;
+        private readonly PostseasonPage               _postseasonPage;
+        private readonly SandboxPage                  _sandboxPage;
         private readonly SharedNavigationStateService _navState;
 
         private CancellationTokenSource? _loadingAnimCts;
@@ -22,7 +23,8 @@ namespace SaturdayPulse.Views
             SchedulePage schedulePage,
             PowerRankingsPage rankingsPage,
             SettingsPage SettingsPage,
-            ProjectionsPage projectionsPage)
+            PostseasonPage postseasonPage,
+            SandboxPage sandboxPage)
         {
             InitializeComponent();
 
@@ -31,21 +33,24 @@ namespace SaturdayPulse.Views
             _schedulePage    = schedulePage;
             _rankingsPage    = rankingsPage;
             _SettingsPage    = SettingsPage;
-            _projectionsPage = projectionsPage;
+            _postseasonPage  = postseasonPage;
+            _sandboxPage     = sandboxPage;
 
             BindingContext = _vm;
 
             // Build tab items
             _vm.TabItems.Clear();
-            var labels = new[] { "Scores", "Rankings", "Projections", "Settings" };
+            var labels = new[] { "Scores", "Rankings", "Postseason", "Sandbox", "Settings" };
             for (int i = 0; i < labels.Length; i++)
                 _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == 0 });
 
-            // Add pages to AbsoluteLayout — each fills the entire host
-            AddPageToHost(_schedulePage);
-            AddPageToHost(_rankingsPage);
-            AddPageToHost(_projectionsPage);
-            AddPageToHost(_SettingsPage);
+            // Add pages to AbsoluteLayout — each fills the entire host.
+            // ORDER MUST MATCH labels[] above.
+            AddPageToHost(_schedulePage);    // 0 — Scores
+            AddPageToHost(_rankingsPage);    // 1 — Rankings
+            AddPageToHost(_postseasonPage);  // 2 — Postseason
+            AddPageToHost(_sandboxPage);     // 3 — Sandbox
+            AddPageToHost(_SettingsPage);    // 4 — Settings
 
             // Sync tab underline + page visibility on index change
             _vm.PropertyChanged += (s, e) =>
@@ -77,7 +82,7 @@ namespace SaturdayPulse.Views
             // Wire loading state after pages are initialized
             WireLoadingState(_schedulePage);
             WireLoadingState(_rankingsPage);
-            WireLoadingState(_projectionsPage);
+            WireLoadingState(_postseasonPage);
 
             // Trigger initial data load
             MainThread.BeginInvokeOnMainThread(async () =>
@@ -96,7 +101,7 @@ namespace SaturdayPulse.Views
         {
             if (_schedulePage.BindingContext   is ScheduleViewModel      svm) svm.HasLoaded = false;
             if (_rankingsPage.BindingContext    is PowerRankingsViewModel rvm) rvm.HasLoaded = false;
-            if (_projectionsPage.BindingContext is ProjectionsViewModel   pvm) pvm.HasLoaded = false;
+            if (_postseasonPage.BindingContext is PostseasonViewModel    pvm) pvm.HasLoaded = false;
         }
 
         private void WireLoadingState(ContentPage page)
@@ -132,7 +137,7 @@ namespace SaturdayPulse.Views
         {
             if (_schedulePage.BindingContext   is ScheduleViewModel      svm && svm.IsLoading) return true;
             if (_rankingsPage.BindingContext    is PowerRankingsViewModel rvm && rvm.IsBusy)    return true;
-            if (_projectionsPage.BindingContext is ProjectionsViewModel   pvm && pvm.IsLoading) return true;
+            if (_postseasonPage.BindingContext is PostseasonViewModel    pvm && pvm.IsLoading) return true;
             return false;
         }
 
@@ -156,7 +161,6 @@ namespace SaturdayPulse.Views
             {
                 try
                 {
-                    // Wait for layout if needed
                     if (LoadingBarHost.Width <= 0)
                         await Task.Delay(100);
 
@@ -183,7 +187,6 @@ namespace SaturdayPulse.Views
             _loadingAnimCts?.Cancel();
             _loadingAnimCts?.Dispose();
             _loadingAnimCts = null;
-            // Abort any in-progress animation immediately
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 Microsoft.Maui.Controls.ViewExtensions.CancelAnimations(LoadingBar);
@@ -218,8 +221,7 @@ namespace SaturdayPulse.Views
         {
             MainThread.BeginInvokeOnMainThread(async () =>
             {
-
-                Console.WriteLine($"[SyncPage] index={index}, scheduleBC={_schedulePage.BindingContext?.GetType().Name}");
+                Console.WriteLine($"[SyncPage] index={index}");
 
                 // Toggle visibility
                 for (int i = 0; i < PageHost.Count; i++)
@@ -229,13 +231,14 @@ namespace SaturdayPulse.Views
                 // Lazy load on first visit
                 switch (index)
                 {
-                    case 0 when _schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded:
+                    case 0 when _schedulePage.BindingContext   is ScheduleViewModel      svm && !svm.HasLoaded:
                         await svm.LoadDataAsync(); break;
-                    case 1 when _rankingsPage.BindingContext is PowerRankingsViewModel rvm && !rvm.HasLoaded:
+                    case 1 when _rankingsPage.BindingContext    is PowerRankingsViewModel rvm && !rvm.HasLoaded:
                         await rvm.LoadDataAsync(); break;
-                    case 2 when _projectionsPage.BindingContext is ProjectionsViewModel pvm && !pvm.HasLoaded:
+                    case 2 when _postseasonPage.BindingContext is PostseasonViewModel    pvm && !pvm.HasLoaded:
                         await pvm.LoadDataAsync(); break;
-                    case 3 when _SettingsPage.BindingContext is SettingsViewModel fvm && !fvm.HasLoaded:
+                    // Sandbox (index 3) has no eager load — user picks teams to trigger
+                    case 4 when _SettingsPage.BindingContext   is SettingsViewModel      fvm && !fvm.HasLoaded:
                         await fvm.LoadDataAsync(); break;
                 }
             });
