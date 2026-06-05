@@ -18,6 +18,9 @@ namespace SaturdayPulse.ViewModels
         private RankingSort   _currentSort           = RankingSort.PowerRating;
         private bool          _isSortAscending       = false;
         private string        _selectedFilterDisplay = "All";
+        private string        _statusMessage = "Loading...";
+        private string        _emptyMessage = "Loading...";
+
 
         public PowerRankingsViewModel(
             GameDataApiService apiService,
@@ -135,7 +138,16 @@ namespace SaturdayPulse.ViewModels
             set { _selectedFilterDisplay = value; OnPropertyChanged(); }
         }
 
-        public string StatusMessage { get; private set; } = "Loading...";
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            set { _statusMessage = value; OnPropertyChanged(); }
+        }
+        public string EmptyMessage
+        {
+            get => _emptyMessage;
+            set { _emptyMessage = value; OnPropertyChanged(); }
+        }
         public bool   HasLoaded     { get; set; }
 
         public string ActiveSortLabel => _currentSort switch
@@ -183,6 +195,7 @@ namespace SaturdayPulse.ViewModels
 
             IsBusy = true;
             StatusMessage = "Loading rankings...";
+            EmptyMessage = "Loading...";
             OnPropertyChanged(nameof(StatusMessage));
 
             try
@@ -214,12 +227,14 @@ namespace SaturdayPulse.ViewModels
                     _allTeams.Clear();
                     ApplyFiltersAndSort();
                     StatusMessage = "No rankings available";
+                    EmptyMessage = "No rankings available"; 
                 }
                 else
                 {
                     _allTeams.Clear();
                     ApplyFiltersAndSort();
                     StatusMessage = "Failed to load rankings";
+                    EmptyMessage = "Failed to load rankings";
                 }
 
                 HasLoaded = true;
@@ -228,7 +243,8 @@ namespace SaturdayPulse.ViewModels
             {
                 if (token.IsCancellationRequested) return;
                 System.Diagnostics.Debug.WriteLine(ex.Message?.ToString());
-                StatusMessage = $"Error: {ex.Message}";
+                StatusMessage = $"Failed to load rankings. Error: {ex.Message}";
+                EmptyMessage = "Failed to load rankings. Error: {ex.Message}";
             }
             finally
             {

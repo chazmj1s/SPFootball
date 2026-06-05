@@ -22,7 +22,8 @@ namespace SaturdayPulse.ViewModels
         private List<ChampionshipMatchup> _allChampionships = new();
         private bool   _isBusy;
         private string _selectedView  = "Championship";
-        private string _statusMessage = string.Empty;
+        private string _statusMessage = "Loading...";
+        private string _emptyMessage = "Loading...";
 
         public PostseasonViewModel(
             GameDataApiService apiService,
@@ -98,6 +99,11 @@ namespace SaturdayPulse.ViewModels
             get => _statusMessage;
             set { _statusMessage = value; OnPropertyChanged(); }
         }
+        public string EmptyMessage
+        {
+            get => _emptyMessage;
+            set { _emptyMessage = value; OnPropertyChanged(); }
+        }
 
         public string SelectedView
         {
@@ -154,7 +160,8 @@ namespace SaturdayPulse.ViewModels
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error: {ex.Message}";
+                StatusMessage = $"Failed to load game data. Error: {ex.Message}";
+                EmptyMessage = "Failed to load game data. Error: {ex.Message}";
             }
             finally
             {

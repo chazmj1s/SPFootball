@@ -18,7 +18,8 @@ namespace SaturdayPulse.ViewModels
         private bool   _isBusy;
         private string _activeFilter   = "All";
         private string _selectedFilter = "All";
-        private string _statusMessage  = string.Empty;
+        private string _statusMessage  = "Loading...";
+        private string _emptyMessage = "Loading...";
 
         public ScheduleViewModel(
             GameDataApiService apiService,
@@ -103,7 +104,11 @@ namespace SaturdayPulse.ViewModels
             get => _statusMessage;
             set { _statusMessage = value; OnPropertyChanged(); }
         }
-
+        public string EmptyMessage
+        {
+            get => _emptyMessage;
+            set { _emptyMessage = value; OnPropertyChanged(); }
+        }
         public string SelectedFilter
         {
             get => _selectedFilter;
@@ -127,6 +132,7 @@ namespace SaturdayPulse.ViewModels
             if (IsBusy) return;
             IsBusy = true;
             StatusMessage = "Loading...";
+            EmptyMessage = "Loading...";
 
             try
             {
@@ -134,6 +140,7 @@ namespace SaturdayPulse.ViewModels
                 if (games == null || games.Count == 0)
                 {
                     StatusMessage = "No games found";
+                    EmptyMessage = "No games found";
                     return;
                 }
 
@@ -156,6 +163,7 @@ namespace SaturdayPulse.ViewModels
             catch (Exception ex)
             {
                 StatusMessage = $"Error: {ex.Message}";
+                EmptyMessage = $"Error: {ex.Message}";      
             }
             finally
             {
