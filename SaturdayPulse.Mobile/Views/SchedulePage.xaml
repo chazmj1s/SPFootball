@@ -317,13 +317,14 @@
           </DataTemplate>
         </CollectionView.ItemTemplate>
 
-        <CollectionView.EmptyView>
-          <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
-            <Label Text="No games found" FontSize="16" HorizontalOptions="Center" />
-          </VerticalStackLayout>
-        </CollectionView.EmptyView>
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
+                    <Label Text="{Binding EmptyMessage}" FontSize="14" Opacity="0.7"
+                HorizontalOptions="Center" Margin="0,10,0,0"/>
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
 
-      </CollectionView>
+            </CollectionView>
 
     </RefreshView>
 

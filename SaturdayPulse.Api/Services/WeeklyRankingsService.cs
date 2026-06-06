@@ -77,6 +77,15 @@ namespace SaturdayPulse.Services
                 .GetByYearAndWeekAsync(year, priorWeek, token);
             var priorByTeamId = priorRankings.ToDictionary(wr => wr.TeamID);
 
+            // SeedRating fallback for opponent pregame strength — used when no
+            // prior WeeklyRankings row exists (e.g. week 1 of a new season, or
+            // when a team hasn't been ranked yet). Lives on TeamRecords from
+            // RollingAverageService's offseason calc.
+            var currentYearRecordsForSeed = await _uow.TeamRecords.GetByYearAsync(year, token);
+            var seedByTeamId = currentYearRecordsForSeed
+                .Where(tr => tr.SeedRating.HasValue)
+                .ToDictionary(tr => tr.TeamID, tr => tr.SeedRating!.Value);
+
             // ── 2. Played games through this week ─────────────────────────────────
             var games = await _uow.Games.GetPlayedGamesByYearAndWeekAsync(year, week, token);
 
@@ -280,27 +289,59 @@ namespace SaturdayPulse.Services
 
                 var divWeight = RatingCalculator.DivisionWeight(gp.OpponentDivision);
 
+                // Smooth quality-of-win modifier — replaces the four-bucket step.
+                //   QualityMod = clamp(1 + z * 0.25, 0.50, 1.50)
+                // Applied to the team's own z-score in PowerRating, NOT to SOS.
+                var qualityMod = Math.Max(0.50, Math.Min(1.50, 1.0 + (zScore * 0.25)));
+
+                // Pregame opponent strength for the new SOS calc.
+                // Chain: WeeklyRankings[opponent, week-1].Ranking → SeedRating → 0
+                // FCS opponents (and any opponent we can't find) get 0 strength.
+                decimal oppPregameStrength = 0m;
+                bool oppIsFcs = string.Equals(gp.OpponentDivision, "fcs",
+                                    StringComparison.OrdinalIgnoreCase);
+                if (!oppIsFcs)
+                {
+                    if (oppPrior != null && oppPrior.Ranking > 0m)
+                        oppPregameStrength = (decimal)oppPrior.Ranking;
+                    else if (seedByTeamId.TryGetValue(gp.OpponentId, out var seed))
+                        oppPregameStrength = seed;
+                }
+
                 return new
                 {
                     gp.TeamId, gp.TeamDivision, gp.OpponentId, gp.OpponentDivision,
                     ZScore = zScore, OffZScore = offZScore, DefZScore = defZScore,
                     DivWeight = divWeight,
-                    PerfWeight = zScore switch { >= 1.0 => 1.25, > -1.0 => 1.00, > -2.0 => 0.75, _ => 0.50 }
+                    QualityMod = qualityMod,
+                    OppStrength = (double)oppPregameStrength
                 };
             }).ToList();
 
             // ── 6-8. BaseSOS → SubSOS → CombinedSOS ──────────────────────────────
+            //
+            // CORRECTED: SOS is now a pure opponent-strength metric.
+            //   BaseSOS  = weighted average of opponents' pregame strength
+            //              (Ranking from prior week, fallback to SeedRating, 0 for FCS)
+            //              weighted by division weight
+            //   SubSOS   = weighted average of opponents' BaseSOS (same weighting)
+            //   CombinedSOS = (2 * BaseSOS + 3 * SubSOS) / 5
+            //
+            // The old performance-weight bucketing has moved to PowerRating below as
+            // a smooth QualityMod applied to the team's own z-score.
             var baseSOS = withZScores
                 .GroupBy(x => x.TeamId)
-                .ToDictionary(g => g.Key, g => Math.Round(
-                    g.Sum(x => x.PerfWeight * x.DivWeight) / g.Sum(x => x.DivWeight), 3));
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
+                    ? Math.Round(
+                        g.Sum(x => x.OppStrength * x.DivWeight) / g.Sum(x => x.DivWeight), 4)
+                    : 0.0);
 
             var subSOS = withZScores
                 .GroupBy(x => x.TeamId)
                 .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
                     ? Math.Round(
-                        g.Sum(x => baseSOS.GetValueOrDefault(x.OpponentId, 0.0) * x.PerfWeight) /
-                        g.Sum(x => x.PerfWeight), 3)
+                        g.Sum(x => baseSOS.GetValueOrDefault(x.OpponentId, 0.0) * x.DivWeight) /
+                        g.Sum(x => x.DivWeight), 4)
                     : 0.0);
 
             var combinedSOS = fbsTeams.ToDictionary(t => t.TeamId, t =>
@@ -311,15 +352,42 @@ namespace SaturdayPulse.Services
             });
 
             // ── 9. PowerRating ────────────────────────────────────────────────────
+            //
+            // CORRECTED: Quality-of-win lives here, not in SOS.
+            //   AvgZScore   = weighted avg of (ZScore * QualityMod), weighted by DivWeight
+            //   PowerRating = AvgZScore * CombinedSOS
+            //
+            // A team's z-score is scaled by how decisively they over/under-performed
+            // expectations (the smooth QualityMod) BEFORE averaging. SOS then scales
+            // the whole thing for opponent quality.
             var powerRatings = withZScores
                 .GroupBy(x => x.TeamId)
                 .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
                     ? Math.Round(
-                        g.Sum(x => x.ZScore * x.DivWeight) / g.Sum(x => x.DivWeight) *
+                        g.Sum(x => x.ZScore * x.QualityMod * x.DivWeight) /
+                        g.Sum(x => x.DivWeight) *
                         combinedSOS.GetValueOrDefault(g.Key, 1.0), 4)
                     : 0.0);
 
             // ── 10. Ranking ───────────────────────────────────────────────────────
+            //
+            // CORRECTED: SOS removed from the Ranking formula.
+            //
+            //   OLD: Ranking = WinPct × CombinedSOS × (1 + PowerRating)
+            //   NEW: Ranking = WinPct × (1 + PowerRating)
+            //
+            // Why: Ranking is read back as opponent pregame strength in the NEXT
+            // week's SOS calculation. With CombinedSOS multiplied INTO Ranking,
+            // SOS compounded against itself week-over-week — values geometrically
+            // collapsed toward zero. The old formula tolerated it because the
+            // buggy SOS clustered tightly around 1.0 (effectively a no-op).
+            //
+            // PowerRating already contains SOS via AvgZScore × CombinedSOS, so
+            // SOS is still represented in Ranking via PowerRating — just not
+            // double-counted in a way that creates a feedback loop.
+            //
+            // This also aligns with TeamMetricsService.CalculateRankings, which
+            // already uses this formula.
             var rankings = fbsTeams.ToDictionary(t => t.TeamId, t =>
             {
                 var wins   = winsLookup.GetValueOrDefault(t.TeamId, 0);
@@ -327,9 +395,8 @@ namespace SaturdayPulse.Services
                 var total  = wins + losses;
                 if (total == 0) return (decimal?)null;
                 var winPct = (decimal)wins / total;
-                var sos    = (decimal)combinedSOS.GetValueOrDefault(t.TeamId, 0.0);
                 var pr     = (decimal)powerRatings.GetValueOrDefault(t.TeamId, 0.0);
-                return (decimal?)Math.Round(winPct * sos * (1 + pr), 4);
+                return (decimal?)Math.Round(winPct * (1 + pr), 4);
             });
 
             // ── 11. Overall and tier ranks ────────────────────────────────────────
