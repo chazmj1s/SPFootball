@@ -59,7 +59,8 @@ namespace SaturdayPulse.ViewModels
                 if (result == null || result == "Cancel" || !int.TryParse(result, out int year))
                     return;
 
-                await ApplyYearChangeAsync(year);
+                // Fire and forget — keeps main thread free during Azure calls
+                _ = Task.Run(async () => await ApplyYearChangeAsync(year));
             });
 
             // ── Week — owned here, delegated to navState ─────────────────
@@ -141,6 +142,7 @@ namespace SaturdayPulse.ViewModels
         /// </summary>
         public async Task InitializeAsync()
         {
+            System.Diagnostics.Debug.WriteLine("[Init] InitializeAsync entered");
             if (HasInitialized) return;
             HasInitialized = true;
             await ApplyYearChangeAsync(_navState.SelectedYear, isStartup: true);
@@ -150,15 +152,20 @@ namespace SaturdayPulse.ViewModels
 
         private async Task ApplyYearChangeAsync(int year, bool isStartup = false)
         {
-            System.Diagnostics.Debug.WriteLine($"[API] Apply Year Change Year: {year} : Startup: {isStartup}");
+            System.Diagnostics.Debug.WriteLine($"[Init] ApplyYearChangeAsync start - thread: {Thread.CurrentThread.ManagedThreadId} - isMain: {MainThread.IsMainThread}");
 
             // 1. Pre-warm cache + refresh conference dropdown in parallel
             var games = await _cache.GetGamesForYearAsync(year, forceReload: !isStartup);
+            System.Diagnostics.Debug.WriteLine($"[Init] Cache loaded - thread: {Thread.CurrentThread.ManagedThreadId} - isMain: {MainThread.IsMainThread}");
+
             await RefreshConferencesAsync(year);
+            System.Diagnostics.Debug.WriteLine($"[Init] Conferences loaded - isMain: {MainThread.IsMainThread}");
 
             // 2. Build week list from the loaded schedule
             var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
             _navState.SetWeeks(weeks);
+            System.Diagnostics.Debug.WriteLine($"[Init] Weeks set - isMain: {MainThread.IsMainThread}");
+
 
             System.Diagnostics.Debug.WriteLine($"[API] Set Weeks on NavState to: {_navState.SelectedWeek}");
 
@@ -173,6 +180,7 @@ namespace SaturdayPulse.ViewModels
                     var dateStr = $"{g.GameDate} {year}";
                     return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
                 });
+            System.Diagnostics.Debug.WriteLine($"[Init] Defaults applied - isMain: {MainThread.IsMainThread}");
 
             // 4. On year change (not startup), reset conference to saved default
             if (!isStartup)

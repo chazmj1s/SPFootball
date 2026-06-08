@@ -31,8 +31,9 @@ namespace SaturdayPulse.ViewModels
             _navState            = navState;
             _personalGameService = personalGameService;
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync());
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(async () => await LoadDataAsync(forceReload: true));
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
+            RefreshCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync(forceReload: true)));
+
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {

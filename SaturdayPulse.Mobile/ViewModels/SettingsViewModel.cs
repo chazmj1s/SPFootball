@@ -140,11 +140,8 @@ namespace SaturdayPulse.ViewModels
             TierFilters.Add("🏠 Regional");
             TierFilters.Add("• Meh");
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(
-                async () => await LoadDataAsync());
-
-            RefreshCommand = new Microsoft.Maui.Controls.Command(
-                async () => await LoadDataAsync());
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
+            RefreshCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
 
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
