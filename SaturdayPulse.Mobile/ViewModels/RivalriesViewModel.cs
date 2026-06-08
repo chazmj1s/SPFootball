@@ -64,7 +64,8 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var rivalries = await _apiService.GetNamedRivalriesAsync();
+                var rivalries = await Task.Run(async () =>
+                    await _apiService.GetNamedRivalriesAsync());
 
                 if (rivalries == null || rivalries.Count == 0)
                 {
@@ -72,7 +73,6 @@ namespace SaturdayPulse.ViewModels
                     return;
                 }
 
-                // Hydrate follow state for both teams in each rivalry
                 var followedIds = _followService.GetFollowedIds();
                 foreach (var r in rivalries)
                 {
@@ -80,12 +80,9 @@ namespace SaturdayPulse.ViewModels
                     r.Team2IsFollowed = followedIds.Contains(r.Team2Id);
                 }
 
-                // Sort: EPIC first, then NATIONAL, STATE, MEH, alphabetical within tier
                 _allRivalries = [.. rivalries.OrderBy(r => TierSortOrder(r.RivalryTier))
-                                             .ThenBy(r => r.RivalryName)];
-
+                    .ThenBy(r => r.RivalryName)];
                 ApplyFilter();
-                
                 HasLoaded = true;
             }
             catch (Exception ex)

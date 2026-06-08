@@ -69,27 +69,29 @@ namespace SaturdayPulse.ViewModels
         {
             IsLoading = true;
             StatusMessage = string.Empty;
+
             try
             {
-                var teams = await _apiService.GetTeamsAsync();
+                var teams = await Task.Run(async () =>
+                    await _apiService.GetTeamsAsync());
+
                 if (teams == null || teams.Count == 0)
                 {
                     StatusMessage = "No teams available.";
                     return;
                 }
 
-                // Hydrate follow state from FollowService
                 foreach (var t in teams)
                     t.IsFollowed = _followService.IsFollowed(t.TeamID);
 
                 _allTeams = [.. teams.OrderBy(t => t.TeamName)];
-                ConferenceFilters = new ObservableCollection<string>(ConferenceHelper.FilterDisplayList());
+                ConferenceFilters = new ObservableCollection<string>(
+                    ConferenceHelper.FilterDisplayList());
                 _selectedConference = "All";
                 OnPropertyChanged(nameof(SelectedConference));
 
                 ApplyFilter();
                 HasLoaded = true;
-
             }
             catch (Exception ex)
             {

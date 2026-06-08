@@ -144,18 +144,18 @@ namespace SaturdayPulse.ViewModels
         private async Task LoadTeamsAsync()
         {
             if (_allTeams.Any()) return;
-            var teams = await _apiService.GetTeamsAsync();
+
+            var teams = await Task.Run(async () => await _apiService.GetTeamsAsync());
             if (teams != null)
                 _allTeams = teams.OrderBy(t => t.TeamName).ToList();
         }
-
         private async Task SelectTeamAsync(bool isTeamA)
         {
             await LoadTeamsAsync();
             if (!_allTeams.Any()) return;
 
             var options = _allTeams.Select(t => t.TeamName).ToArray();
-            var result  = await Shell.Current.DisplayActionSheet(
+            var result = await Shell.Current.DisplayActionSheet(
                 isTeamA ? "Select Team A" : "Select Team B",
                 "Cancel", null, options);
 
@@ -164,30 +164,29 @@ namespace SaturdayPulse.ViewModels
             var selected = _allTeams.FirstOrDefault(t => t.TeamName == result);
             if (selected == null) return;
 
-            // Load available years for this team
-            var years = await _apiService.GetTeamAvailableYearsAsync(selected.TeamID);
+            // API call on background thread
+            var years = await Task.Run(async () =>
+                await _apiService.GetTeamAvailableYearsAsync(selected.TeamID));
 
             if (isTeamA)
             {
-                TeamA      = selected;
-                TeamAYear  = 0;
+                TeamA = selected;
+                TeamAYear = 0;
                 TeamARanking = null;
                 Prediction = null;
                 _teamAYears = years ?? new List<int>();
-                // Auto-pick year if only one available
                 if (_teamAYears.Count == 1) TeamAYear = _teamAYears[0];
             }
             else
             {
-                TeamB      = selected;
-                TeamBYear  = 0;
+                TeamB = selected;
+                TeamBYear = 0;
                 TeamBRanking = null;
                 Prediction = null;
                 _teamBYears = years ?? new List<int>();
                 if (_teamBYears.Count == 1) TeamBYear = _teamBYears[0];
             }
         }
-
         private async Task SelectYearAsync(bool isTeamA)
         {
             var years = isTeamA ? _teamAYears : _teamBYears;
@@ -216,38 +215,41 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                // Run prediction and both ranking loads in parallel
-                // Fire prediction and season arcs in parallel.
-                // Arc data gives us the max week for each year — needed to hit
-                // the fully-populated weekly rankings path instead of the
-                // null-stats year-end path.
-                var predTask = _apiService.GetSandboxPredictionAsync(
-                    TeamA.TeamName, TeamAYear, TeamB.TeamName, TeamBYear);
-                var arcATask = _apiService.GetTeamSeasonArcAsync(TeamA.TeamID, TeamAYear);
-                var arcBTask = _apiService.GetTeamSeasonArcAsync(TeamB.TeamID, TeamBYear);
+                var result = await Task.Run(async () =>
+                {
+                    // Parallel: prediction + both arcs
+                    var predTask = _apiService.GetSandboxPredictionAsync(
+                        TeamA.TeamName, TeamAYear, TeamB.TeamName, TeamBYear);
+                    var arcATask = _apiService.GetTeamSeasonArcAsync(TeamA.TeamID, TeamAYear);
+                    var arcBTask = _apiService.GetTeamSeasonArcAsync(TeamB.TeamID, TeamBYear);
 
-                await Task.WhenAll(predTask, arcATask, arcBTask);
+                    await Task.WhenAll(predTask, arcATask, arcBTask);
 
-                Prediction = predTask.Result;
+                    var pred = predTask.Result;
+                    var arcA = arcATask.Result;
+                    var arcB = arcBTask.Result;
+                    var maxWeekA = arcA?.Weeks?.Select(w => w.Week).DefaultIfEmpty(0).Max();
+                    var maxWeekB = arcB?.Weeks?.Select(w => w.Week).DefaultIfEmpty(0).Max();
 
-                var arcA     = arcATask.Result;
-                var arcB     = arcBTask.Result;
-                var maxWeekA = arcA?.Weeks?.Select(w => w.Week).DefaultIfEmpty(0).Max();
-                var maxWeekB = arcB?.Weeks?.Select(w => w.Week).DefaultIfEmpty(0).Max();
+                    // Parallel: both rankings
+                    var rankATask = _apiService.GetPowerRankingsAsync(
+                        TeamAYear, maxWeekA > 0 ? maxWeekA : null);
+                    var rankBTask = _apiService.GetPowerRankingsAsync(
+                        TeamBYear, maxWeekB > 0 ? maxWeekB : null);
 
-                var rankATask = _apiService.GetPowerRankingsAsync(TeamAYear, maxWeekA > 0 ? maxWeekA : null);
-                var rankBTask = _apiService.GetPowerRankingsAsync(TeamBYear, maxWeekB > 0 ? maxWeekB : null);
+                    await Task.WhenAll(rankATask, rankBTask);
 
-                await Task.WhenAll(rankATask, rankBTask);
+                    return (pred, arcA, arcB, rankATask.Result, rankBTask.Result);
+                });
 
-                TeamARanking = rankATask.Result?.FirstOrDefault(r => r.TeamID == TeamA.TeamID);
-                TeamBRanking = rankBTask.Result?.FirstOrDefault(r => r.TeamID == TeamB.TeamID);
+                Prediction = result.pred;
+                TeamARanking = result.Item4?.FirstOrDefault(r => r.TeamID == TeamA.TeamID);
+                TeamBRanking = result.Item5?.FirstOrDefault(r => r.TeamID == TeamB.TeamID);
 
-                // Pre-populate arc data so the toggle panel doesn't need a reload
-                if (TeamARanking != null && arcA?.Weeks?.Count > 0)
-                    TeamARanking.SeasonArcWeeks = arcA.Weeks;
-                if (TeamBRanking != null && arcB?.Weeks?.Count > 0)
-                    TeamBRanking.SeasonArcWeeks = arcB.Weeks;
+                if (TeamARanking != null && result.arcA?.Weeks?.Count > 0)
+                    TeamARanking.SeasonArcWeeks = result.arcA.Weeks;
+                if (TeamBRanking != null && result.arcB?.Weeks?.Count > 0)
+                    TeamBRanking.SeasonArcWeeks = result.arcB.Weeks;
 
                 StatusMessage = Prediction != null
                     ? "Neutral site · End-of-season ratings"
@@ -257,9 +259,12 @@ namespace SaturdayPulse.ViewModels
             {
                 StatusMessage = $"Error: {ex.Message}";
             }
-            finally { IsBusy = false; }
+            finally
+            {
+                IsBusy = false;
+            }
         }
-
+        
         // ── Expandable panel toggles ──────────────────────────────────────
 
         private void ToggleTrend(bool isTeamA)
@@ -273,16 +278,19 @@ namespace SaturdayPulse.ViewModels
         private async Task ToggleArcAsync(bool isTeamA)
         {
             var ranking = isTeamA ? TeamARanking : TeamBRanking;
-            var team    = isTeamA ? TeamA        : TeamB;
-            var year    = isTeamA ? TeamAYear    : TeamBYear;
+            var team = isTeamA ? TeamA : TeamB;
+            var year = isTeamA ? TeamAYear : TeamBYear;
             if (ranking == null || team == null) return;
 
             if (!ranking.IsArcExpanded && ranking.SeasonArcWeeks == null)
             {
-                var data = await _apiService.GetTeamSeasonArcAsync(team.TeamID, year);
+                var data = await Task.Run(async () =>
+                    await _apiService.GetTeamSeasonArcAsync(team.TeamID, year));
+
                 if (data?.Weeks?.Count > 0)
                     ranking.SeasonArcWeeks = data.Weeks;
             }
+
             ranking.IsArcExpanded = !ranking.IsArcExpanded;
         }
 

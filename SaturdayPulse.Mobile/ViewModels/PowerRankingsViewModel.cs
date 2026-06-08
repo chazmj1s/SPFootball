@@ -62,16 +62,16 @@ namespace SaturdayPulse.ViewModels
 
                 if (!t.IsTrendExpanded && t.TrendHistory == null)
                 {
-                    var data = await _apiService.GetTeamRollingAveragesAsync(
-                        t.TeamID, _navState.SelectedYear);
+                    var data = await Task.Run(async () =>
+                        await _apiService.GetTeamRollingAveragesAsync(t.TeamID, _navState.SelectedYear));
 
                     if (data?.History?.Count > 0)
                     {
                         var h = data.History[^1];
-                        t.TrendRating     = h.TrendRating;
-                        t.PedigreeRating  = h.PedigreeRating;
-                        t.SeedRating      = h.SeedRating;
-                        t.TrendHistory    = h.TrendHistory;
+                        t.TrendRating = h.TrendRating;
+                        t.PedigreeRating = h.PedigreeRating;
+                        t.SeedRating = h.SeedRating;
+                        t.TrendHistory = h.TrendHistory;
                         t.PedigreeHistory = h.PedigreeHistory;
                     }
                 }
@@ -79,38 +79,36 @@ namespace SaturdayPulse.ViewModels
                 t.IsTrendExpanded = !t.IsTrendExpanded;
             });
 
-            ToggleArcExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            ToggleArcExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
             {
                 if (t == null) return;
-                _ = Task.Run(async () =>
+
+                if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
                 {
-                    if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
-                    {
-                        var data = await _apiService.GetTeamSeasonArcAsync(
-                            t.TeamID, _navState.SelectedYear);
-                        if (data?.Weeks?.Count > 0)
-                            t.SeasonArcWeeks = data.Weeks;
-                    }
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                        t.IsArcExpanded = !t.IsArcExpanded);
-                });
+                    var data = await Task.Run(async () =>
+                        await _apiService.GetTeamSeasonArcAsync(t.TeamID, _navState.SelectedYear));
+
+                    if (data?.Weeks?.Count > 0)
+                        t.SeasonArcWeeks = data.Weeks;
+                }
+
+                t.IsArcExpanded = !t.IsArcExpanded;
             });
 
-            ToggleScheduleExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            ToggleScheduleExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
             {
                 if (t == null) return;
-                _ = Task.Run(async () =>
+
+                if (!t.IsScheduleExpanded && t.ScheduleGames == null)
                 {
-                    if (!t.IsScheduleExpanded && t.ScheduleGames == null)
-                    {
-                        var data = await _apiService.GetTeamScheduleAsync(
-                            t.TeamID, _navState.SelectedYear);
-                        if (data?.Games?.Count > 0)
-                            t.ScheduleGames = data.Games;
-                    }
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                        t.IsScheduleExpanded = !t.IsScheduleExpanded);
-                });
+                    var data = await Task.Run(async () =>
+                        await _apiService.GetTeamScheduleAsync(t.TeamID, _navState.SelectedYear));
+
+                    if (data?.Games?.Count > 0)
+                        t.ScheduleGames = data.Games;
+                }
+
+                t.IsScheduleExpanded = !t.IsScheduleExpanded;
             });
 
             _navState.PropertyChanged += OnNavStateChanged;
@@ -201,13 +199,14 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var teams = await _apiService.GetPowerRankingsAsync(
-                    _navState.SelectedYear,
-                    _navState.SelectedWeek);
+                var teams = await Task.Run(async () =>
+                    await _apiService.GetPowerRankingsAsync(
+                        _navState.SelectedYear,
+                        _navState.SelectedWeek), token);
 
                 if (token.IsCancellationRequested) return;
 
-                if (teams != null)
+                if (teams != null && teams.Any())
                 {
                     _allTeams = teams;
 
@@ -215,7 +214,7 @@ namespace SaturdayPulse.ViewModels
                     foreach (var t in _allTeams)
                     {
                         t.IsFollowed = followedIds.Contains(t.TeamID);
-                        t.IsTop25    = t.OverallRank > 0 && t.OverallRank <= 25;
+                        t.IsTop25 = t.OverallRank > 0 && t.OverallRank <= 25;
                     }
 
                     ApplyFiltersAndSort();
@@ -223,19 +222,12 @@ namespace SaturdayPulse.ViewModels
                         ? $"{teams.Count} teams · Wk {_navState.SelectedWeek}"
                         : $"{teams.Count} teams · Final";
                 }
-                else if (!teams.Any())
-                {
-                    _allTeams.Clear();
-                    ApplyFiltersAndSort();
-                    StatusMessage = "No rankings available";
-                    EmptyMessage = "No rankings available"; 
-                }
                 else
                 {
                     _allTeams.Clear();
                     ApplyFiltersAndSort();
-                    StatusMessage = "Failed to load rankings";
-                    EmptyMessage = "Failed to load rankings";
+                    StatusMessage = "No rankings available";
+                    EmptyMessage = "No rankings available";
                 }
 
                 HasLoaded = true;
@@ -243,9 +235,9 @@ namespace SaturdayPulse.ViewModels
             catch (Exception ex)
             {
                 if (token.IsCancellationRequested) return;
-                System.Diagnostics.Debug.WriteLine(ex.Message?.ToString());
+                System.Diagnostics.Debug.WriteLine(ex.Message);
                 StatusMessage = $"Failed to load rankings. Error: {ex.Message}";
-                EmptyMessage = "Failed to load rankings. Error: {ex.Message}";
+                EmptyMessage = "Failed to load rankings.";
             }
             finally
             {
@@ -256,7 +248,6 @@ namespace SaturdayPulse.ViewModels
                 }
             }
         }
-
         // ── Filter / sort ─────────────────────────────────────────────────
 
         public void ApplyFilter(string filterType)

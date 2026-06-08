@@ -41,9 +41,9 @@ namespace SaturdayPulse.Models
         public double? ProjOU    { get; set; }
 
         // ── Derived: who won ──────────────────────────────────────────────
-
         public bool HomeIsWinner => IsPlayed && HomePoints >= AwayPoints;
         public bool NeutralSite  => Location == 'N';
+        
 
         // ── Display: visitor (away) on top, home on bottom ────────────────
 

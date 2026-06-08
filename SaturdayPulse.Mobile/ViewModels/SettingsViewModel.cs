@@ -208,42 +208,41 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var teamsTask     = _apiService.GetTeamsAsync();
-                var rivalriesTask = _apiService.GetNamedRivalriesAsync();
+                var (teams, rivalries) = await Task.Run(async () =>
+                {
+                    var teamsTask = _apiService.GetTeamsAsync();
+                    var rivalriesTask = _apiService.GetNamedRivalriesAsync();
+                    await Task.WhenAll(teamsTask, rivalriesTask);
+                    return (teamsTask.Result, rivalriesTask.Result);
+                });
 
-                await Task.WhenAll(teamsTask, rivalriesTask);
-
-                // ── Teams ─────────────────────────────────────────────────
-                var teams = teamsTask.Result;
+                // ── Teams ─────────────────────────────────────────────────────────
                 if (teams != null && teams.Count > 0)
                 {
                     foreach (var t in teams)
                         t.IsFollowed = _followService.IsFollowed(t.TeamID);
 
                     _allTeams = [.. teams.OrderBy(t => t.TeamName)];
-
                     ApplyTeamFilter();
                 }
 
-                // ── Named rivalries ───────────────────────────────────────
-                var rivalries   = rivalriesTask.Result ?? [];
+                // ── Named rivalries ───────────────────────────────────────────────
+                var allRivalries = rivalries ?? [];
                 var followedIds = _followService.GetFollowedIds();
 
-                foreach (var r in rivalries)
+                foreach (var r in allRivalries)
                 {
                     r.Team1IsFollowed = followedIds.Contains(r.Team1Id);
                     r.Team2IsFollowed = followedIds.Contains(r.Team2Id);
                     r.IsGameFavorited = _personalGameService.IsFavorited(r.Team1Id, r.Team2Id);
                 }
 
-                _allRivalries = [.. rivalries
+                _allRivalries = [.. allRivalries
                     .OrderBy(r => TierSortOrder(r.RivalryTier))
                     .ThenBy(r => r.RivalryName)];
 
-                // ── Personal games (non-rivalry matchups from Scores) ─────
                 await LoadPersonalGamesAsync(_allRivalries, followedIds);
 
-                // Set default tier AFTER data is ready so Picker shows correctly
                 _selectedTier = "♥ Personal";
                 OnPropertyChanged(nameof(SelectedTier));
                 ApplyGamesFilter();
