@@ -5,10 +5,9 @@ using SaturdayPulse.Repositories.Interfaces;
 
 namespace SaturdayPulse.Repositories.Implementations
 {
-    public class ConferenceRepository : IConferenceRepository
+    public class ConferenceRepository(NCAAContext context) : IConferenceRepository
     {
-        private readonly NCAAContext _context;
-        public ConferenceRepository(NCAAContext context) => _context = context;
+        private readonly NCAAContext _context = context;
 
         public Task<List<Conference>> GetAllAsync(CancellationToken token = default)
             => _context.Conferences.OrderBy(c => c.Name).ToListAsync(token);

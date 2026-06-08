@@ -48,6 +48,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<DeveloperService>();
 builder.Services.AddScoped<IAvgScoreDifferentialService, AvgScoreDifferentialService>();
 builder.Services.AddScoped<ProjectionAccuracyService>();
+builder.Services.AddScoped<ConferenceTierService>();
 
 builder.Services.AddSingleton<ProjectionCacheService>();
 

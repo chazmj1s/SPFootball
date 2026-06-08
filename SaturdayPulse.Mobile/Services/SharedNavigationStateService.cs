@@ -1,7 +1,8 @@
+using SaturdayPulse.Models;
+using SaturdayPulse.ViewModels;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using SaturdayPulse.ViewModels;
 
 namespace SaturdayPulse.Services
 {
@@ -9,19 +10,42 @@ namespace SaturdayPulse.Services
     /// Single source of truth for year, week, conference selection,
     /// and user display preferences across all tabs.
     /// Registered as Singleton in MauiProgram.cs.
+    ///
+    /// FilterChanged is the unified signal for all nav-state changes.
+    /// LastFilterChange tells subscribers what triggered it so they can
+    /// decide whether to hit the server or just refilter cached data.
     /// </summary>
     public class SharedNavigationStateService : INotifyPropertyChanged
     {
         private int    _selectedYear       = 2025;
         private int    _selectedWeek       = 1;
         private string _selectedConference = "All";
-        private bool   _showFavoritesFirst    = Preferences.Get("ShowFavoritesFirst", false);
-        private string _defaultWeek           = Preferences.Get("DefaultWeek", "Current");
-        private string _defaultConference     = Preferences.Get("DefaultConference", "All");
-        private bool   _suppressNavReady   = false;
+        private bool   _showFavoritesFirst = Preferences.Get("ShowFavoritesFirst", false);
+        private string _defaultWeek        = Preferences.Get("DefaultWeek", "Current");
+        private string _defaultConference  = Preferences.Get("DefaultConference", "All");
+        private ObservableCollection<ConferenceInfo> _availableConferences = new();
+
+        // ── Filter change reason ──────────────────────────────────────────
+
+        /// <summary>
+        /// What triggered the most recent FilterChanged signal.
+        /// Read by ViewModels in their FilterChanged handler to decide
+        /// whether to reload from the server or just refilter cached data.
+        /// </summary>
+        public FilterChangeReason LastFilterChange { get; private set; } = FilterChangeReason.Year;
+
+        private void FireFilterChanged(FilterChangeReason reason)
+        {
+            LastFilterChange = reason;
+            OnPropertyChanged("FilterChanged");
+        }
 
         // ── Year ──────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Set by MainViewModel after pre-warming the cache.
+        /// Fires FilterChanged(Year) — do not set directly from other ViewModels.
+        /// </summary>
         public int SelectedYear
         {
             get => _selectedYear;
@@ -30,58 +54,39 @@ namespace SaturdayPulse.Services
                 if (_selectedYear != value)
                 {
                     _selectedYear = value;
-                    _selectedWeek = 1;                          // reset to week 1 on year change
                     OnPropertyChanged();
-                    OnPropertyChanged(nameof(SelectedWeek));    // update week strip highlight
-                    Weeks.Clear();
-                    if (!_suppressNavReady) OnPropertyChanged("YearChanged");
+                    FireFilterChanged(FilterChangeReason.Year);
                 }
             }
         }
 
         // ── Week ──────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Set by MainViewModel. Fires FilterChanged(Week).
+        /// Do not set directly from other ViewModels.
+        /// </summary>
         public int SelectedWeek
         {
             get => _selectedWeek;
             set
             {
-                Console.WriteLine($"[NavState] SelectedWeek{_selectedWeek} set to {value}");
-
                 if (_selectedWeek != value)
                 {
                     _selectedWeek = value;
                     OnPropertyChanged();
                     SyncWeekItems();
-             
-                Console.WriteLine($"[NavState] SelectedWeek set to {value}, firing WeekChanged");
-
-                    if (!_suppressNavReady) OnPropertyChanged("WeekChanged");
+                    FireFilterChanged(FilterChangeReason.Week);
                 }
             }
         }
 
-        /// <summary>
-        /// Set year and week atomically — fires a single YearChanged
-        /// notification instead of two separate signals.
-        /// </summary>
-        public void SetYearAndWeek(int year, int week)
-        {
-            _suppressNavReady = true;
-            try
-            {
-                SelectedYear = year;
-                SelectedWeek = week;
-            }
-            finally
-            {
-                _suppressNavReady = false;
-            }
-            OnPropertyChanged("YearChanged");
-        }
-
         // ── Conference ────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Stores the conference Abbreviation (e.g. "SEC", "SWC", "All").
+        /// Set by MainViewModel. Fires FilterChanged(Conference).
+        /// </summary>
         public string SelectedConference
         {
             get => _selectedConference;
@@ -91,8 +96,52 @@ namespace SaturdayPulse.Services
                 {
                     _selectedConference = value;
                     OnPropertyChanged();
+                    FireFilterChanged(FilterChangeReason.Conference);
                 }
             }
+        }
+
+        // ── Available conferences ─────────────────────────────────────────
+
+        public ObservableCollection<ConferenceInfo> AvailableConferences => _availableConferences;
+
+        /// <summary>
+        /// Replaces the available conference list. If the currently selected
+        /// abbreviation no longer exists in the new year, resets to "All"
+        /// (without firing FilterChanged — year change handles that).
+        /// </summary>
+        public void SetAvailableConferences(IEnumerable<ConferenceInfo> conferences)
+        {
+            var list = conferences.ToList(); // materialize before crossing threads
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                _availableConferences.Clear();
+                foreach (var c in list)
+                    _availableConferences.Add(c);
+
+                if (SelectedConference != "All")
+                {
+                    var stillValid = _availableConferences.Any(c =>
+                        string.Equals(c.Abbreviation, SelectedConference, StringComparison.OrdinalIgnoreCase));
+                    if (!stillValid)
+                    {
+                        _selectedConference = "All";
+                        OnPropertyChanged(nameof(SelectedConference));
+                    }
+                }
+            });
+        }
+
+        /// <summary>
+        /// Sets SelectedConference without firing FilterChanged.
+        /// Used by MainViewModel during year-change orchestration so that
+        /// conference reset and year change fire a single FilterChanged(Year).
+        /// </summary>
+        public void SetConferenceSilent(string abbreviation)
+        {
+            if (_selectedConference == abbreviation) return;
+            _selectedConference = abbreviation;
+            OnPropertyChanged(nameof(SelectedConference));
         }
 
         // ── Show Favorites First ──────────────────────────────────────────
@@ -107,15 +156,13 @@ namespace SaturdayPulse.Services
                     _showFavoritesFirst = value;
                     Preferences.Set("ShowFavoritesFirst", value);
                     OnPropertyChanged();
+                    FireFilterChanged(FilterChangeReason.Conference); // local refilter only
                 }
             }
         }
 
         // ── Default Week preference ───────────────────────────────────────
 
-        /// <summary>
-        /// "Week1" or "Current" — controls which week is selected on app launch.
-        /// </summary>
         public string DefaultWeek
         {
             get => _defaultWeek;
@@ -130,9 +177,6 @@ namespace SaturdayPulse.Services
 
         // ── Default Conference preference ─────────────────────────────────
 
-        /// <summary>
-        /// Conference abbreviation or "All" — applied to SelectedConference on launch.
-        /// </summary>
         public string DefaultConference
         {
             get => _defaultConference;
@@ -142,8 +186,7 @@ namespace SaturdayPulse.Services
                 _defaultConference = value;
                 Preferences.Set("DefaultConference", value);
                 OnPropertyChanged();
-                // Apply immediately so the header updates without restarting
-                SelectedConference = value;
+                SelectedConference = value;  // fires FilterChanged(Conference)
             }
         }
 
@@ -153,46 +196,45 @@ namespace SaturdayPulse.Services
 
         public void SetWeeks(IEnumerable<int> weekNumbers)
         {
-            Weeks.Clear();
-            foreach (var w in weekNumbers)
-                Weeks.Add(new WeekItem { Week = w, IsSelected = w == _selectedWeek });
+            var weekList = weekNumbers.ToList(); // materialize before crossing threads
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                Weeks.Clear();
+                foreach (var w in weekList)
+                    Weeks.Add(new WeekItem { Week = w, IsSelected = w == _selectedWeek });
+            });
         }
 
         public void SyncWeekItems()
         {
-            foreach (var w in Weeks)
-                w.IsSelected = w.Week == _selectedWeek;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                foreach (var w in Weeks)
+                    w.IsSelected = w.Week == _selectedWeek;
+            });
         }
 
         // ── Startup defaults ──────────────────────────────────────────────
 
         /// <summary>
-        /// Called once after the schedule loads. Sets SelectedConference and
-        /// SelectedWeek according to the user's saved DefaultConference /
-        /// DefaultWeek preferences.
-        ///
-        /// "Current" = the highest week number whose earliest game date is
-        /// on or before today.  Falls back to week 1 if all games are future.
+        /// Called by MainViewModel after the schedule loads for a new year.
+        /// Sets SelectedWeek according to DefaultWeek preference without
+        /// firing FilterChanged — MainViewModel fires it once after all
+        /// state is settled.
         /// </summary>
         public void ApplyStartupDefaults<T>(
             IEnumerable<T> schedule,
             Func<T, int>       getWeek,
             Func<T, DateTime?> getDate)
         {
-            // ── Conference ────────────────────────────────────────────────
-            if (_defaultConference != "All")
-                SelectedConference = _defaultConference;
-
-            // ── Week ──────────────────────────────────────────────────────
             if (_defaultWeek == "Week1")
             {
-                SelectedWeek = 1;
+                _selectedWeek = 1;
+                OnPropertyChanged(nameof(SelectedWeek));
+                SyncWeekItems();
                 return;
             }
 
-            // "Current" — last week with at least one game date ≤ today.
-            // If no games have been played yet (pre-season / off-season),
-            // the season hasn't started so default to week 1.
             var today = DateTime.Today;
             var games = schedule.ToList();
 
@@ -205,12 +247,12 @@ namespace SaturdayPulse.Services
 
             if (today < seasonStartDate)
             {
-                // Off-season or pre-season — no games played yet
-                SelectedWeek = 1;
+                _selectedWeek = 1;
+                OnPropertyChanged(nameof(SelectedWeek));
+                SyncWeekItems();
                 return;
             }
 
-            // At least one game has been played — find the latest such week
             var currentWeek = games
                 .GroupBy(g => getWeek(g))
                 .Where(grp => grp.Any(g =>
@@ -222,7 +264,9 @@ namespace SaturdayPulse.Services
                 .DefaultIfEmpty(1)
                 .Max();
 
-            SelectedWeek = currentWeek;
+            _selectedWeek = currentWeek;
+            OnPropertyChanged(nameof(SelectedWeek));
+            SyncWeekItems();
         }
 
         // ── INotifyPropertyChanged ────────────────────────────────────────
@@ -230,5 +274,14 @@ namespace SaturdayPulse.Services
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    // ── Filter change reason ──────────────────────────────────────────────
+
+    public enum FilterChangeReason
+    {
+        Year,           // year changed — ViewModels may need server call
+        Week,           // week changed — Rankings needs server call, others refilter
+        Conference      // conference/favorites changed — all ViewModels refilter only
     }
 }

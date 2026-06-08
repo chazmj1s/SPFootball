@@ -321,9 +321,9 @@ namespace SaturdayPulse.ViewModels
                 var abbr = ConferenceHelper.DisplayToAbbr(conf);
                 filtered = filtered.Where(t =>
                     (t.ConferenceAbbr != null &&
-                        t.ConferenceAbbr.Equals(abbr, StringComparison.OrdinalIgnoreCase)) ||
+                     t.ConferenceAbbr.Equals(conf, StringComparison.OrdinalIgnoreCase)) ||
                     (t.Conference != null &&
-                        t.Conference.Equals(abbr, StringComparison.OrdinalIgnoreCase)));
+                     t.Conference.Equals(conf, StringComparison.OrdinalIgnoreCase)));
             }
 
             // Tier / top-25 filter
@@ -383,15 +383,22 @@ namespace SaturdayPulse.ViewModels
 
         private async void OnNavStateChanged(object sender, PropertyChangedEventArgs e)
         {
-            // User week tap — re-filter client-side only, no server call
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
-                await LoadDataAsync();
+            if (e.PropertyName != "FilterChanged") return;
 
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
-                e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
-                ApplyFiltersAndSort();
+            switch (_navState.LastFilterChange)
+            {
+                case FilterChangeReason.Year:
+                case FilterChangeReason.Week:
+                    // Year or week changed — rankings are week-specific, must hit server
+                    await LoadDataAsync();
+                    break;
+
+                case FilterChangeReason.Conference:
+                    // Conference or favorites changed — refilter cached results only
+                    ApplyFiltersAndSort();
+                    break;
+            }
         }
-
         private void OnTeamFollowChanged(int teamId, bool isFollowed)
         {
             var team = _allTeams.FirstOrDefault(t => t.TeamID == teamId);

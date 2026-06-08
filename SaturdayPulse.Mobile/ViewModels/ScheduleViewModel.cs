@@ -9,27 +9,24 @@ namespace SaturdayPulse.ViewModels
 {
     public class ScheduleViewModel : BaseViewModel
     {
-        private readonly GameDataApiService           _apiService;
         private readonly GameDataCacheService         _cache;
         private readonly SharedNavigationStateService _navState;
         private readonly PersonalGameService          _personalGameService;
 
-        private ObservableCollection<GameResult> _games    = new();
+        private ObservableCollection<GameResult> _games = new();
         private bool   _isBusy;
         private string _activeFilter   = "All";
         private string _selectedFilter = "All";
         private string _statusMessage  = "Loading...";
-        private string _emptyMessage = "Loading...";
+        private string _emptyMessage   = "Loading...";
 
         public ScheduleViewModel(
-            GameDataApiService apiService,
             GameDataCacheService cache,
             FollowService followService,
             SharedNavigationStateService navState,
             PersonalGameService personalGameService)
             : base(followService)
         {
-            _apiService          = apiService;
             _cache               = cache;
             _navState            = navState;
             _personalGameService = personalGameService;
@@ -50,6 +47,7 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
+            // Week prev/next — delegate to navState, fires FilterChanged(Week)
             PreviousWeekCommand = new Microsoft.Maui.Controls.Command(() =>
             {
                 var idx = _navState.Weeks.ToList().FindIndex(w => w.Week == _navState.SelectedWeek);
@@ -127,12 +125,17 @@ namespace SaturdayPulse.ViewModels
 
         // ── Load ──────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Forces a cache reload (e.g. pull-to-refresh) then refilters.
+        /// Normal navigation uses ApplyFiltersAndSort directly via FilterChanged —
+        /// MainViewModel pre-warms the cache before firing that signal.
+        /// </summary>
         public async Task LoadDataAsync(bool forceReload = false)
         {
             if (IsBusy) return;
             IsBusy = true;
             StatusMessage = "Loading...";
-            EmptyMessage = "Loading...";
+            EmptyMessage  = "Loading...";
 
             try
             {
@@ -140,30 +143,16 @@ namespace SaturdayPulse.ViewModels
                 if (games == null || games.Count == 0)
                 {
                     StatusMessage = "No games found";
-                    EmptyMessage = "No games found";
+                    EmptyMessage  = "No games found";
                     return;
                 }
 
-                var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
-                _navState.SetWeeks(weeks);
-                _navState.ApplyStartupDefaults(
-                    games,
-                    g => g.Week,
-                    g =>
-                    {
-                        if (string.IsNullOrWhiteSpace(g.GameDate)) return null;
-                        var dateStr = $"{g.GameDate} {_navState.SelectedYear}";
-                        return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
-                    });
-
                 ApplyFiltersAndSort();
-                StatusMessage = "( ) = projected value";
-                HasLoaded = true;
             }
             catch (Exception ex)
             {
                 StatusMessage = $"Error: {ex.Message}";
-                EmptyMessage = $"Error: {ex.Message}";      
+                EmptyMessage  = $"Error: {ex.Message}";
             }
             finally
             {
@@ -175,22 +164,29 @@ namespace SaturdayPulse.ViewModels
 
         private void ApplyFiltersAndSort()
         {
+            if (_cache.AllGames.Count == 0)
+            {
+                Games = new ObservableCollection<GameResult>();
+                StatusMessage = "No games found";
+                EmptyMessage  = "No games found";
+                return;
+            }
+
             IEnumerable<GameResult> filtered = _cache.AllGames;
 
             filtered = filtered.Where(g => g.Week == _navState.SelectedWeek);
 
+            // SelectedConference stores Abbreviation directly — no DisplayToAbbr needed
             var conf = _navState.SelectedConference;
             if (conf != "All")
             {
-                var abbr = ConferenceHelper.DisplayToAbbr(conf);
                 filtered = filtered.Where(g =>
-                    g.HomeConf.Equals(abbr, StringComparison.OrdinalIgnoreCase) ||
-                    g.AwayConf.Equals(abbr,  StringComparison.OrdinalIgnoreCase));
+                    g.HomeConf.Equals(conf, StringComparison.OrdinalIgnoreCase) ||
+                    g.AwayConf.Equals(conf, StringComparison.OrdinalIgnoreCase));
             }
 
             filtered = _activeFilter switch
             {
-                "All"       => filtered,
                 "Favorites" => filtered.Where(g => g.IsGameFavorited),
                 "Followed"  => filtered.Where(g => g.HomeIsFollowed || g.VisitorIsFollowed),
                 "P4"        => filtered.Where(g => g.HomeTier == "P4" || g.AwayTier == "P4"),
@@ -219,24 +215,24 @@ namespace SaturdayPulse.ViewModels
                 lastHeader = g.GroupHeader;
             }
 
-            Games = new ObservableCollection<GameResult>(sorted);
+            Games         = new ObservableCollection<GameResult>(sorted);
+            StatusMessage = "( ) = projected value";
+            EmptyMessage  = "No games for selected filter";
+            HasLoaded     = true;
         }
 
         // ── Event handlers ────────────────────────────────────────────────
 
         private void OnNavStateChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
-                ApplyFiltersAndSort();
-
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference) ||
-                e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
-                ApplyFiltersAndSort();
+            // Single entry point — cache is always hot when FilterChanged fires
+            if (e.PropertyName == "FilterChanged")
+                MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
         }
 
         private void OnCacheUpdated()
         {
-            // Cache re-stamped follow/favorite flags — refilter to update UI
+            // Follow/favorite flags re-stamped — refilter to update UI
             MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
         }
     }

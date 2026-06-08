@@ -169,6 +169,30 @@ namespace SaturdayPulse.Services
             }
         }
 
+
+
+        /// <summary>
+        /// Returns the conferences active in a given year, ordered P4 → G5.
+        /// Used to populate the conference filter dropdown on year change.
+        /// Maps to: GET /conferences/{year}
+        /// </summary>
+        public async Task<List<Models.ConferenceInfo>?> GetConferencesForYearAsync(int year)
+        {
+            try
+            {
+                var url = $"conferences/{year}";
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching conferences for year {year}");
+                var result = await _httpClient.GetFromJsonAsync<List<Models.ConferenceInfo>>(url);
+                System.Diagnostics.Debug.WriteLine($"[API] Conferences for {year}: {result?.Count ?? 0} returned");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error fetching conferences for year {year}: {ex.Message}");
+                return null;
+            }
+        }
+
         // <summary>
         /// Gets the full season schedule with actual and projected scores.
         /// </summary>

@@ -215,8 +215,9 @@ namespace SaturdayPulse.ViewModels
             OnPropertyChanged(nameof(HasPlayoffData));
 
             // ── Bowls — grouped by weekend (Fri–Sun), then by day ─────────
-            var conf = _navState.SelectedConference;
-            var confAbbr = conf == "All" ? null : ConferenceHelper.DisplayToAbbr(conf);
+            // SelectedConference now stores Abbreviation directly — no DisplayToAbbr needed
+            var conf     = _navState.SelectedConference;
+            var confAbbr = conf == "All" ? null : conf;
 
             var bowlGames = allGames.Where(g => g.SeasonType == "postseason");
 
@@ -232,7 +233,9 @@ namespace SaturdayPulse.ViewModels
                 BowlWeekends.Add(wk);
             OnPropertyChanged(nameof(HasBowlData));
         }
-        // ── Helper: build bowl weekends from filtered games ──────────────────
+
+        // ── Helper: build bowl weekends from filtered games ───────────────
+
         private static List<BowlWeekendGroup> BuildBowlWeekends(IEnumerable<GameResult> bowlGames)
         {
             static DateTime WeekendSaturday(DateTime d)
@@ -266,12 +269,14 @@ namespace SaturdayPulse.ViewModels
                 })
                 .ToList();
         }
+
         // ── Conference filter (Championship view only) ────────────────────
 
         private void ApplyConferenceFilter()
         {
-            var conf = _navState.SelectedConference;
-            var confAbbr = conf == "All" ? null : ConferenceHelper.DisplayToAbbr(conf);
+            // SelectedConference now stores Abbreviation directly — no DisplayToAbbr needed
+            var conf     = _navState.SelectedConference;
+            var confAbbr = conf == "All" ? null : conf;
 
             // ── Championships ─────────────────────────────────────────────
             var filteredChamps = confAbbr == null
@@ -302,26 +307,34 @@ namespace SaturdayPulse.ViewModels
                 BowlWeekends.Add(wk);
             OnPropertyChanged(nameof(HasBowlData));
         }
+
         // ── Event handlers ────────────────────────────────────────────────
 
         private async void OnNavStateChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
+            if (e.PropertyName != "FilterChanged") return;
+
+            switch (_navState.LastFilterChange)
             {
-                await LoadDataAsync();
-                return;
+                case FilterChangeReason.Year:
+                    // Full reload — new year means new schedule + new championships
+                    await LoadDataAsync();
+                    break;
+
+                case FilterChangeReason.Week:
+                    // Week change only matters for championship qualifiers (not bowls/playoffs)
+                    if (_selectedView != "Bowls" && _selectedView != "Playoffs")
+                        await LoadDataAsync();
+                    else
+                        ApplyConferenceFilter();
+                    break;
+
+                case FilterChangeReason.Conference:
+                    // Conference/favorites — refilter cached data only
+                    ApplyConferenceFilter();
+                    break;
             }
-
-            if (_selectedView == "Playoffs")
-                return;
-
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek) && _selectedView != "Bowls")
-                await LoadDataAsync();
-
-            if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
-                ApplyConferenceFilter();
         }
-
         private void OnCacheUpdated()
         {
             MainThread.BeginInvokeOnMainThread(RebuildPostseasonFromCache);
