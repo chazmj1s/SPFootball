@@ -150,16 +150,17 @@ namespace SaturdayPulse.ViewModels
 
         private async Task ApplyYearChangeAsync(int year, bool isStartup = false)
         {
-            // 1. Pre-warm cache + refresh conference dropdown in parallel
-            var cacheTask       = _cache.GetGamesForYearAsync(year, forceReload: !isStartup);
-            var conferencesTask = RefreshConferencesAsync(year);
-            await Task.WhenAll(cacheTask, conferencesTask);
+            System.Diagnostics.Debug.WriteLine($"[API] Apply Year Change Year: {year} : Startup: {isStartup}");
 
-            var games = cacheTask.Result;
+            // 1. Pre-warm cache + refresh conference dropdown in parallel
+            var games = await _cache.GetGamesForYearAsync(year, forceReload: !isStartup);
+            await RefreshConferencesAsync(year);
 
             // 2. Build week list from the loaded schedule
             var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
             _navState.SetWeeks(weeks);
+
+            System.Diagnostics.Debug.WriteLine($"[API] Set Weeks on NavState to: {_navState.SelectedWeek}");
 
             // 3. Apply week + conference defaults (sets backing fields silently —
             //    no FilterChanged fires here; we fire once below via SelectedYear)
@@ -191,6 +192,9 @@ namespace SaturdayPulse.ViewModels
                     _navState.SetConferenceSilent(validDefault);
                 }
             }
+
+            System.Diagnostics.Debug.WriteLine($"[API] Set Conference on navState to: {_navState.SelectedConference}");
+
 
             // 5. Fire FilterChanged(Year) — cache is hot, weeks/conference are set,
             //    all ViewModels rebuild from correct state in one signal
