@@ -88,28 +88,7 @@ namespace SaturdayPulse.Views
                 if (PageHost.Children[i] is VisualElement ve)
                     ve.IsVisible = i == 0;
 
-            // ── Kick off startup initialization ──
-            // MainViewModel.InitializeAsync pre-warms the cache + conferences,
-            // builds the week list, then fires FilterChanged(Year).
-            // Only after that completes do we load the schedule page,
-            // so the cache is guaranteed hot when ScheduleViewModel reads it.
-            System.Diagnostics.Debug.WriteLine("[Init] MAINPAGE CONSTRUCTOR COMPLETE");
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    System.Diagnostics.Debug.WriteLine("[Init] Task.Run started");
-                    await _vm.InitializeAsync();
-                    System.Diagnostics.Debug.WriteLine("[Init] InitializeAsync complete");
-                    if (_schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded)
-                        await MainThread.InvokeOnMainThreadAsync(async () => await svm.LoadDataAsync());
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[Init] EXCEPTION: {ex.Message}");
-                    System.Diagnostics.Debug.WriteLine($"[Init] STACK: {ex.StackTrace}");
-                }
-            });
+            _ = Task.Run(async () => await _vm.InitializeAsync());
         }
 
         // ── Loading state wiring ──────────────────────────────────────────
@@ -248,14 +227,14 @@ namespace SaturdayPulse.Views
 
                 switch (index)
                 {
-                    case 0 when _schedulePage.BindingContext   is ScheduleViewModel      svm && !svm.HasLoaded:
-                        await svm.LoadDataAsync(); break;
-                    case 1 when _rankingsPage.BindingContext    is PowerRankingsViewModel rvm && !rvm.HasLoaded:
-                        await rvm.LoadDataAsync(); break;
-                    case 2 when _postseasonPage.BindingContext is PostseasonViewModel    pvm && !pvm.HasLoaded:
-                        await pvm.LoadDataAsync(); break;
-                    case 4 when _SettingsPage.BindingContext   is SettingsViewModel      fvm && !fvm.HasLoaded:
-                        await fvm.LoadDataAsync(); break;
+                    case 0 when _schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded:
+                        _ = Task.Run(async () => await svm.LoadDataAsync()); break;
+                    case 1 when _rankingsPage.BindingContext is PowerRankingsViewModel rvm && !rvm.HasLoaded:
+                        _ = Task.Run(async () => await rvm.LoadDataAsync()); break;
+                    case 2 when _postseasonPage.BindingContext is PostseasonViewModel pvm && !pvm.HasLoaded:
+                        _ = Task.Run(async () => await pvm.LoadDataAsync()); break;
+                    case 4 when _SettingsPage.BindingContext is SettingsViewModel fvm && !fvm.HasLoaded:
+                        _ = Task.Run(async () => await fvm.LoadDataAsync()); break;
                 }
             });
         }

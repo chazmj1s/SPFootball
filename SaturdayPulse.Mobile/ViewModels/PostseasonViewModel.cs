@@ -143,16 +143,26 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var championships = await _apiService.GetProjectedChampionshipQualifiersAsync(
-                    _navState.SelectedYear, _navState.SelectedWeek);
-
-                if (championships != null)
+                if (_navState.SelectedYear >= 2016)
                 {
-                    _allChampionships = championships;
-                    ApplyConferenceFilter();
+                    var championships = await Task.Run(async () =>
+                        await _apiService.GetProjectedChampionshipQualifiersAsync(
+                            _navState.SelectedYear, _navState.SelectedWeek));
+                    if (championships != null)
+                    {
+                        _allChampionships = championships;
+                        ApplyConferenceFilter();
+                    }
+                }
+                else
+                {
+                    _allChampionships.Clear();
+                    Championships.Clear();
                 }
 
-                await _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload);
+                await Task.Run(async () =>
+                    await _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload));
+
                 RebuildPostseasonFromCache();
 
                 StatusMessage = $"{_navState.SelectedYear} projections";
@@ -161,14 +171,13 @@ namespace SaturdayPulse.ViewModels
             catch (Exception ex)
             {
                 StatusMessage = $"Failed to load game data. Error: {ex.Message}";
-                EmptyMessage = "Failed to load game data. Error: {ex.Message}";
+                EmptyMessage = "Failed to load game data.";
             }
             finally
             {
                 IsBusy = false;
             }
         }
-
         // ── Build Bowls + Playoffs from cached schedule ───────────────────
 
         private void RebuildPostseasonFromCache()
@@ -193,7 +202,7 @@ namespace SaturdayPulse.ViewModels
             };
 
             var playoffRounds = allGames
-                .Where(g => g.SeasonType == "playoff")
+                .Where(g => g.SeasonType == "playoff" && g.Year >= 2014)
                 .GroupBy(g => g.Week)
                 .OrderBy(g => g.Key)
                 .Select(weekGrp =>
@@ -244,7 +253,7 @@ namespace SaturdayPulse.ViewModels
                 return d.AddDays(daysToSat).Date;
             }
 
-            return bowlGames
+            var  weekendGroups = bowlGames
                 .GroupBy(g =>
                 {
                     var d = g.GameDate.ToDateTime();
@@ -260,20 +269,31 @@ namespace SaturdayPulse.ViewModels
                         .GroupBy(g => g.GroupHeader)
                         .OrderBy(g =>
                         {
-                            var first = g.First().GameDate.ToDateTime();
-                            return first ?? DateTime.MaxValue;
+                            try
+                            {
+                                var first = g.FirstOrDefault()?.GameDate?.ToDateTime();
+                                return first ?? DateTime.MaxValue;
+                            }
+                            catch
+                            {
+                                return DateTime.MaxValue;
+                            }
                         })
                         .Select(dayGrp => new BowlDayGroup(dayGrp.Key, dayGrp.ToList()))
                         .ToList();
                     return new BowlWeekendGroup(label, days);
                 })
                 .ToList();
+
+            return weekendGroups;
         }
 
         // ── Conference filter (Championship view only) ────────────────────
 
         private void ApplyConferenceFilter()
         {
+            Championships.Clear();
+
             // SelectedConference now stores Abbreviation directly — no DisplayToAbbr needed
             var conf     = _navState.SelectedConference;
             var confAbbr = conf == "All" ? null : conf;
