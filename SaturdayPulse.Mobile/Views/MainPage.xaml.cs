@@ -92,7 +92,7 @@ namespace SaturdayPulse.Views
             // builds the week list, then fires FilterChanged(Year).
             // Only after that completes do we load the schedule page,
             // so the cache is guaranteed hot when ScheduleViewModel reads it.
-            MainThread.BeginInvokeOnMainThread(async () =>
+            _ = Task.Run(async () =>
             {
                 await _vm.InitializeAsync();
 
