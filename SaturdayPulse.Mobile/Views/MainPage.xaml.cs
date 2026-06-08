@@ -26,6 +26,7 @@ namespace SaturdayPulse.Views
             PostseasonPage postseasonPage,
             SandboxPage sandboxPage)
         {
+            System.Diagnostics.Debug.WriteLine("[Init] MAINPAGE CONSTRUCTOR STARTED");
             InitializeComponent();
 
             _navState        = navState;
@@ -92,12 +93,22 @@ namespace SaturdayPulse.Views
             // builds the week list, then fires FilterChanged(Year).
             // Only after that completes do we load the schedule page,
             // so the cache is guaranteed hot when ScheduleViewModel reads it.
+            System.Diagnostics.Debug.WriteLine("[Init] MAINPAGE CONSTRUCTOR COMPLETE");
             _ = Task.Run(async () =>
             {
-                await _vm.InitializeAsync();
-
-                if (_schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded)
-                    await svm.LoadDataAsync();
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine("[Init] Task.Run started");
+                    await _vm.InitializeAsync();
+                    System.Diagnostics.Debug.WriteLine("[Init] InitializeAsync complete");
+                    if (_schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded)
+                        await MainThread.InvokeOnMainThreadAsync(async () => await svm.LoadDataAsync());
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Init] EXCEPTION: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[Init] STACK: {ex.StackTrace}");
+                }
             });
         }
 
@@ -229,7 +240,7 @@ namespace SaturdayPulse.Views
         {
             MainThread.BeginInvokeOnMainThread(async () =>
             {
-                Console.WriteLine($"[SyncPage] index={index}");
+                System.Diagnostics.Debug.WriteLine($"[SyncPage] index={index}");
 
                 for (int i = 0; i < PageHost.Count; i++)
                     if (PageHost.Children[i] is VisualElement ve)
