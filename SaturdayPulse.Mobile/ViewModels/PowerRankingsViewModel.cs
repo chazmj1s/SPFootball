@@ -31,17 +31,17 @@ namespace SaturdayPulse.ViewModels
             _apiService = apiService;
             _navState   = navState;
 
-            LoadDataCommand       = new Command(async () => await LoadDataAsync());
-            RefreshCommand        = new Command(async () => await LoadDataAsync());
-            ApplyFilterCommand    = new Command<string>(ApplyFilter);
-            ApplySortCommand      = new Command<RankingSort>(ApplySort);
-            SortColumnCommand     = new Command<string>(SortByColumn);
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
+            RefreshCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
+            ApplyFilterCommand = new Microsoft.Maui.Controls.Command<string>(ApplyFilter);
+            ApplySortCommand      = new Microsoft.Maui.Controls.Command<RankingSort>(ApplySort);
+            SortColumnCommand     = new Microsoft.Maui.Controls.Command<string>(SortByColumn);
 
-            SelectFilterCommand = new Command(async () =>
+            SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var options = new List<string> { "All", "Top 25", "── Tier ──", "P4", "G5", "Independent" };
-                var result = await Shell.Current.DisplayActionSheet(
-                    "Filter", "Cancel", null, options.ToArray());
+                
+                var result = await Shell.Current.DisplayActionSheet("Filter", "Cancel", null, options.ToArray());
 
                 if (result != null && result != "Cancel" && !result.StartsWith("──"))
                 {
@@ -50,13 +50,13 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
-            ToggleStatsExpandCommand = new Command<TeamRanking>(t =>
+            ToggleStatsExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
             {
                 if (t == null) return;
                 t.IsStatsExpanded = !t.IsStatsExpanded;
             });
 
-            ToggleTrendExpandCommand = new Command<TeamRanking>(async t =>
+            ToggleTrendExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
             {
                 if (t == null) return;
 
@@ -79,38 +79,39 @@ namespace SaturdayPulse.ViewModels
                 t.IsTrendExpanded = !t.IsTrendExpanded;
             });
 
-            ToggleArcExpandCommand = new Command<TeamRanking>(async t =>
+            ToggleArcExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
             {
                 if (t == null) return;
-
-                if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
+                _ = Task.Run(async () =>
                 {
-                    var data = await _apiService.GetTeamSeasonArcAsync(
-                        t.TeamID, _navState.SelectedYear);
-
-                    if (data?.Weeks?.Count > 0)
-                        t.SeasonArcWeeks = data.Weeks;
-                }
-
-                t.IsArcExpanded = !t.IsArcExpanded;
+                    if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
+                    {
+                        var data = await _apiService.GetTeamSeasonArcAsync(
+                            t.TeamID, _navState.SelectedYear);
+                        if (data?.Weeks?.Count > 0)
+                            t.SeasonArcWeeks = data.Weeks;
+                    }
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        t.IsArcExpanded = !t.IsArcExpanded);
+                });
             });
 
-            ToggleScheduleExpandCommand = new Command<TeamRanking>(async t =>
+            ToggleScheduleExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
             {
                 if (t == null) return;
-
-                if (!t.IsScheduleExpanded && t.ScheduleGames == null)
+                _ = Task.Run(async () =>
                 {
-                    var data = await _apiService.GetTeamScheduleAsync(
-                        t.TeamID, _navState.SelectedYear);
-
-                    if (data?.Games?.Count > 0)
-                        t.ScheduleGames = data.Games;
-                }
-
-                t.IsScheduleExpanded = !t.IsScheduleExpanded;
+                    if (!t.IsScheduleExpanded && t.ScheduleGames == null)
+                    {
+                        var data = await _apiService.GetTeamScheduleAsync(
+                            t.TeamID, _navState.SelectedYear);
+                        if (data?.Games?.Count > 0)
+                            t.ScheduleGames = data.Games;
+                    }
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        t.IsScheduleExpanded = !t.IsScheduleExpanded);
+                });
             });
-
 
             _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
