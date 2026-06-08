@@ -26,7 +26,6 @@ namespace SaturdayPulse.Views
             PostseasonPage postseasonPage,
             SandboxPage sandboxPage)
         {
-            System.Diagnostics.Debug.WriteLine("[Init] MAINPAGE CONSTRUCTOR STARTED");
             InitializeComponent();
 
             _navState        = navState;
@@ -45,19 +44,19 @@ namespace SaturdayPulse.Views
             for (int i = 0; i < labels.Length; i++)
                 _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == 0 });
 
-            // Add pages to AbsoluteLayout — order matches labels[] above.
+            // Add pages to AbsoluteLayout — order matches labels[] above
             AddPageToHost(_schedulePage);    // 0 — Scores
             AddPageToHost(_rankingsPage);    // 1 — Rankings
             AddPageToHost(_postseasonPage);  // 2 — Postseason
             AddPageToHost(_sandboxPage);     // 3 — Sandbox
             AddPageToHost(_SettingsPage);    // 4 — Settings
 
-            // ── Wire loading state FIRST, before any load fires ──
+            // Wire loading state FIRST before any load fires
             WireLoadingState(_schedulePage);
             WireLoadingState(_rankingsPage);
             WireLoadingState(_postseasonPage);
 
-            // ── ViewModel + nav state subscriptions ──
+            // Forward nav state changes
             _vm.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(MainViewModel.SelectedIndex))
@@ -75,20 +74,33 @@ namespace SaturdayPulse.Views
             {
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
                 {
-                    // Reset HasLoaded so each page reloads when next visited.
-                    // FilterChanged will have already fired before SelectedYear,
-                    // so ViewModels are already rebuilding — this just cleans state.
                     ResetAllPages();
                     SyncPage(_vm.SelectedIndex);
                 }
             };
 
-            // ── Show the initial page (visibility only, no lazy-load call) ──
+            // Show initial page — visibility only, no load
             for (int i = 0; i < PageHost.Count; i++)
                 if (PageHost.Children[i] is VisualElement ve)
                     ve.IsVisible = i == 0;
 
-            _ = Task.Run(async () => await _vm.InitializeAsync());
+            // Kick off initial Schedule load on a background thread.
+            // HTTP call (Azure cold start) never touches the main thread.
+            // Other tabs lazy-load via SyncPage on first tap.
+            if (_schedulePage.BindingContext is ScheduleViewModel schedVm)
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await schedVm.LoadDataAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Startup] LoadDataAsync failed: {ex.Message}");
+                    }
+                });
+            }
         }
 
         // ── Loading state wiring ──────────────────────────────────────────
@@ -225,6 +237,7 @@ namespace SaturdayPulse.Views
                     if (PageHost.Children[i] is VisualElement ve)
                         ve.IsVisible = i == index;
 
+                // Lazy load on first visit — Task.Run keeps HTTP calls off main thread
                 switch (index)
                 {
                     case 0 when _schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded:
