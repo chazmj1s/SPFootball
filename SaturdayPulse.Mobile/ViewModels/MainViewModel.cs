@@ -128,8 +128,22 @@ namespace SaturdayPulse.ViewModels
                 }
             };
 
-            // Populate conference dropdown and week list for the default year on start
-            Task.Run(async () => await ApplyYearChangeAsync(_navState.SelectedYear, isStartup: true));
+        }
+
+        // ── Startup initialization ────────────────────────────────────────
+
+        public bool HasInitialized { get; private set; }
+
+        /// <summary>
+        /// Called once by MainPage after UI is ready.
+        /// Pre-warms cache + conferences, builds week list, fires FilterChanged.
+        /// Kept out of the constructor to avoid blocking the main thread during launch.
+        /// </summary>
+        public async Task InitializeAsync()
+        {
+            if (HasInitialized) return;
+            HasInitialized = true;
+            await ApplyYearChangeAsync(_navState.SelectedYear, isStartup: true);
         }
 
         // ── Year change orchestration ─────────────────────────────────────

@@ -52,9 +52,6 @@ namespace SaturdayPulse.Views
             AddPageToHost(_SettingsPage);    // 4 — Settings
 
             // ── Wire loading state FIRST, before any load fires ──
-            // This must happen before SchedulePage's LoadDataAsync runs,
-            // otherwise the IsBusy=true that kicks off the load slips past
-            // an un-subscribed event handler and the indicator never starts.
             WireLoadingState(_schedulePage);
             WireLoadingState(_rankingsPage);
             WireLoadingState(_postseasonPage);
@@ -77,22 +74,28 @@ namespace SaturdayPulse.Views
             {
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
                 {
+                    // Reset HasLoaded so each page reloads when next visited.
+                    // FilterChanged will have already fired before SelectedYear,
+                    // so ViewModels are already rebuilding — this just cleans state.
                     ResetAllPages();
                     SyncPage(_vm.SelectedIndex);
                 }
             };
 
             // ── Show the initial page (visibility only, no lazy-load call) ──
-            // We don't go through SyncPage here because SyncPage would also
-            // fire a lazy-load, which would race with the explicit kickoff below.
             for (int i = 0; i < PageHost.Count; i++)
                 if (PageHost.Children[i] is VisualElement ve)
                     ve.IsVisible = i == 0;
 
-            // ── Kick off initial Schedule load ──
-            // Other tabs lazy-load on first tap via SyncPage.
+            // ── Kick off startup initialization ──
+            // MainViewModel.InitializeAsync pre-warms the cache + conferences,
+            // builds the week list, then fires FilterChanged(Year).
+            // Only after that completes do we load the schedule page,
+            // so the cache is guaranteed hot when ScheduleViewModel reads it.
             MainThread.BeginInvokeOnMainThread(async () =>
             {
+                await _vm.InitializeAsync();
+
                 if (_schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded)
                     await svm.LoadDataAsync();
             });
@@ -112,7 +115,7 @@ namespace SaturdayPulse.Views
         private void WireLoadingState(ContentPage page)
         {
             if (page.BindingContext is not INotifyPropertyChanged npc) return;
-            if (!_wiredViewModels.Add(npc)) return; // already subscribed
+            if (!_wiredViewModels.Add(npc)) return;
 
             npc.PropertyChanged += (s, e) =>
             {
@@ -228,12 +231,10 @@ namespace SaturdayPulse.Views
             {
                 Console.WriteLine($"[SyncPage] index={index}");
 
-                // Toggle visibility
                 for (int i = 0; i < PageHost.Count; i++)
                     if (PageHost.Children[i] is VisualElement ve)
                         ve.IsVisible = i == index;
 
-                // Lazy load on first visit
                 switch (index)
                 {
                     case 0 when _schedulePage.BindingContext   is ScheduleViewModel      svm && !svm.HasLoaded:
@@ -242,7 +243,6 @@ namespace SaturdayPulse.Views
                         await rvm.LoadDataAsync(); break;
                     case 2 when _postseasonPage.BindingContext is PostseasonViewModel    pvm && !pvm.HasLoaded:
                         await pvm.LoadDataAsync(); break;
-                    // Sandbox (index 3) has no eager load — user picks teams to trigger
                     case 4 when _SettingsPage.BindingContext   is SettingsViewModel      fvm && !fvm.HasLoaded:
                         await fvm.LoadDataAsync(); break;
                 }
