@@ -10,9 +10,10 @@ namespace SaturdayPulse.ViewModels
 {
     /// <summary>
     /// Owns year, week, and conference selection for the entire app.
-    /// On year change: pre-warms cache + conferences in parallel, extracts
-    /// weeks, applies startup defaults, then fires FilterChanged(Year) by
-    /// setting SelectedYear — all ViewModels rebuild from a hot cache.
+    /// Nav state changes fire on the main thread as always.
+    /// HTTP calls inside LoadDataAsync methods are wrapped in Task.Run.
+    /// No startup initialization here — MainPage handles that directly
+    /// by calling ScheduleViewModel.LoadDataAsync via Task.Run.
     /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
@@ -45,7 +46,6 @@ namespace SaturdayPulse.ViewModels
                 if (SelectedIndex > 0) SelectedIndex--;
             });
 
-            // ── Year change — MainViewModel orchestrates the full flow ────
             SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var years = Enumerable.Range(1965, DateTime.Now.Year - 1965 + 1)
@@ -59,14 +59,12 @@ namespace SaturdayPulse.ViewModels
                 if (result == null || result == "Cancel" || !int.TryParse(result, out int year))
                     return;
 
-                // Fire and forget — keeps main thread free during Azure calls
-                _ = Task.Run(async () => await ApplyYearChangeAsync(year));
+                await ApplyYearChangeAsync(year);
             });
 
-            // ── Week — owned here, delegated to navState ─────────────────
             SelectWeekCommand = new Microsoft.Maui.Controls.Command<int>(week =>
             {
-                _navState.SelectedWeek = week;  // fires FilterChanged(Week)
+                _navState.SelectedWeek = week;
             });
 
             PreviousWeekCommand = new Microsoft.Maui.Controls.Command(() =>
@@ -82,7 +80,6 @@ namespace SaturdayPulse.ViewModels
                     _navState.SelectedWeek = _navState.Weeks[idx + 1].Week;
             });
 
-            // ── Conference — owned here, delegated to navState ────────────
             SelectConferenceCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var available = _navState.AvailableConferences.Any()
@@ -101,7 +98,7 @@ namespace SaturdayPulse.ViewModels
 
                 if (result == "All")
                 {
-                    _navState.SelectedConference = "All";   // fires FilterChanged(Conference)
+                    _navState.SelectedConference = "All";
                     return;
                 }
 
@@ -109,7 +106,7 @@ namespace SaturdayPulse.ViewModels
                 _navState.SelectedConference = picked?.Abbreviation ?? result;
             });
 
-            // Forward nav state property changes to XAML bindings
+            // Forward nav state changes to XAML bindings
             _navState.PropertyChanged += (s, e) =>
             {
                 switch (e.PropertyName)
@@ -128,49 +125,28 @@ namespace SaturdayPulse.ViewModels
                         break;
                 }
             };
-
-        }
-
-        // ── Startup initialization ────────────────────────────────────────
-
-        public bool HasInitialized { get; private set; }
-
-        /// <summary>
-        /// Called once by MainPage after UI is ready.
-        /// Pre-warms cache + conferences, builds week list, fires FilterChanged.
-        /// Kept out of the constructor to avoid blocking the main thread during launch.
-        /// </summary>
-        public async Task InitializeAsync()
-        {
-            System.Diagnostics.Debug.WriteLine("[Init] InitializeAsync entered");
-            if (HasInitialized) return;
-            HasInitialized = true;
-            await ApplyYearChangeAsync(_navState.SelectedYear, isStartup: true);
         }
 
         // ── Year change orchestration ─────────────────────────────────────
 
-        private async Task ApplyYearChangeAsync(int year, bool isStartup = false)
+        /// <summary>
+        /// Called when user explicitly picks a new year.
+        /// HTTP calls wrapped in Task.Run to keep main thread free.
+        /// Not called on startup — MainPage handles that directly.
+        /// </summary>
+        private async Task ApplyYearChangeAsync(int year)
         {
-            System.Diagnostics.Debug.WriteLine($"[Init] ApplyYearChangeAsync start - thread: {Thread.CurrentThread.ManagedThreadId} - isMain: {MainThread.IsMainThread}");
+            // Cache reload on background thread
+            var games = await Task.Run(async () =>
+                await _cache.GetGamesForYearAsync(year, forceReload: true));
 
-            // 1. Pre-warm cache + refresh conference dropdown in parallel
-            var games = await _cache.GetGamesForYearAsync(year, forceReload: !isStartup);
-            System.Diagnostics.Debug.WriteLine($"[Init] Cache loaded - thread: {Thread.CurrentThread.ManagedThreadId} - isMain: {MainThread.IsMainThread}");
+            // Conference dropdown refresh on background thread
+            await Task.Run(async () => await RefreshConferencesAsync(year));
 
-            await RefreshConferencesAsync(year);
-            System.Diagnostics.Debug.WriteLine($"[Init] Conferences loaded - isMain: {MainThread.IsMainThread}");
-
-            // 2. Build week list from the loaded schedule
+            // Week list — SetWeeks marshals to main thread internally
             var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
             _navState.SetWeeks(weeks);
-            System.Diagnostics.Debug.WriteLine($"[Init] Weeks set - isMain: {MainThread.IsMainThread}");
 
-
-            System.Diagnostics.Debug.WriteLine($"[API] Set Weeks on NavState to: {_navState.SelectedWeek}");
-
-            // 3. Apply week + conference defaults (sets backing fields silently —
-            //    no FilterChanged fires here; we fire once below via SelectedYear)
             _navState.ApplyStartupDefaults(
                 games,
                 g => g.Week,
@@ -180,34 +156,17 @@ namespace SaturdayPulse.ViewModels
                     var dateStr = $"{g.GameDate} {year}";
                     return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
                 });
-            System.Diagnostics.Debug.WriteLine($"[Init] Defaults applied - isMain: {MainThread.IsMainThread}");
 
-            // 4. On year change (not startup), reset conference to saved default
-            if (!isStartup)
-            {
-                var defaultConf = _navState.DefaultConference;
-                // Set backing field directly — FilterChanged fires once below via SelectedYear
-                if (_navState.SelectedConference != defaultConf)
-                {
-                    // Use SetAvailableConferences to validate the default still exists
-                    // for this year; it resets to All if not
-                    var validDefault = _navState.AvailableConferences.Any(c =>
-                        string.Equals(c.Abbreviation, defaultConf, StringComparison.OrdinalIgnoreCase))
-                        ? defaultConf : "All";
+            // Validate conference still exists in new year
+            var validDefault = _navState.AvailableConferences.Any(c =>
+                string.Equals(c.Abbreviation, _navState.DefaultConference,
+                    StringComparison.OrdinalIgnoreCase))
+                ? _navState.DefaultConference : "All";
 
-                    // Write to backing field via property to get the OnPropertyChanged
-                    // but suppress the FilterChanged — SelectedYear fires it below
-                    _navState.SetConferenceSilent(validDefault);
-                }
-            }
+            _navState.SetConferenceSilent(validDefault);
 
-            System.Diagnostics.Debug.WriteLine($"[API] Set Conference on navState to: {_navState.SelectedConference}");
-
-
-            // 5. Fire FilterChanged(Year) — cache is hot, weeks/conference are set,
-            //    all ViewModels rebuild from correct state in one signal
-            if (!isStartup)
-                _navState.SelectedYear = year;  // fires FilterChanged(Year)
+            // Fire FilterChanged(Year) — all ViewModels rebuild from hot cache
+            _navState.SelectedYear = year;
         }
 
         private async Task RefreshConferencesAsync(int year)
