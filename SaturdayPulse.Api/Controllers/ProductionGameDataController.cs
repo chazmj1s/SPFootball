@@ -465,6 +465,14 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        [HttpGet("conferences/{year:int}")]
+        public async Task<IActionResult> GetConferencesForYear(int year, CancellationToken token)
+        {
+            var result = await gameDataService.GetConferencesForYearAsync(year, token);
+            return Ok(result);
+        }
+
+
         #endregion
 
         #region Teams and Rivalries

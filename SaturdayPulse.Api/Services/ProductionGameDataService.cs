@@ -10,30 +10,22 @@ namespace SaturdayPulse.Services
     /// endpoints. All legacy methods removed 2026-05-19 — use V2 equivalents in
     /// ProductionGameDataService_V2.cs.
     /// </summary>
-    public partial class ProductionGameDataService
+    public partial class ProductionGameDataService(
+        IUnitOfWork uow,
+        GamePredictionService predictionService,
+        ProjectionCacheService projectionCache,
+        WeeklyRankingsService weeklyRankingsService,
+        RollingAverageService rollingAverageService,
+        ConferenceTierService tierService,
+        ILogger<ProductionGameDataService> logger)
     {
-        private readonly IUnitOfWork                        _uow;
-        private readonly GamePredictionService              _predictionService;
-        private readonly ProjectionCacheService             _projectionCache;
-        private readonly WeeklyRankingsService              _weeklyRankingsService;
-        private readonly RollingAverageService              _rollingAverageService;
-        private readonly ILogger<ProductionGameDataService> _logger;
-
-        public ProductionGameDataService(
-            IUnitOfWork uow,
-            GamePredictionService predictionService,
-            ProjectionCacheService projectionCache,
-            WeeklyRankingsService weeklyRankingsService,
-            RollingAverageService rollingAverageService,
-            ILogger<ProductionGameDataService> logger)
-        {
-            _uow                   = uow;
-            _predictionService     = predictionService;
-            _projectionCache       = projectionCache;
-            _weeklyRankingsService = weeklyRankingsService;
-            _rollingAverageService = rollingAverageService;
-            _logger                = logger;
-        }
+        private readonly IUnitOfWork _uow = uow;
+        private readonly GamePredictionService _predictionService = predictionService;
+        private readonly ProjectionCacheService _projectionCache = projectionCache;
+        private readonly WeeklyRankingsService _weeklyRankingsService = weeklyRankingsService;
+        private readonly RollingAverageService _rollingAverageService = rollingAverageService;
+        private readonly ConferenceTierService _tierService = tierService;
+        private readonly ILogger<ProductionGameDataService> _logger = logger;
 
         // ── Predictions ──────────────────────────────────────────────────────────
 

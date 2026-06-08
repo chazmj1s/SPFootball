@@ -504,8 +504,6 @@ namespace SaturdayPulse.Services
             return total;
         }
 
-
-
         /// <summary>
         /// Fetches all conferences from CFBD and upserts into Conferences table.
         /// </summary>

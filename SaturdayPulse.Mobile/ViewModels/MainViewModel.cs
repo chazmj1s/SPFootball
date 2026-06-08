@@ -3,18 +3,32 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using SaturdayPulse.Helpers;
+using SaturdayPulse.Models;
 using SaturdayPulse.Services;
 
 namespace SaturdayPulse.ViewModels
 {
+    /// <summary>
+    /// Owns year, week, and conference selection for the entire app.
+    /// On year change: pre-warms cache + conferences in parallel, extracts
+    /// weeks, applies startup defaults, then fires FilterChanged(Year) by
+    /// setting SelectedYear — all ViewModels rebuild from a hot cache.
+    /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
         private readonly SharedNavigationStateService _navState;
+        private readonly GameDataApiService           _apiService;
+        private readonly GameDataCacheService         _cache;
         private int _selectedIndex = 0;
 
-        public MainViewModel(SharedNavigationStateService navState)
+        public MainViewModel(
+            SharedNavigationStateService navState,
+            GameDataApiService apiService,
+            GameDataCacheService cache)
         {
-            _navState = navState;
+            _navState   = navState;
+            _apiService = apiService;
+            _cache      = cache;
 
             SelectTabCommand = new Microsoft.Maui.Controls.Command<int>(idx =>
             {
@@ -31,6 +45,7 @@ namespace SaturdayPulse.ViewModels
                 if (SelectedIndex > 0) SelectedIndex--;
             });
 
+            // ── Year change — MainViewModel orchestrates the full flow ────
             SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var years = Enumerable.Range(1965, DateTime.Now.Year - 1965 + 1)
@@ -41,14 +56,16 @@ namespace SaturdayPulse.ViewModels
                 var result = await Shell.Current.DisplayActionSheet(
                     "Select Year", "Cancel", null, years);
 
-                if (result != null && result != "Cancel" && int.TryParse(result, out int year))
-                    _navState.SelectedYear = year;
+                if (result == null || result == "Cancel" || !int.TryParse(result, out int year))
+                    return;
+
+                await ApplyYearChangeAsync(year);
             });
 
+            // ── Week — owned here, delegated to navState ─────────────────
             SelectWeekCommand = new Microsoft.Maui.Controls.Command<int>(week =>
             {
-                Console.WriteLine($"[SelectWeek] week={week}");
-                _navState.SelectedWeek = week;
+                _navState.SelectedWeek = week;  // fires FilterChanged(Week)
             });
 
             PreviousWeekCommand = new Microsoft.Maui.Controls.Command(() =>
@@ -64,32 +81,114 @@ namespace SaturdayPulse.ViewModels
                     _navState.SelectedWeek = _navState.Weeks[idx + 1].Week;
             });
 
+            // ── Conference — owned here, delegated to navState ────────────
             SelectConferenceCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
+                var available = _navState.AvailableConferences.Any()
+                    ? _navState.AvailableConferences.ToList()
+                    : ConferenceHelper.OrderedConferences
+                        .Select(c => new ConferenceInfo { Name = c.Display, Abbreviation = c.Abbr, Tier = "" })
+                        .ToList();
+
                 var options = new List<string> { "All" };
-                options.AddRange(ConferenceHelper.OrderedConferences.Select(c => c.Display));
+                options.AddRange(available.Select(c => c.Name));
 
                 var result = await Shell.Current.DisplayActionSheet(
                     "Conference", "Cancel", null, options.ToArray());
 
-                if (result != null && result != "Cancel")
-                    _navState.SelectedConference = result;
+                if (result == null || result == "Cancel") return;
+
+                if (result == "All")
+                {
+                    _navState.SelectedConference = "All";   // fires FilterChanged(Conference)
+                    return;
+                }
+
+                var picked = available.FirstOrDefault(c => c.Name == result);
+                _navState.SelectedConference = picked?.Abbreviation ?? result;
             });
 
-            // Forward nav state changes to XAML bindings
+            // Forward nav state property changes to XAML bindings
             _navState.PropertyChanged += (s, e) =>
             {
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
-                    OnPropertyChanged(nameof(SelectedYear));
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedWeek))
+                switch (e.PropertyName)
                 {
-                    OnPropertyChanged(nameof(SelectedWeek));  // triggers scroll in MainPage
+                    case nameof(SharedNavigationStateService.SelectedYear):
+                        OnPropertyChanged(nameof(SelectedYear));
+                        break;
+                    case nameof(SharedNavigationStateService.SelectedWeek):
+                        OnPropertyChanged(nameof(SelectedWeek));
+                        break;
+                    case nameof(SharedNavigationStateService.SelectedConference):
+                        OnPropertyChanged(nameof(SelectedConference));
+                        break;
+                    case nameof(SharedNavigationStateService.ShowFavoritesFirst):
+                        OnPropertyChanged(nameof(ShowFavoritesFirst));
+                        break;
                 }
-                if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
-                    OnPropertyChanged(nameof(SelectedConference));
-                if (e.PropertyName == nameof(SharedNavigationStateService.ShowFavoritesFirst))
-                    OnPropertyChanged(nameof(ShowFavoritesFirst));
             };
+
+            // Populate conference dropdown and week list for the default year on start
+            Task.Run(async () => await ApplyYearChangeAsync(_navState.SelectedYear, isStartup: true));
+        }
+
+        // ── Year change orchestration ─────────────────────────────────────
+
+        private async Task ApplyYearChangeAsync(int year, bool isStartup = false)
+        {
+            // 1. Pre-warm cache + refresh conference dropdown in parallel
+            var cacheTask       = _cache.GetGamesForYearAsync(year, forceReload: !isStartup);
+            var conferencesTask = RefreshConferencesAsync(year);
+            await Task.WhenAll(cacheTask, conferencesTask);
+
+            var games = cacheTask.Result;
+
+            // 2. Build week list from the loaded schedule
+            var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
+            _navState.SetWeeks(weeks);
+
+            // 3. Apply week + conference defaults (sets backing fields silently —
+            //    no FilterChanged fires here; we fire once below via SelectedYear)
+            _navState.ApplyStartupDefaults(
+                games,
+                g => g.Week,
+                g =>
+                {
+                    if (string.IsNullOrWhiteSpace(g.GameDate)) return null;
+                    var dateStr = $"{g.GameDate} {year}";
+                    return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
+                });
+
+            // 4. On year change (not startup), reset conference to saved default
+            if (!isStartup)
+            {
+                var defaultConf = _navState.DefaultConference;
+                // Set backing field directly — FilterChanged fires once below via SelectedYear
+                if (_navState.SelectedConference != defaultConf)
+                {
+                    // Use SetAvailableConferences to validate the default still exists
+                    // for this year; it resets to All if not
+                    var validDefault = _navState.AvailableConferences.Any(c =>
+                        string.Equals(c.Abbreviation, defaultConf, StringComparison.OrdinalIgnoreCase))
+                        ? defaultConf : "All";
+
+                    // Write to backing field via property to get the OnPropertyChanged
+                    // but suppress the FilterChanged — SelectedYear fires it below
+                    _navState.SetConferenceSilent(validDefault);
+                }
+            }
+
+            // 5. Fire FilterChanged(Year) — cache is hot, weeks/conference are set,
+            //    all ViewModels rebuild from correct state in one signal
+            if (!isStartup)
+                _navState.SelectedYear = year;  // fires FilterChanged(Year)
+        }
+
+        private async Task RefreshConferencesAsync(int year)
+        {
+            var conferences = await _apiService.GetConferencesForYearAsync(year);
+            if (conferences != null)
+                _navState.SetAvailableConferences(conferences);
         }
 
         // ── Tab nav ───────────────────────────────────────────────────────

@@ -38,18 +38,21 @@ namespace SaturdayPulse.Services
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
             var teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
 
-            string GetConfAbbr(Teams? t)
-            {
-                if (t?.ConferenceId == null) return string.Empty;
-                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                return conf?.Abbreviation ?? string.Empty;
-            }
+            // Year-aware conf + tier for every team in this schedule — one query
+            var allTeamIdsForConf = games
+                .SelectMany(g => new[] { g.HomeId ?? 0, g.AwayId ?? 0 })
+                .Where(id => id > 0)
+                .Distinct();
 
-            string GetConfName(Teams? t)
+            var confTierByTeamId = await _tierService.GetConfAndTierBatchAsync(
+                allTeamIdsForConf, targetYear, token);
+
+            // Safe lookup with static fallback for teams missing a history row
+            (string abbr, string tier) ConfTier(int? teamId, string? teamName = null)
             {
-                if (t?.ConferenceId == null) return string.Empty;
-                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                return conf?.Name ?? string.Empty;
+                if (teamId.HasValue && confTierByTeamId.TryGetValue(teamId.Value, out var ct))
+                    return ct;
+                return (string.Empty, ConferenceTierService.GetTierStatic(null, teamName));
             }
 
             var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
@@ -103,11 +106,15 @@ namespace SaturdayPulse.Services
                 teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
                 teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
 
+                var (homeConfAbbr, homeTier) = ConfTier(g.HomeId, g.HomeName);
+                var (awayConfAbbr, awayTier) = ConfTier(g.AwayId, g.AwayName);
+                
                 var homePoints = g.HomePoints ?? 0;
                 var awayPoints = g.AwayPoints ?? 0;
                 var isPlayed = homePoints > 0 || awayPoints > 0;
                 var actualOU = homePoints + awayPoints;
                 char location = g.NeutralSite == true ? 'N' : 'H';
+                bool homeWon = homePoints >= awayPoints;
 
                 double? projHome = null, projAway = null;
                 if (allProjections.TryGetValue(g.GameId, out var pred))
@@ -197,14 +204,14 @@ namespace SaturdayPulse.Services
                     GameDay = g.GameDay,
                     HomeName = g.HomeName,
                     HomeId = g.HomeId,
-                    HomeConf = GetConfAbbr(homeTeam),
-                    HomeTier = RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName),
+                    HomeConf = homeConfAbbr,
+                    HomeTier = homeTier,
                     HomePoints = homePoints,
                     HomeProjScore = projHome,
                     AwayName = g.AwayName,
                     AwayId = g.AwayId,
-                    AwayConf = GetConfAbbr(awayTeam),
-                    AwayTier = RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName),
+                    AwayConf = awayConfAbbr,
+                    AwayTier = awayTier,
                     AwayPoints = awayPoints,
                     AwayProjScore = projAway,
                     Location = location,
@@ -220,24 +227,59 @@ namespace SaturdayPulse.Services
                     WinnerName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
                     WinnerShortName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
                     WinnerId = homePoints >= awayPoints ? g.HomeId : g.AwayId,
-                    WinnerConf = homePoints >= awayPoints ? GetConfAbbr(homeTeam) : GetConfAbbr(awayTeam),
-                    WinnerTier = homePoints >= awayPoints
-                                        ? RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName)
-                                        : RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName),
+                    WinnerConf = homeWon ? homeConfAbbr : awayConfAbbr,
+                    WinnerTier = homeWon ? homeTier : awayTier,
                     WPoints = homePoints >= awayPoints ? homePoints : awayPoints,
                     LoserName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
                     LoserShortName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
                     LoserId = homePoints >= awayPoints ? g.AwayId : g.HomeId,
-                    LoserConf = homePoints >= awayPoints ? GetConfAbbr(awayTeam) : GetConfAbbr(homeTeam),
-                    LoserTier = homePoints >= awayPoints
-                                        ? RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName)
-                                        : RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName),
+                    LoserConf = homeWon ? awayConfAbbr : homeConfAbbr,
+                    LoserTier = homeWon ? awayTier : homeTier,
                     LPoints = homePoints >= awayPoints ? awayPoints : homePoints,
                 };
             }).ToList();
 
             return new ScheduleResult(results);
         }
+
+        /// <summary>
+        /// Returns the distinct FBS conferences that had at least one team active
+        /// in the given year, ordered P4 → G5, then alphabetically within tier.
+        ///
+        /// Used to populate the conference filter dropdown on year change so that
+        /// historical conferences (SWC, Big 8, Pac-10, Big East) appear in the
+        /// correct years rather than the static current-era list.
+        /// </summary>
+        public async Task<List<ConferenceInfo>> GetConferencesForYearAsync(
+            int year, CancellationToken token = default)
+        {
+            // Each repository touches only its own table
+            var confIdByTeamId = await _uow.TeamsConferenceHistory
+                .GetConferenceIdsByYearAsync(year, token);
+
+            var confById = await _uow.Conferences.GetDictionaryAsync(token);
+
+            var activeConfIds = confIdByTeamId.Values.Distinct().ToHashSet();
+
+            return activeConfIds
+                .Where(id => confById.ContainsKey(id))
+                .Select(id =>
+                {
+                    var c = confById[id];
+                    var tier = _tierService.ClassifyConference(c.ConferenceId, c.Classification, year);
+                    return new ConferenceInfo
+                    {
+                        Name = c.Name ?? string.Empty,
+                        Abbreviation = c.Abbreviation ?? string.Empty,
+                        Tier = tier
+                    };
+                })
+                .Where(c => c.Tier is "P4" or "G5")    // FBS only — FCS/DII/DIII are noise
+                .OrderBy(c => c.Tier == "P4" ? 0 : 1)  // P4 first
+                .ThenBy(c => c.Name)
+                .ToList();
+        }
+
 
 
         // ── Teams and Rivalries ──────────────────────────────────────────────────
@@ -894,26 +936,25 @@ namespace SaturdayPulse.Services
             {
                 var targetYear = year ?? DateTime.Now.Year;
                 var Teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
-                var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
 
-                string ConfName(Teams? t)
-                {
-                    if (t?.ConferenceId == null) return string.Empty;
-                    confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                    return conf?.Name ?? string.Empty;
-                }
+                // Year-aware Name + Abbreviation + Tier for every known team — one batch
+                var confDataByTeamId = await _tierService.GetConfDataBatchAsync(
+                    Teams.Keys, targetYear, token);
 
-                string ConfAbbr(Teams? t)
+                // Safe lookup with static fallback for teams missing a history row
+                ConferenceTierService.ConferenceData ConfData(int? teamId, string? teamName = null)
                 {
-                    if (t?.ConferenceId == null) return string.Empty;
-                    confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                    return conf?.Abbreviation ?? string.Empty;
+                    if (teamId.HasValue && confDataByTeamId.TryGetValue(teamId.Value, out var cd))
+                        return cd;
+                    var staticTier = ConferenceTierService.GetTierStatic(null, teamName);
+                    return new ConferenceTierService.ConferenceData(string.Empty, string.Empty, staticTier);
                 }
 
                 if (throughWeek.HasValue)
                 {
+                    var lookupWeek = Math.Max(0, throughWeek.Value - 1);
                     var weekly = await _uow.WeeklyRankings.GetByYearAndWeekAsync(
-                        targetYear, throughWeek.Value, token);
+                        targetYear, lookupWeek, token);
 
                     if (!weekly.Any())
                         throw new KeyNotFoundException(
@@ -941,17 +982,16 @@ namespace SaturdayPulse.Services
                             historyByTeam.TryGetValue(wr.TeamID, out var history);
                             history ??= [];
 
-                            var confName = ConfName(t);
-                            var confAbbr = ConfAbbr(t);
+                            var conf = ConfData(wr.TeamID, t?.TeamName);
 
                             return new PowerRankingRowResponse
                             {
                                 TeamID = wr.TeamID,
                                 TeamName = t?.TeamName,
-                                Conference = confName,
-                                ConferenceAbbr = confAbbr,
+                                Conference = conf.Name,
+                                ConferenceAbbr = conf.Abbreviation,
                                 Division = t?.Division,
-                                Tier = RatingCalculator.GetConferenceTier(confName, t?.TeamName),
+                                Tier = conf.Tier,
                                 OverallRank = wr.OverallRank,
                                 TierRank = wr.TierRank,
                                 Ranking = (double?)wr.Ranking,
@@ -991,26 +1031,23 @@ namespace SaturdayPulse.Services
                         .Select(tr =>
                         {
                             Teams.TryGetValue(tr.TeamID, out var t);
-                            var confName = ConfName(t);
-                            var confAbbr = ConfAbbr(t);
+                            var conf = ConfData(tr.TeamID, t?.TeamName);
                             return new
                             {
                                 TeamRecord = tr,
                                 Team = t,
-                                ConfName = confName,
-                                ConfAbbr = confAbbr,
-                                Tier = RatingCalculator.GetConferenceTier(confName, t?.TeamName)
+                                Conf = conf
                             };
                         })
                         .OrderByDescending(t => t.TeamRecord.Ranking)
                         .ToList();
 
                     var withOverallRank = withTiers
-                        .Select((t, i) => new { t.TeamRecord, t.Team, t.ConfName, t.ConfAbbr, t.Tier, OverallRank = i + 1 })
+                        .Select((t, i) => new { t.TeamRecord, t.Team, t.Conf, OverallRank = i + 1 })
                         .ToList();
 
                     var tierRankLookup = new Dictionary<int, int>();
-                    foreach (var tierGroup in withOverallRank.GroupBy(t => t.Tier))
+                    foreach (var tierGroup in withOverallRank.GroupBy(t => t.Conf.Tier))
                     {
                         var tieredTeams = tierGroup
                             .OrderByDescending(t => t.TeamRecord.Ranking)
@@ -1025,10 +1062,10 @@ namespace SaturdayPulse.Services
                         {
                             TeamID = t.TeamRecord.TeamID,
                             TeamName = t.Team?.TeamName ?? t.TeamRecord.Teams?.TeamName,
-                            Conference = t.ConfName,
-                            ConferenceAbbr = t.ConfAbbr,
+                            Conference = t.Conf.Name,
+                            ConferenceAbbr = t.Conf.Abbreviation,
                             Division = t.Team?.Division,
-                            Tier = t.Tier,
+                            Tier = t.Conf.Tier,
                             OverallRank = t.OverallRank,
                             TierRank = tierRankLookup[t.TeamRecord.TeamID],
                             Ranking = (double?)t.TeamRecord.Ranking,
@@ -1046,8 +1083,10 @@ namespace SaturdayPulse.Services
             {
                 Console.WriteLine($"Exception: {ex.Message}");
             }
-                return new PowerRankingsResult(false, new List<PowerRankingRowResponse>());
-            }
+
+            return new PowerRankingsResult(false, new List<PowerRankingRowResponse>());
+        }
+
 
         public async Task<TeamSeasonArcResult> GetTeamSeasonArcAsync(
             int teamId, int year, CancellationToken token = default)
@@ -1265,18 +1304,21 @@ namespace SaturdayPulse.Services
 
             if (games.Count == 0) return new ScheduleResult(Array.Empty<object>());
 
-            string GetConfAbbr(SaturdayPulse.Models.Teams? t)
-            {
-                if (t?.ConferenceId == null) return string.Empty;
-                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                return conf?.Abbreviation ?? string.Empty;
-            }
+            // Year-aware conf + tier for every team in this schedule — one query
+            var allTeamIdsForConf = games
+                .SelectMany(g => new[] { g.HomeId ?? 0, g.AwayId ?? 0 })
+                .Where(id => id > 0)
+                .Distinct();
 
-            string GetConfName(SaturdayPulse.Models.Teams? t)
+            var confTierByTeamId = await _tierService.GetConfAndTierBatchAsync(
+                allTeamIdsForConf, targetYear, token);
+
+            // Safe lookup with static fallback for teams missing a history row
+            (string abbr, string tier) ConfTier(int? teamId, string? teamName = null)
             {
-                if (t?.ConferenceId == null) return string.Empty;
-                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                return conf?.Name ?? string.Empty;
+                if (teamId.HasValue && confTierByTeamId.TryGetValue(teamId.Value, out var ct))
+                    return ct;
+                return (string.Empty, ConferenceTierService.GetTierStatic(null, teamName));
             }
 
             var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
@@ -1286,11 +1328,15 @@ namespace SaturdayPulse.Services
                 teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
                 teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
 
+                var (homeConfAbbr, homeTier) = ConfTier(g.HomeId, g.HomeName);
+                var (awayConfAbbr, awayTier) = ConfTier(g.AwayId, g.AwayName);
+                
                 var homePoints = g.HomePoints ?? 0;
                 var awayPoints = g.AwayPoints ?? 0;
                 var isPlayed   = homePoints > 0 || awayPoints > 0;
                 var actualOU   = homePoints + awayPoints;
                 char location  = g.NeutralSite == true ? 'N' : 'H';
+                bool homeWon = homePoints >= awayPoints;
 
                 double? projHome = null, projAway = null;
                 if (allProjections.TryGetValue(g.GameId, out var pred))
@@ -1311,14 +1357,14 @@ namespace SaturdayPulse.Services
                     GameDay       = g.GameDay,
                     HomeName      = g.HomeName,
                     HomeId        = g.HomeId,
-                    HomeConf      = GetConfAbbr(homeTeam),
-                    HomeTier      = RatingCalculator.GetConferenceTier(GetConfName(homeTeam), g.HomeName),
+                    HomeConf      = homeConfAbbr,
+                    HomeTier      = homeTier,
                     HomePoints    = homePoints,
                     HomeProjScore = projHome,
                     AwayName      = g.AwayName,
                     AwayId        = g.AwayId,
-                    AwayConf      = GetConfAbbr(awayTeam),
-                    AwayTier      = RatingCalculator.GetConferenceTier(GetConfName(awayTeam), g.AwayName),
+                    AwayConf      = awayConfAbbr,
+                    AwayTier      = awayTier,
                     AwayPoints    = awayPoints,
                     AwayProjScore = projAway,
                     Location      = location,
