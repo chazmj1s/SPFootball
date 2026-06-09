@@ -21,7 +21,8 @@ namespace SaturdayPulse.Services
         /// <summary>
         /// Gets power rankings for a specific year
         /// </summary>
-        public async Task<List<Models.TeamRanking>?> GetPowerRankingsAsync(int? year = null, int? throughWeek = null)
+        public async Task<List<Models.TeamRanking>?> GetPowerRankingsAsync(
+            int? year = null, int? throughWeek = null)
         {
             try
             {
@@ -33,9 +34,13 @@ namespace SaturdayPulse.Services
                 var url = $"powerrankings/v2?year={currentYear}";
                 if (throughWeek.HasValue)
                     url += $"&throughWeek={throughWeek}";
+
                 System.Diagnostics.Debug.WriteLine($"[API] Full URL: {url}");
 
-                var response = await _httpClient.GetAsync(url);
+                // Stream directly — avoids double allocation (string + object graph)
+                using var response = await _httpClient.GetAsync(
+                    url, HttpCompletionOption.ResponseHeadersRead);
+
                 System.Diagnostics.Debug.WriteLine($"[API] Response Status: {response.StatusCode}");
 
                 if (!response.IsSuccessStatusCode)
@@ -45,16 +50,23 @@ namespace SaturdayPulse.Services
                     throw new HttpRequestException($"API returned {response.StatusCode}");
                 }
 
-                var jsonContent = await response.Content.ReadAsStringAsync();
-                System.Diagnostics.Debug.WriteLine($"[API] Response length: {jsonContent.Length} characters");
-                System.Diagnostics.Debug.WriteLine($"[API] First 500 chars: {(jsonContent.Length > 500 ? jsonContent.Substring(0, 500) : jsonContent)}");
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
 
-                var rankings = JsonSerializer.Deserialize<List<TeamRanking>>(jsonContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                // Deserialize into lightweight DTO
+                var dtos = await System.Text.Json.JsonSerializer
+                    .DeserializeAsync<List<Models.TeamRankingDto>>(stream, options);
+
+                // Map to UI-bound TeamRanking
+                var rankings = dtos?.ToTeamRankings();
 
                 if (rankings != null && rankings.Count > 0)
                 {
                     System.Diagnostics.Debug.WriteLine($"[API] First team: {rankings[0].TeamName} - Rank: {rankings[0].OverallRank} ({rankings[0].Tier} #{rankings[0].TierRank}) - Power: {rankings[0].Ranking}");
-                    System.Diagnostics.Debug.WriteLine($"[API] Last team: {rankings[^1].TeamName} - Rank: {rankings[^1].OverallRank} ({rankings[^1].Tier} #{rankings[^1].TierRank}) - Power: {rankings[^1].Ranking}");
+                    System.Diagnostics.Debug.WriteLine($"[API] Last team: {rankings[^1].TeamName} - Rank: {rankings[^1].OverallRank}");
                 }
                 else
                 {
@@ -66,7 +78,6 @@ namespace SaturdayPulse.Services
             }
             catch (HttpRequestException httpEx)
             {
-                System.Diagnostics.Debug.WriteLine($"[API] ERROR: {httpEx.GetType().Name}: {httpEx.Message}");
                 System.Diagnostics.Debug.WriteLine($"[API] HTTP ERROR: {httpEx.Message}");
                 return null;
             }
@@ -77,7 +88,6 @@ namespace SaturdayPulse.Services
                 return null;
             }
         }
-
         /// <summary>
         /// Fetches Seed / Trend / Pedigree rating history for a single team.
         /// Called lazily when the user first taps "Trend / Pedigree ▼" on a row.
@@ -159,8 +169,24 @@ namespace SaturdayPulse.Services
             {
                 var currentYear = year ?? DateTime.Now.Year;
                 var url = $"schedule/v2?year={currentYear}";
-                var schedule = await _httpClient.GetFromJsonAsync<List<Models.GameResult>>(url);
-                return schedule;
+
+                // Stream directly — avoids reading entire payload into a string first
+                using var response = await _httpClient.GetAsync(
+                    url, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                // Deserialize into lightweight DTO — no INPC, no computed properties
+                var dtos = await System.Text.Json.JsonSerializer
+                    .DeserializeAsync<List<Models.GameResultDto>>(stream, options);
+
+                // Map to UI-bound GameResult on whatever thread we're on (caller wraps in Task.Run)
+                return dtos?.ToGameResults();
             }
             catch (Exception ex)
             {
@@ -168,7 +194,6 @@ namespace SaturdayPulse.Services
                 return null;
             }
         }
-
 
 
         /// <summary>
