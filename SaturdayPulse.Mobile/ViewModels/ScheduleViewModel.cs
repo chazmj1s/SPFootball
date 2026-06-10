@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows.Input;
 using SaturdayPulse.Helpers;
@@ -13,7 +14,7 @@ namespace SaturdayPulse.ViewModels
         private readonly SharedNavigationStateService _navState;
         private readonly PersonalGameService          _personalGameService;
 
-        private ObservableCollection<GameResult> _games = new();
+        private ObservableRangeCollection<GameResult> _games = new();
         private bool   _isBusy;
         private string _activeFilter   = "All";
         private string _selectedFilter = "All";
@@ -32,8 +33,7 @@ namespace SaturdayPulse.ViewModels
             _personalGameService = personalGameService;
 
             LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
-            RefreshCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync(forceReload: true)));
-
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync(forceReload: true)));
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
@@ -48,7 +48,6 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
-            // Week prev/next — delegate to navState, fires FilterChanged(Week)
             PreviousWeekCommand = new Microsoft.Maui.Controls.Command(() =>
             {
                 var idx = _navState.Weeks.ToList().FindIndex(w => w.Week == _navState.SelectedWeek);
@@ -81,10 +80,15 @@ namespace SaturdayPulse.ViewModels
 
         // ── Bindable collections ──────────────────────────────────────────
 
-        public ObservableCollection<GameResult> Games
+        /// <summary>
+        /// ObservableRangeCollection fires a single Reset notification on
+        /// ReplaceRange instead of one per item — significantly faster
+        /// CollectionView re-renders on week/conference/filter changes.
+        /// </summary>
+        public ObservableRangeCollection<GameResult> Games
         {
             get => _games;
-            set { _games = value; OnPropertyChanged(); }
+            private set { _games = value; OnPropertyChanged(); }
         }
 
         // ── Bindable properties ───────────────────────────────────────────
@@ -126,11 +130,6 @@ namespace SaturdayPulse.ViewModels
 
         // ── Load ──────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Forces a cache reload (e.g. pull-to-refresh) then refilters.
-        /// Normal navigation uses ApplyFiltersAndSort directly via FilterChanged —
-        /// MainViewModel pre-warms the cache before firing that signal.
-        /// </summary>
         public async Task LoadDataAsync(bool forceReload = false)
         {
             if (IsBusy) return;
@@ -180,7 +179,7 @@ namespace SaturdayPulse.ViewModels
         {
             if (_cache.AllGames.Count == 0)
             {
-                Games = new ObservableCollection<GameResult>();
+                _games.ReplaceRange(Enumerable.Empty<GameResult>());
                 StatusMessage = "No games found";
                 EmptyMessage  = "No games found";
                 return;
@@ -190,7 +189,6 @@ namespace SaturdayPulse.ViewModels
 
             filtered = filtered.Where(g => g.Week == _navState.SelectedWeek);
 
-            // SelectedConference stores Abbreviation directly — no DisplayToAbbr needed
             var conf = _navState.SelectedConference;
             if (conf != "All")
             {
@@ -229,7 +227,10 @@ namespace SaturdayPulse.ViewModels
                 lastHeader = g.GroupHeader;
             }
 
-            Games         = new ObservableCollection<GameResult>(sorted);
+            // ReplaceRange fires single Reset notification — much faster than
+            // replacing the entire ObservableCollection reference
+            _games.ReplaceRange(sorted);
+
             StatusMessage = "( ) = projected value";
             EmptyMessage  = "No games for selected filter";
             HasLoaded     = true;
@@ -239,18 +240,15 @@ namespace SaturdayPulse.ViewModels
 
         private void OnNavStateChanged(object? sender, PropertyChangedEventArgs e)
         {
-            // Single entry point — cache is always hot when FilterChanged fires
-            if (e.PropertyName == "FilterChanged")
-            {
-                System.Diagnostics.Debug.WriteLine($"[Schedule] FilterChanged isMain={MainThread.IsMainThread}");
-
-                MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
-            }
+            if (e.PropertyName != "FilterChanged") return;
+            System.Diagnostics.Debug.WriteLine($"[Schedule] FilterChanged isMain={MainThread.IsMainThread}");
+            MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
         }
 
         private void OnCacheUpdated()
         {
-            // Follow/favorite flags re-stamped — refilter to update UI
+            // Only refilter after initial load — avoids double render on startup
+            if (!HasLoaded) return;
             MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
         }
     }
