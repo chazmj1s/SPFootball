@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:SaturdayPulse.Models"
+             xmlns:helpers="clr-namespace:SaturdayPulse.Helpers"
              xmlns:controls="clr-namespace:SaturdayPulse.Controls"
              x:Class="SaturdayPulse.Views.SettingsPage"
              x:Name="ThisPage"
@@ -23,7 +24,7 @@
         <!-- ═══════════════════════════════════════════════════ -->
         <RefreshView Grid.Row="1"
                      Command="{Binding RefreshCommand}"
-                 IsRefreshing="False">
+                     IsRefreshing="False">
             <ScrollView>
                 <VerticalStackLayout Spacing="0">
 
@@ -31,7 +32,6 @@
                     <!-- SECTION: Following                      -->
                     <!-- ─────────────────────────────────────── -->
 
-                    <!-- Section header -->
                     <Grid ColumnDefinitions="*,24"
                           Padding="12,10"
                           BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
@@ -61,14 +61,11 @@
                         </Label>
                     </Grid>
 
-                    <!-- Section body -->
                     <VerticalStackLayout IsVisible="{Binding IsFollowingExpanded}" Spacing="0">
 
-                        <!-- Teams | Games flat tabs -->
                         <Grid ColumnDefinitions="*,*"
                               BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}">
 
-                            <!-- Teams tab -->
                             <VerticalStackLayout Grid.Column="0" Spacing="0">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Teams" />
@@ -96,7 +93,6 @@
                                 </BoxView>
                             </VerticalStackLayout>
 
-                            <!-- Games tab -->
                             <VerticalStackLayout Grid.Column="1" Spacing="0">
                                 <VerticalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
@@ -126,212 +122,65 @@
 
                         </Grid>
 
-                        <!-- Loading indicator -->
-<!-- ═══════════════════════════════════ -->
-                        <!-- TEAMS VIEW                          -->
-                        <!-- ═══════════════════════════════════ -->
-                        <VerticalStackLayout IsVisible="{Binding IsTeamsView}" Spacing="0">
+                        <!-- Teams list -->
+                        <CollectionView ItemsSource="{Binding Teams}"
+                                        IsVisible="{Binding IsTeamsView}"
+                                        ItemSizingStrategy="MeasureAllItems">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:TeamInfo">
+                                    <Grid ColumnDefinitions="*,Auto" Padding="12,8">
+                                        <Label Grid.Column="0"
+                                               Text="{Binding TeamName}"
+                                               FontSize="13" VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               Text="{Binding IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+                                               TextColor="{Binding IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+                                               FontSize="{StaticResource TeamIconSize}"
+                                               VerticalOptions="Center">
+                                            <Label.GestureRecognizers>
+                                                <TapGestureRecognizer
+                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                                                    CommandParameter="{Binding TeamID}" />
+                                            </Label.GestureRecognizers>
+                                        </Label>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
 
-                            <!-- Column headers -->
-                            <Grid ColumnDefinitions="28,*,60"
-                                  Padding="10,4,10,4"
-                                  BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#2A2A2A}">
-                                <Label Grid.Column="0" Text="" />
-                                <Label Grid.Column="1" Text="Team"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       VerticalOptions="Center" />
-                                <Label Grid.Column="2" Text="Conf"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       HorizontalOptions="Center" VerticalOptions="Center" />
-                            </Grid>
-
-                            <!-- Teams list -->
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Teams}" Spacing="0">
-                                <BindableLayout.EmptyView>
-                                    <Label Text="No teams found" FontSize="14"
-                                           HorizontalOptions="Center" Padding="20" />
-                                </BindableLayout.EmptyView>
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="models:TeamInfo">
-                                        <Grid ColumnDefinitions="28,*,60" Padding="10,7,10,7">
-
-                                            <controls:FollowTeamIcon
-                                                Grid.Column="0"
-                                                IsFollowed="{Binding IsFollowed}"
-                                                VerticalOptions="Center"
-                                                HorizontalOptions="Center">
-                                                <controls:FollowTeamIcon.GestureRecognizers>
-                                                    <TapGestureRecognizer
-                                                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                                                        CommandParameter="{Binding TeamID}" />
-                                                </controls:FollowTeamIcon.GestureRecognizers>
-                                            </controls:FollowTeamIcon>
-
-                                            <Label Grid.Column="1"
-                                                   Text="{Binding TeamName}"
-                                                   FontSize="13"
-                                                   VerticalOptions="Center"
-                                                   LineBreakMode="TailTruncation" />
-
-                                            <Label Grid.Column="2"
-                                                   Text="{Binding ConferenceAbbr}"
-                                                   FontSize="11"
-                                                   TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
-                                                   HorizontalOptions="Center" VerticalOptions="Center" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </VerticalStackLayout>
-
-                        </VerticalStackLayout>
-
-                        <!-- ═══════════════════════════════════ -->
-                        <!-- GAMES VIEW                          -->
-                        <!-- ═══════════════════════════════════ -->
+                        <!-- Games list -->
                         <VerticalStackLayout IsVisible="{Binding IsGamesView}" Spacing="0">
 
-                            <!-- Tier filter -->
-                            <Grid ColumnDefinitions="Auto,*"
-                                  Padding="10,6,10,4" ColumnSpacing="8">
-                                <Label Grid.Column="0" Text="Tier"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       VerticalOptions="Center" />
-                                <Picker Grid.Column="1"
-                                        ItemsSource="{Binding TierFilters}"
-                                        SelectedItem="{Binding SelectedTier}"
-                                        FontSize="13" HeightRequest="32"
-                                        VerticalOptions="Center" />
-                            </Grid>
+                            <Picker ItemsSource="{Binding TierFilters}"
+                                    SelectedItem="{Binding SelectedTier}"
+                                    Margin="12,8" FontSize="13" />
 
-                            <!-- Column headers -->
-                            <Grid ColumnDefinitions="28,*,110,90,32"
-                                  Padding="10,4,10,4"
-                                  BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#2A2A2A}">
-                                <Label Grid.Column="0" Text="" />
-                                <Label Grid.Column="1" Text="Team"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       VerticalOptions="Center" />
-                                <Label Grid.Column="2" Text="Series"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       VerticalOptions="Center" />
-                                <Label Grid.Column="3" Text="Stats"
-                                       FontSize="11" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#555555, Dark=#AAAAAA}"
-                                       HorizontalOptions="End" VerticalOptions="Center" />
-                                <Label Grid.Column="4" Text="" />
-                            </Grid>
-
-                            <!-- Games list -->
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Games}" Spacing="0">
-                                <BindableLayout.EmptyView>
-                                    <Label Text="No games followed yet" FontSize="16"
-                                           HorizontalOptions="Center" Padding="20" />
-                                </BindableLayout.EmptyView>
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate>
-                                        <VerticalStackLayout Spacing="0">
-
-                                            <!-- Rivalry header: name + tier badge + star -->
-                                            <Grid ColumnDefinitions="*,Auto,32" Padding="10,5,10,2">
-                                                <Label Grid.Column="0"
-                                                       Text="{Binding RivalryName}"
-                                                       FontSize="13"
-                                                       VerticalOptions="Center"
-                                                       LineBreakMode="TailTruncation" />
-                                                <Label Grid.Column="1"
-                                                       Text="{Binding TierBadge}"
-                                                       FontSize="16"
-                                                       VerticalOptions="Center"
-                                                       HorizontalOptions="End" />
-
-                                                <!-- Star: follow this rivalry/game -->
-                                                <controls:FollowGameIcon
-                                                    Grid.Column="2"
-                                                    IsFollowed="{Binding IsGameFavorited}"
-                                                    HorizontalOptions="Center"
-                                                    VerticalOptions="Center">
-                                                    <controls:FollowGameIcon.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
-                                                            CommandParameter="{Binding .}" />
-                                                    </controls:FollowGameIcon.GestureRecognizers>
-                                                </controls:FollowGameIcon>
-                                            </Grid>
-
-                                            <!-- Team rows -->
-                                            <Grid ColumnDefinitions="28,*,110,90"
-                                                  RowDefinitions="Auto,Auto"
-                                                  Padding="10,2,10,5">
-
-                                                <!-- Heart: follow team 1 -->
-                                                <controls:FollowTeamIcon
-                                                    Grid.Row="0" Grid.Column="0"
-                                                    IsFollowed="{Binding Team1IsFollowed}"
-                                                    VerticalOptions="Center"
-                                                    HorizontalOptions="Center">
-                                                    <controls:FollowTeamIcon.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                                                            CommandParameter="{Binding Team1Id}" />
-                                                    </controls:FollowTeamIcon.GestureRecognizers>
-                                                </controls:FollowTeamIcon>
-
-                                                <Label Grid.Row="0" Grid.Column="1"
-                                                       Text="{Binding Team1Name}"
-                                                       FontSize="13" VerticalOptions="Center"
-                                                       LineBreakMode="TailTruncation" />
-                                                <Label Grid.Row="0" Grid.Column="2"
-                                                       Text="{Binding DisplaySeries}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
-                                                       VerticalOptions="Center" />
-                                                <Label Grid.Row="0" Grid.Column="3"
-                                                       Text="{Binding DisplayAvgMargin}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                                       VerticalOptions="Center" HorizontalOptions="End" />
-
-                                                <!-- Heart: follow team 2 -->
-                                                <controls:FollowTeamIcon
-                                                    Grid.Row="1" Grid.Column="0"
-                                                    IsFollowed="{Binding Team2IsFollowed}"
-                                                    VerticalOptions="Center"
-                                                    HorizontalOptions="Center">
-                                                    <controls:FollowTeamIcon.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                                                            CommandParameter="{Binding Team2Id}" />
-                                                    </controls:FollowTeamIcon.GestureRecognizers>
-                                                </controls:FollowTeamIcon>
-
-                                                <Label Grid.Row="1" Grid.Column="1"
-                                                       Text="{Binding Team2Name}"
-                                                       FontSize="13" VerticalOptions="Center"
-                                                       LineBreakMode="TailTruncation" />
-                                                <Label Grid.Row="1" Grid.Column="2"
-                                                       Text="{Binding DisplayUpsetRate}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
-                                                       VerticalOptions="Center" />
-                                                <Label Grid.Row="1" Grid.Column="3"
-                                                       Text="{Binding DisplayAvgSwing}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                                       VerticalOptions="Center" HorizontalOptions="End" />
-                                            </Grid>
-
-                                            <BoxView HeightRequest="1" Opacity="0.12"
-                                                     Color="{AppThemeBinding Light=Black, Dark=White}" />
-
-                                        </VerticalStackLayout>
+                            <CollectionView ItemsSource="{Binding Games}"
+                                            ItemSizingStrategy="MeasureAllItems">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:RivalryInfo">
+                                        <Grid ColumnDefinitions="*,Auto" Padding="12,8">
+                                            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                                <Label Text="{Binding DisplayName}"
+                                                       FontSize="13" />
+                                                <Label Text="{Binding RivalryTier}"
+                                                       FontSize="10" Opacity="0.6" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="1"
+                                                   Text="{Binding IsGameFavorited, Converter={StaticResource FollowGameGlyphConverter}}"
+                                                   TextColor="{Binding IsGameFavorited, Converter={StaticResource FollowGameColorConverter}}"
+                                                   FontSize="{StaticResource GameStarSize}"
+                                                   VerticalOptions="Center">
+                                                <Label.GestureRecognizers>
+                                                    <TapGestureRecognizer
+                                                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                </Label.GestureRecognizers>
+                                            </Label>
+                                        </Grid>
                                     </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </VerticalStackLayout>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
 
                         </VerticalStackLayout>
 
@@ -342,7 +191,7 @@
                              Color="{AppThemeBinding Light=Black, Dark=White}" />
 
                     <!-- ─────────────────────────────────────── -->
-                    <!-- SECTION: User Configuration             -->
+                    <!-- SECTION: User Config                    -->
                     <!-- ─────────────────────────────────────── -->
 
                     <Grid ColumnDefinitions="*,24"
@@ -353,7 +202,7 @@
                                                   CommandParameter="UserConfig" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0"
-                               Text="User Configuration"
+                               Text="User Config"
                                FontSize="15" FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
                                VerticalOptions="Center" />
@@ -362,10 +211,12 @@
                                HorizontalOptions="Center" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
                             <Label.Triggers>
-                                <DataTrigger TargetType="Label" Binding="{Binding IsUserConfigExpanded}" Value="True">
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsUserConfigExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
                                 </DataTrigger>
-                                <DataTrigger TargetType="Label" Binding="{Binding IsUserConfigExpanded}" Value="False">
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsUserConfigExpanded}" Value="False">
                                     <Setter Property="Text" Value="▼" />
                                 </DataTrigger>
                             </Label.Triggers>
@@ -376,130 +227,120 @@
                                          Padding="16,12" Spacing="16">
 
                         <!-- Show Favorites First -->
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                            <CheckBox Grid.Column="0"
-                                      IsChecked="{Binding ShowFavoritesFirst}"
-                                      VerticalOptions="Center"
-                                      Color="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Spacing="2">
                                 <Label Text="Show favorites first"
                                        FontSize="13"
                                        TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                                <Label Text="Starred games and followed teams sort to the top in Scores and Rankings."
+                                <Label Text="Followed teams and starred games appear at the top of each list."
                                        FontSize="11"
                                        TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
                                        LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding ShowFavoritesFirst}"
+                                    VerticalOptions="Center"
+                                    OnColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                         </Grid>
 
-                        <!-- Divider -->
-                        <BoxView HeightRequest="1"
-                                 Color="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}"
-                                 Margin="-16,0" />
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
 
                         <!-- Default Week -->
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Default week"
                                    FontSize="13"
                                    TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                            <Label Text="Which week is selected when the app launches."
+                            <Label Text="Which week to show when the app launches."
                                    FontSize="11"
                                    TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
                                    LineBreakMode="WordWrap" />
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,*" ColumnSpacing="8" Margin="0,4,0,0">
 
-                            <!-- Horizontal radio buttons — sized to content, left-anchored -->
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="24" Margin="0,2,0,0">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding SelectDefaultWeekCommand}"
+                                                          CommandParameter="Week1" />
+                                </Grid.GestureRecognizers>
 
-                                <!-- Week 1 -->
-                                <StackLayout Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                                    <StackLayout.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding SelectDefaultWeekCommand}"
-                                                              CommandParameter="Week1" />
-                                    </StackLayout.GestureRecognizers>
-                                    <Ellipse WidthRequest="16" HeightRequest="16" VerticalOptions="Center">
-                                        <Ellipse.Triggers>
-                                            <DataTrigger TargetType="Ellipse"
-                                                         Binding="{Binding DefaultWeek}" Value="Week1">
-                                                <Setter Property="Fill"
-                                                        Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                                <Setter Property="StrokeThickness" Value="0" />
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Ellipse"
-                                                         Binding="{Binding DefaultWeek}" Value="Current">
-                                                <Setter Property="Fill" Value="Transparent" />
-                                                <Setter Property="Stroke"
-                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
-                                                <Setter Property="StrokeThickness" Value="1.5" />
-                                            </DataTrigger>
-                                        </Ellipse.Triggers>
-                                    </Ellipse>
-                                    <Label Text="Week 1" FontSize="13" VerticalOptions="Center">
-                                        <Label.Triggers>
-                                            <DataTrigger TargetType="Label"
-                                                         Binding="{Binding DefaultWeek}" Value="Week1">
-                                                <Setter Property="TextColor"
-                                                        Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Label"
-                                                         Binding="{Binding DefaultWeek}" Value="Current">
-                                                <Setter Property="TextColor"
-                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
-                                            </DataTrigger>
-                                        </Label.Triggers>
-                                    </Label>
-                                </StackLayout>
+                                <Ellipse Grid.Column="0" WidthRequest="14" HeightRequest="14" VerticalOptions="Center">
+                                    <Ellipse.Triggers>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding DefaultWeek}" Value="Week1">
+                                            <Setter Property="Fill"
+                                                    Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                            <Setter Property="StrokeThickness" Value="0" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding DefaultWeek}" Value="Current">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Label Grid.Column="1" Text="Week 1" FontSize="13" VerticalOptions="Center">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding DefaultWeek}" Value="Week1">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding DefaultWeek}" Value="Current">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
 
-                                <!-- Current -->
-                                <StackLayout Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <StackLayout.GestureRecognizers>
+                                <BoxView Grid.Column="2" Color="Transparent" />
+
+                                <Ellipse Grid.Column="3" WidthRequest="14" HeightRequest="14" VerticalOptions="Center">
+                                    <Ellipse.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding SelectDefaultWeekCommand}"
                                                               CommandParameter="Current" />
-                                    </StackLayout.GestureRecognizers>
-                                    <Ellipse WidthRequest="16" HeightRequest="16" VerticalOptions="Center">
-                                        <Ellipse.Triggers>
-                                            <DataTrigger TargetType="Ellipse"
-                                                         Binding="{Binding DefaultWeek}" Value="Current">
-                                                <Setter Property="Fill"
-                                                        Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                                <Setter Property="StrokeThickness" Value="0" />
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Ellipse"
-                                                         Binding="{Binding DefaultWeek}" Value="Week1">
-                                                <Setter Property="Fill" Value="Transparent" />
-                                                <Setter Property="Stroke"
-                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
-                                                <Setter Property="StrokeThickness" Value="1.5" />
-                                            </DataTrigger>
-                                        </Ellipse.Triggers>
-                                    </Ellipse>
-                                    <Label Text="Current" FontSize="13" VerticalOptions="Center">
-                                        <Label.Triggers>
-                                            <DataTrigger TargetType="Label"
-                                                         Binding="{Binding DefaultWeek}" Value="Current">
-                                                <Setter Property="TextColor"
-                                                        Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Label"
-                                                         Binding="{Binding DefaultWeek}" Value="Week1">
-                                                <Setter Property="TextColor"
-                                                        Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
-                                            </DataTrigger>
-                                        </Label.Triggers>
-                                    </Label>
-                                </StackLayout>
+                                    </Ellipse.GestureRecognizers>
+                                    <Ellipse.Triggers>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding DefaultWeek}" Value="Current">
+                                            <Setter Property="Fill"
+                                                    Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                            <Setter Property="StrokeThickness" Value="0" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding DefaultWeek}" Value="Week1">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Label Grid.Column="4" Text="Current" FontSize="13" VerticalOptions="Center">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding DefaultWeek}" Value="Current">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding DefaultWeek}" Value="Week1">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
 
-                                <!-- Spacer -->
-                                <BoxView Grid.Column="2" Color="Transparent" />
+                                <BoxView Grid.Column="5" Color="Transparent" />
 
                             </Grid>
                         </VerticalStackLayout>
 
-                        <!-- Divider -->
-                        <BoxView HeightRequest="1"
-                                 Color="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}"
-                                 Margin="-16,0" />
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
 
-                        <!-- Default Conference — plain tap row, purple value + chevron -->
+                        <!-- Default Conference -->
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Default conference"
                                    FontSize="13"
@@ -568,6 +409,94 @@
                                TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
                     </VerticalStackLayout>
 
+                    <!-- Divider -->
+                    <BoxView HeightRequest="1" Opacity="0.1"
+                             Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                    <!-- ─────────────────────────────────────── -->
+                    <!-- SECTION: Debug Log                      -->
+                    <!-- ─────────────────────────────────────── -->
+
+                    <Grid ColumnDefinitions="*,24"
+                          Padding="12,10"
+                          BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleSectionCommand}"
+                                                  CommandParameter="DebugLog" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0"
+                               Text="Debug Log"
+                               FontSize="15" FontAttributes="Bold"
+                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               VerticalOptions="Center" />
+                        <Label Grid.Column="1"
+                               FontSize="14" FontAttributes="Bold"
+                               HorizontalOptions="Center" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsDebugLogExpanded}" Value="True">
+                                    <Setter Property="Text" Value="▲" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsDebugLogExpanded}" Value="False">
+                                    <Setter Property="Text" Value="▼" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                    </Grid>
+
+                    <VerticalStackLayout IsVisible="{Binding IsDebugLogExpanded}" Spacing="0">
+
+                        <!-- Toolbar: entry count + clear -->
+                        <Grid ColumnDefinitions="*,Auto"
+                              Padding="12,8"
+                              BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}">
+                            <Label Grid.Column="0"
+                                   Text="{Binding LogEntryCount, StringFormat='{0} entries'}"
+                                   FontSize="11" Opacity="0.6"
+                                   VerticalOptions="Center" />
+                            <Border Grid.Column="1"
+                                    StrokeShape="RoundRectangle 4"
+                                    Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
+                                    StrokeThickness="1"
+                                    Padding="10,4">
+                                <Label Text="Clear"
+                                       FontSize="11"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding ClearLogCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </Border>
+                        </Grid>
+
+                        <!-- Log entries — newest first -->
+                        <ScrollView HeightRequest="300"
+                                    BackgroundColor="{AppThemeBinding Light=#1A1A1A, Dark=#0D0D0D}">
+                            <CollectionView ItemsSource="{Binding LogEntries}"
+                                            ItemSizingStrategy="MeasureAllItems">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="helpers:LogEntry">
+                                        <Label Text="{Binding Display}"
+                                               FontSize="9"
+                                               TextColor="{Binding LevelColor}"
+                                               Padding="8,2"
+                                               LineBreakMode="WordWrap" />
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                                <CollectionView.EmptyView>
+                                    <Label Text="No log entries yet."
+                                           FontSize="11" Opacity="0.5"
+                                           HorizontalOptions="Center"
+                                           Padding="0,20"
+                                           TextColor="#888888" />
+                                </CollectionView.EmptyView>
+                            </CollectionView>
+                        </ScrollView>
+
+                    </VerticalStackLayout>
+
                 </VerticalStackLayout>
             </ScrollView>
         </RefreshView>
@@ -581,7 +510,7 @@
                    Padding="8,0" FontSize="10" Opacity="0.5"
                    VerticalOptions="Center" HorizontalOptions="Start"
                    TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
-</Grid>
+        </Grid>
 
     </Grid>
 </ContentPage>

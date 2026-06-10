@@ -20,8 +20,6 @@ public static class MauiProgram
         SyncfusionLicenseProvider.RegisterLicense(
             "Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXpfcXVQR2lfWUB+V0RWYEo=");
         
-        AppleLogger.LogToMacConsole("Connection successful! Terminal build tracking works.");
-
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()

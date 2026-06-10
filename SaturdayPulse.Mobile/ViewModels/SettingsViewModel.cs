@@ -36,9 +36,10 @@ namespace SaturdayPulse.ViewModels
         // ── Accordion state — only one section open at a time ─────────────
         private string? _expandedSection = "Following"; // open by default
 
-        public bool IsFollowingExpanded    => _expandedSection == "Following";
-        public bool IsUserConfigExpanded   => _expandedSection == "UserConfig";
+        public bool IsFollowingExpanded     => _expandedSection == "Following";
+        public bool IsUserConfigExpanded    => _expandedSection == "UserConfig";
         public bool IsMoreCoolStuffExpanded => _expandedSection == "MoreCoolStuff";
+        public bool IsDebugLogExpanded      => _expandedSection == "DebugLog";
 
         public bool IsTeamsView => _selectedView == "Teams";
         public bool IsGamesView => _selectedView == "Games";
@@ -63,9 +64,6 @@ namespace SaturdayPulse.ViewModels
         }
 
         // ── User preference: Show Favorites First ─────────────────────────
-        // Passthrough to SharedNavigationStateService so the setting
-        // propagates to all tabs automatically via PropertyChanged.
-
         public bool ShowFavoritesFirst
         {
             get => _navState.ShowFavoritesFirst;
@@ -90,8 +88,6 @@ namespace SaturdayPulse.ViewModels
         // ── Games ─────────────────────────────────────────────────────────
         public ObservableCollection<RivalryInfo> Games { get; } = new();
 
-        // TierFilters is an ObservableCollection so the Picker binds
-        // before we set SelectedTier, avoiding the blank-until-expand bug
         public ObservableCollection<string> TierFilters { get; } = new();
 
         private string _selectedTier = "♥ Personal";
@@ -108,15 +104,23 @@ namespace SaturdayPulse.ViewModels
             }
         }
 
+        // ── Debug Log ─────────────────────────────────────────────────────
+
+        /// <summary>Bound to the Debug Log CollectionView in Settings.</summary>
+        public ObservableCollection<LogEntry> LogEntries => AppLogger.Entries;
+
+        public int LogEntryCount => AppLogger.Entries.Count;
+
         // ── Commands ──────────────────────────────────────────────────────
-        public ICommand LoadDataCommand               { get; }
-        public ICommand SelectViewCommand             { get; }
-        public ICommand TogglePersonalCommand         { get; }
-        public ICommand ToggleSectionCommand          { get; }
-        public ICommand ToggleFollowCommand           { get; }
-        public ICommand RefreshCommand                { get; }
-        public ICommand SelectDefaultWeekCommand      { get; }
+        public ICommand LoadDataCommand                { get; }
+        public ICommand SelectViewCommand              { get; }
+        public ICommand TogglePersonalCommand          { get; }
+        public ICommand ToggleSectionCommand           { get; }
+        public ICommand ToggleFollowCommand            { get; }
+        public ICommand RefreshCommand                 { get; }
+        public ICommand SelectDefaultWeekCommand       { get; }
         public ICommand SelectDefaultConferenceCommand { get; }
+        public ICommand ClearLogCommand                { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
         public SettingsViewModel(
@@ -130,8 +134,6 @@ namespace SaturdayPulse.ViewModels
             _personalGameService = personalGameService;
             _navState            = navState;
 
-            // Populate TierFilters here so the ObservableCollection
-            // is ready before any binding occurs
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
             TierFilters.Add("── Rivalries ──");
@@ -140,8 +142,10 @@ namespace SaturdayPulse.ViewModels
             TierFilters.Add("🏠 Regional");
             TierFilters.Add("• Meh");
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
-            RefreshCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(
+                () => _ = Task.Run(async () => await LoadDataAsync()));
+            RefreshCommand = new Microsoft.Maui.Controls.Command(
+                () => _ = Task.Run(async () => await LoadDataAsync()));
 
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
@@ -165,6 +169,7 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsFollowingExpanded));
                 OnPropertyChanged(nameof(IsUserConfigExpanded));
                 OnPropertyChanged(nameof(IsMoreCoolStuffExpanded));
+                OnPropertyChanged(nameof(IsDebugLogExpanded));
             });
 
             SelectDefaultWeekCommand = new Microsoft.Maui.Controls.Command<string>(value =>
@@ -184,6 +189,16 @@ namespace SaturdayPulse.ViewModels
                     DefaultConference = result == "All" ? "All"
                         : ConferenceHelper.DisplayToAbbr(result) ?? result;
             });
+
+            ClearLogCommand = new Microsoft.Maui.Controls.Command(() =>
+            {
+                AppLogger.Clear();
+                OnPropertyChanged(nameof(LogEntryCount));
+            });
+
+            // Keep LogEntryCount in sync as entries are added/removed
+            AppLogger.Entries.CollectionChanged += (s, e) =>
+                OnPropertyChanged(nameof(LogEntryCount));
 
             _followService.TeamFollowChanged         += OnTeamFollowChanged;
             _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
@@ -210,13 +225,12 @@ namespace SaturdayPulse.ViewModels
             {
                 var (teams, rivalries) = await Task.Run(async () =>
                 {
-                    var teamsTask = _apiService.GetTeamsAsync();
+                    var teamsTask     = _apiService.GetTeamsAsync();
                     var rivalriesTask = _apiService.GetNamedRivalriesAsync();
                     await Task.WhenAll(teamsTask, rivalriesTask);
                     return (teamsTask.Result, rivalriesTask.Result);
                 });
 
-                // ── Teams ─────────────────────────────────────────────────────────
                 if (teams != null && teams.Count > 0)
                 {
                     foreach (var t in teams)
@@ -226,9 +240,8 @@ namespace SaturdayPulse.ViewModels
                     ApplyTeamFilter();
                 }
 
-                // ── Named rivalries ───────────────────────────────────────────────
                 var allRivalries = rivalries ?? [];
-                var followedIds = _followService.GetFollowedIds();
+                var followedIds  = _followService.GetFollowedIds();
 
                 foreach (var r in allRivalries)
                 {
@@ -279,7 +292,7 @@ namespace SaturdayPulse.ViewModels
             var tasks = personalKeys.Select(async key =>
             {
                 var (id1, id2) = PersonalGameService.ParseKey(key);
-                var info = await _apiService.GetMatchupHistoryAsync(id1, id2);
+                var info       = await _apiService.GetMatchupHistoryAsync(id1, id2);
                 if (info != null)
                 {
                     info.Team1IsFollowed = followedIds.Contains(id1);
