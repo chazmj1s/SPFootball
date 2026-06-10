@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls.Hosting;
 using Microsoft.Maui.Hosting;
+using SaturdayPulse.Helpers;
 using SaturdayPulse.Mobile.Services;
 using SaturdayPulse.Services;
 using SaturdayPulse.ViewModels;
@@ -18,6 +19,8 @@ public static class MauiProgram
     {
         SyncfusionLicenseProvider.RegisterLicense(
             "Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXpfcXVQR2lfWUB+V0RWYEo=");
+        
+        AppleLogger.LogToMacConsole("Connection successful! Terminal build tracking works.");
 
         var builder = MauiApp.CreateBuilder();
         builder
