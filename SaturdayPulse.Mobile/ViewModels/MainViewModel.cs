@@ -88,6 +88,8 @@ namespace SaturdayPulse.ViewModels
                         .Select(c => new ConferenceInfo { Name = c.Display, Abbreviation = c.Abbr, Tier = "" })
                         .ToList();
 
+                System.Diagnostics.Debug.WriteLine($"[Conf] AvailableConferences count={_navState.AvailableConferences.Count} year={_navState.SelectedYear}");
+
                 var options = new List<string> { "All" };
                 options.AddRange(available.Select(c => c.Name));
 
