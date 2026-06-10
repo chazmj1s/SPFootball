@@ -532,7 +532,8 @@
         </DataTrigger>
       </RefreshView.Triggers>
 
-      <CollectionView ItemsSource="{Binding Championships}">
+        <CollectionView ItemsSource="{Binding Championships}"
+                        ItemSizingStrategy="MeasureAllItems">
         <CollectionView.ItemTemplate>
           <DataTemplate x:DataType="models:ChampionshipMatchup">
             <VerticalStackLayout Spacing="0">

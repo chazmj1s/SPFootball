@@ -17,7 +17,8 @@
                  Command="{Binding RefreshCommand}"
                  IsRefreshing="False">
 
-      <CollectionView ItemsSource="{Binding Games}">
+            <CollectionView ItemsSource="{Binding Games}"
+                            ItemSizingStrategy="MeasureAllItems">
 
         <CollectionView.ItemTemplate>
           <DataTemplate x:DataType="models:GameResult">

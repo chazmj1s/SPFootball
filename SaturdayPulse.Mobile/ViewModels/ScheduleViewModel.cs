@@ -148,6 +148,19 @@ namespace SaturdayPulse.ViewModels
                     return;
                 }
 
+                // Populate week strip
+                var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
+                _navState.SetWeeks(weeks);
+                _navState.ApplyStartupDefaults(
+                    games,
+                    g => g.Week,
+                    g =>
+                    {
+                        if (string.IsNullOrWhiteSpace(g.GameDate)) return null;
+                        var dateStr = $"{g.GameDate} {_navState.SelectedYear}";
+                        return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
+                    });
+
                 ApplyFiltersAndSort();
             }
             catch (Exception ex)
@@ -228,7 +241,11 @@ namespace SaturdayPulse.ViewModels
         {
             // Single entry point — cache is always hot when FilterChanged fires
             if (e.PropertyName == "FilterChanged")
+            {
+                System.Diagnostics.Debug.WriteLine($"[Schedule] FilterChanged isMain={MainThread.IsMainThread}");
+
                 MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
+            }
         }
 
         private void OnCacheUpdated()

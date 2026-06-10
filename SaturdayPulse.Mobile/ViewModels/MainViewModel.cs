@@ -144,9 +144,10 @@ namespace SaturdayPulse.ViewModels
             await Task.Run(async () => await RefreshConferencesAsync(year));
 
             // Week list — SetWeeks marshals to main thread internally
+            System.Diagnostics.Debug.WriteLine($"[YearChange] Before SetWeeks isMain={MainThread.IsMainThread}");
             var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
             _navState.SetWeeks(weeks);
-
+            System.Diagnostics.Debug.WriteLine($"[YearChange] After SetWeeks isMain={MainThread.IsMainThread}");
             _navState.ApplyStartupDefaults(
                 games,
                 g => g.Week,
