@@ -261,7 +261,7 @@ namespace SaturdayPulse.Services
 
             var activeConfIds = confIdByTeamId.Values.Distinct().ToHashSet();
 
-            return activeConfIds
+            var list = activeConfIds
                 .Where(id => confById.ContainsKey(id))
                 .Select(id =>
                 {
@@ -278,6 +278,9 @@ namespace SaturdayPulse.Services
                 .OrderBy(c => c.Tier == "P4" ? 0 : 1)  // P4 first
                 .ThenBy(c => c.Name)
                 .ToList();
+
+            list.Insert(0, new ConferenceInfo { Name = "All", Abbreviation = "All", Tier = "All" });
+            return list;
         }
 
 

@@ -84,23 +84,13 @@ namespace SaturdayPulse.Views
                 if (PageHost.Children[i] is VisualElement ve)
                     ve.IsVisible = i == 0;
 
-            // Kick off initial Schedule load on a background thread.
-            // HTTP call (Azure cold start) never touches the main thread.
-            // Other tabs lazy-load via SyncPage on first tap.
-            if (_schedulePage.BindingContext is ScheduleViewModel schedVm)
-            {
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        await schedVm.LoadDataAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Startup] LoadDataAsync failed: {ex.Message}");
-                    }
-                });
-            }
+            // MainView owns year/week/conference setup. InitializeAsync warms the
+            // cache, builds the week strip, resolves the default week + conference,
+            // then fires FilterChanged so the active (Schedule) page renders.
+            // Runs on the MAIN THREAD (no Task.Run) so the nav-state continuation —
+            // including ApplyStartupDefaults' property notifications — stays on it.
+            // The awaited async cache fetch frees the main thread during I/O.
+            _ = _vm.InitializeAsync();
         }
 
         // ── Loading state wiring ──────────────────────────────────────────
@@ -237,11 +227,19 @@ namespace SaturdayPulse.Views
                     if (PageHost.Children[i] is VisualElement ve)
                         ve.IsVisible = i == index;
 
-                // Lazy load on first visit — Task.Run keeps HTTP calls off main thread
+                // Lazy load on first visit.
                 switch (index)
                 {
+                    // Schedule VM is main-thread-safe (LoadDataAsync awaits async I/O,
+                    // continuation stays on main). No Task.Run — that would push
+                    // ApplyFiltersAndSort back onto a background thread.
                     case 0 when _schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded:
-                        _ = Task.Run(async () => await svm.LoadDataAsync()); break;
+                        _ = svm.LoadDataAsync(); break;
+
+                    // NOTE: the pages below still use Task.Run pending the same
+                    // consumer-only / main-thread refactor applied to ScheduleViewModel.
+                    // Once each VM's LoadDataAsync awaits async I/O without blocking,
+                    // drop the Task.Run here too (same hazard as case 0).
                     case 1 when _rankingsPage.BindingContext is PowerRankingsViewModel rvm && !rvm.HasLoaded:
                         _ = Task.Run(async () => await rvm.LoadDataAsync()); break;
                     case 2 when _postseasonPage.BindingContext is PostseasonViewModel pvm && !pvm.HasLoaded:
