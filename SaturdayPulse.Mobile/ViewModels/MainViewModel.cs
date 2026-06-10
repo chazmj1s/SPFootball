@@ -64,6 +64,8 @@ namespace SaturdayPulse.ViewModels
 
             SelectWeekCommand = new Microsoft.Maui.Controls.Command<int>(week =>
             {
+                Console.WriteLine($"[Week] Selected week={_navState.SelectedWeek} year={_navState.SelectedYear}");
+
                 _navState.SelectedWeek = week;
             });
 
@@ -88,7 +90,7 @@ namespace SaturdayPulse.ViewModels
                         .Select(c => new ConferenceInfo { Name = c.Display, Abbreviation = c.Abbr, Tier = "" })
                         .ToList();
 
-                System.Diagnostics.Debug.WriteLine($"[Conf] AvailableConferences count={_navState.AvailableConferences.Count} year={_navState.SelectedYear}");
+                Console.WriteLine($"[Conf] AvailableConferences count={_navState.AvailableConferences.Count} year={_navState.SelectedYear}");
 
                 var options = new List<string> { "All" };
                 options.AddRange(available.Select(c => c.Name));
