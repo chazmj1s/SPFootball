@@ -359,6 +359,9 @@ namespace SaturdayPulse.ViewModels
         }
         private void OnCacheUpdated()
         {
+            // Only refilter if we've already loaded — avoids double render on initial load
+            if (!HasLoaded) return;
+
             MainThread.BeginInvokeOnMainThread(RebuildPostseasonFromCache);
         }
     }
