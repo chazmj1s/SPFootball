@@ -334,6 +334,8 @@ namespace SaturdayPulse.ViewModels
         {
             if (e.PropertyName != "FilterChanged") return;
 
+            System.Diagnostics.Debug.WriteLine($"[Postseason] FilterChanged isMain={MainThread.IsMainThread}");
+
             switch (_navState.LastFilterChange)
             {
                 case FilterChangeReason.Year:

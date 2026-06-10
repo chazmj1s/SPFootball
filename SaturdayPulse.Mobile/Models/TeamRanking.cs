@@ -327,7 +327,8 @@ public class TeamRanking : INotifyPropertyChanged
         foreach (var w in SeasonArcWeeks)
         {
             ArcRankingPoints.Add(new ChartPoint { Index = w.Week, Value = w.Ranking  ?? 0 });
-            ArcSosPoints    .Add(new ChartPoint { Index = w.Week, Value = (w.CombinedSOS - 1) * 10 ?? 0 });
+            //ArcSosPoints    .Add(new ChartPoint { Index = w.Week, Value = (w.CombinedSOS - 1) * 10 ?? 0 });
+            ArcSosPoints.Add(new ChartPoint { Index = w.Week, Value = (double)(w.CombinedSOS ?? 0) });
             ArcWinPctPoints .Add(new ChartPoint { Index = w.Week, Value = w.WinPct });
         }
 

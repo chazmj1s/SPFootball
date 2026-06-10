@@ -36,6 +36,9 @@ namespace SaturdayPulse.Services
 
         private void FireFilterChanged(FilterChangeReason reason)
         {
+            var caller = new System.Diagnostics.StackFrame(2, false).GetMethod()?.Name ?? "unknown";
+            System.Diagnostics.Debug.WriteLine($"[FilterChanged] reason={reason} caller={caller} isMain={MainThread.IsMainThread}");
+
             LastFilterChange = reason;
             OnPropertyChanged("FilterChanged");
         }

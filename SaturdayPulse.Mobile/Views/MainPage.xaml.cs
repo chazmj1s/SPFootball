@@ -75,7 +75,7 @@ namespace SaturdayPulse.Views
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedYear))
                 {
                     ResetAllPages();
-                    SyncPage(_vm.SelectedIndex);
+                    //SyncPage(_vm.SelectedIndex);
                 }
             };
 
