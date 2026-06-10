@@ -174,7 +174,7 @@ namespace SaturdayPulse.ViewModels
         {
             var conferences = await _apiService.GetConferencesForYearAsync(year);
             if (conferences != null)
-                _navState.SetAvailableConferences(conferences);
+                _navState.SetAvailableConferencesAsync(conferences);
         }
 
         // ── Tab nav ───────────────────────────────────────────────────────

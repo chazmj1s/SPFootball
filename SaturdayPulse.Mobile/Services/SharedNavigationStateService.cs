@@ -113,10 +113,10 @@ namespace SaturdayPulse.Services
         /// abbreviation no longer exists in the new year, resets to "All"
         /// (without firing FilterChanged — year change handles that).
         /// </summary>
-        public void SetAvailableConferences(IEnumerable<ConferenceInfo> conferences)
+        public void SetAvailableConferencesAsync(IEnumerable<ConferenceInfo> conferences)
         {
             var list = conferences.ToList(); // materialize before crossing threads
-            MainThread.BeginInvokeOnMainThread(() =>
+            MainThread.InvokeOnMainThreadAsync(() =>
             {
                 _availableConferences.Clear();
                 foreach (var c in list)
