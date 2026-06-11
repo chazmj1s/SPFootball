@@ -8,6 +8,7 @@ namespace SaturdayPulse.Contracts.Responses
     public record RivalriesResult(int TotalMatchups, int TotalInDatabase, object Filters, IReadOnlyList<object> Rivalries);
     public record PowerRankingsResult(bool IsWeekly, IReadOnlyList<PowerRankingRowResponse> Rankings);
     public record ScheduleResult(IReadOnlyList<object> Games);
+    public record PlayedWeekDto(int Week, string? GameDate);
     public record TeamsResult(IReadOnlyList<object> Teams);
     public record NamedRivalriesResult(IReadOnlyList<object> Rivalries);
     public record TeamHistoryResult(int TeamId, string TeamName, string ShortName, string? ConferenceAbbr, IReadOnlyList<object> History);
