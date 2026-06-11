@@ -199,23 +199,23 @@ namespace SaturdayPulse.ViewModels
         {
             bool currentSeason = year >= DateTime.Now.Year;
 
-            // Fetch + deserialize + conference/tier stamping all happen inside these
-            // calls and are CPU-heavy on device, so run the whole thing on a
-            // background thread. The continuation after the await resumes on the main
-            // thread (this method is invoked on the main thread with no
-            // ConfigureAwait(false)), so every nav-state mutation below stays UI-safe.
-            var (conferences, games) = await Task.Run(async () =>
-            {
-                var confTask  = _apiService.GetConferencesForYearAsync(year);
-                var gamesTask = _cache.GetGamesForYearAsync(year, forceReload: currentSeason);
-                await Task.WhenAll(confTask, gamesTask);
-                return (await confTask, await gamesTask);
-            });
+            // Both calls run concurrently on background threads (fetch + deserialize +
+            // conference/tier stamping are CPU-heavy on device, so they stay off the
+            // main thread). We publish the conference list the moment IT returns rather
+            // than waiting on the multi-MB games fetch — otherwise the conference picker
+            // sits empty (and acts disabled) for the whole games cold-start window.
+            // Each await resumes on the main thread (this method is invoked on the main
+            // thread with no ConfigureAwait(false)), so the nav-state mutations are UI-safe.
+            var confTask  = Task.Run(() => _apiService.GetConferencesForYearAsync(year));
+            var gamesTask = Task.Run(() => _cache.GetGamesForYearAsync(year, forceReload: currentSeason));
 
-            // ── Main-thread continuation: nav-state mutation is UI-safe here ──
-
+            var conferences = await confTask;
             if (conferences != null)
-                _navState.SetAvailableConferences(conferences);
+                _navState.SetAvailableConferences(conferences);   // picker ready ASAP
+
+            var games = await gamesTask;
+
+            // ── Remaining nav-state mutation (week strip + defaults) is UI-safe here ──
 
             var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
             _navState.SetWeeks(weeks);
