@@ -151,6 +151,14 @@ namespace SaturdayPulse.ViewModels
         }
         public bool   HasLoaded     { get; set; }
 
+        /// <summary>
+        /// True only while Rankings is the visible tab. Set by MainPage on tab
+        /// switch. When false, the page defers FilterChanged work (marks itself
+        /// stale) instead of loading off-screen — so it never renders during launch
+        /// or behind another tab. The lazy SyncPage path loads it on first visit.
+        /// </summary>
+        public bool   IsActive      { get; set; }
+
         public string ActiveSortLabel => _currentSort switch
         {
             RankingSort.PowerRating => "Rating",
@@ -378,7 +386,15 @@ namespace SaturdayPulse.ViewModels
         {
             if (e.PropertyName != "FilterChanged") return;
 
-            System.Diagnostics.Debug.WriteLine($"[Rankings] FilterChanged isMain={MainThread.IsMainThread}");
+            System.Diagnostics.Debug.WriteLine($"[Rankings] FilterChanged isMain={MainThread.IsMainThread} isActive={IsActive}");
+
+            // Off-screen: don't load or render now. Mark stale so SyncPage reloads
+            // this page the next time it becomes visible.
+            if (!IsActive)
+            {
+                HasLoaded = false;
+                return;
+            }
 
             switch (_navState.LastFilterChange)
             {

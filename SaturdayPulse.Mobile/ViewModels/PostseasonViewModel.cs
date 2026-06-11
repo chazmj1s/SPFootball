@@ -95,6 +95,13 @@ namespace SaturdayPulse.ViewModels
 
         public bool IsLoading       => _isBusy;
         public bool HasLoaded       { get; set; }
+
+        /// <summary>
+        /// True only while Postseason is the visible tab (set by MainPage on tab
+        /// switch). When false, the page defers FilterChanged work instead of
+        /// loading off-screen; the lazy SyncPage path loads it on first visit.
+        /// </summary>
+        public bool IsActive        { get; set; }
         public bool HasPlayoffData  => PlayoffRounds.Any();
         public bool HasBowlData     => BowlWeekends.Any();
 
@@ -338,7 +345,14 @@ namespace SaturdayPulse.ViewModels
         {
             if (e.PropertyName != "FilterChanged") return;
 
-            System.Diagnostics.Debug.WriteLine($"[Postseason] FilterChanged isMain={MainThread.IsMainThread}");
+            System.Diagnostics.Debug.WriteLine($"[Postseason] FilterChanged isMain={MainThread.IsMainThread} isActive={IsActive}");
+
+            // Off-screen: defer. Mark stale so SyncPage reloads on next visit.
+            if (!IsActive)
+            {
+                HasLoaded = false;
+                return;
+            }
 
             switch (_navState.LastFilterChange)
             {

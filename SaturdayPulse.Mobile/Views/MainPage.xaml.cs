@@ -227,6 +227,13 @@ namespace SaturdayPulse.Views
                     if (PageHost.Children[i] is VisualElement ve)
                         ve.IsVisible = i == index;
 
+                // Mark which page is active so off-screen pages defer FilterChanged
+                // work instead of loading/rendering behind another tab.
+                if (_rankingsPage.BindingContext is PowerRankingsViewModel rActive)
+                    rActive.IsActive = index == 1;
+                if (_postseasonPage.BindingContext is PostseasonViewModel pActive)
+                    pActive.IsActive = index == 2;
+
                 // Lazy load on first visit.
                 switch (index)
                 {
