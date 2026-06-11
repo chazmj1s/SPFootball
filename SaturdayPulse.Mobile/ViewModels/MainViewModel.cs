@@ -229,11 +229,8 @@ namespace SaturdayPulse.ViewModels
                     return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
                 });
 
-            // Conference resolution (MainView owns this): keep the current pick if
-            // it still exists this year, else fall to the default, else "All".
             var resolved =
-                IsConferenceValid(_navState.SelectedConference) ? _navState.SelectedConference
-              : IsConferenceValid(_navState.DefaultConference)  ? _navState.DefaultConference
+                IsConferenceValid(_navState.DefaultConference)  ? _navState.DefaultConference
               : "All";
 
             _navState.SetConferenceSilent(resolved);
