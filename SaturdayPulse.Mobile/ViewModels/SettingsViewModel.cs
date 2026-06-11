@@ -142,10 +142,11 @@ namespace SaturdayPulse.ViewModels
             TierFilters.Add("🏠 Regional");
             TierFilters.Add("• Meh");
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(
-                () => _ = Task.Run(async () => await LoadDataAsync()));
-            RefreshCommand = new Microsoft.Maui.Controls.Command(
-                () => _ = Task.Run(async () => await LoadDataAsync()));
+            // No outer Task.Run — LoadDataAsync runs on the main thread; the team +
+            // rivalry fetch inside it is offloaded via Task.Run and the continuation
+            // (ApplyTeamFilter / ApplyGamesFilter) returns to the main thread.
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
 
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
@@ -315,11 +316,15 @@ namespace SaturdayPulse.ViewModels
         {
             var filtered = _allTeams.AsEnumerable();
 
+            // SelectedConference already stores the abbreviation — compare directly.
+            // (The old DisplayToAbbr call treated it as a display name and, after the
+            //  abbreviation refactor, silently filtered the Teams list to nothing.)
             var conf = _navState.SelectedConference;
             if (conf != "All")
             {
-                var abbr = ConferenceHelper.DisplayToAbbr(conf);
-                filtered = filtered.Where(t => t.ConferenceAbbr == abbr);
+                filtered = filtered.Where(t =>
+                    t.ConferenceAbbr != null &&
+                    t.ConferenceAbbr.Equals(conf, StringComparison.OrdinalIgnoreCase));
             }
 
             var sorted = filtered
