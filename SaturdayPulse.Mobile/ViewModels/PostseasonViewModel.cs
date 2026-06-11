@@ -36,8 +36,12 @@ namespace SaturdayPulse.ViewModels
             _cache      = cache;
             _navState   = navState;
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync(forceReload: true)));
+            // No outer Task.Run — LoadDataAsync runs on the main thread; the HTTP
+            // calls inside it are offloaded via their own Task.Run, and the
+            // continuations (ApplyConferenceFilter / RebuildPostseasonFromCache)
+            // return to the main thread.
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync(forceReload: true));
 
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
