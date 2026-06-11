@@ -472,6 +472,13 @@ namespace SaturdayPulse.Controllers
             return Ok(result);
         }
 
+        [HttpGet("weeks/{year:int}")]
+        public async Task<IActionResult> GetPlayedWeeksByYear(int year, CancellationToken token)
+        {
+            var result = await gameDataService.GetPlayedWeeksByYearAsync(year, token);
+            return Ok(result);
+        }
+
 
         #endregion
 

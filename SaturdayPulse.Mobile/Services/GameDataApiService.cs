@@ -218,6 +218,22 @@ namespace SaturdayPulse.Services
             }
         }
 
+        public async Task<List<PlayedWeekInfo>> GetPlayedWeeksByYear(int year)
+        {
+            try
+            {
+                var url = $"weeks/{year}";
+                var result = await _httpClient.GetFromJsonAsync<List<PlayedWeekInfo>>(url);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error fetching game weeks for year {year}: {ex.Message}");
+                return null;
+            }
+        }
+
         // <summary>
         /// Gets the full season schedule with actual and projected scores.
         /// </summary>

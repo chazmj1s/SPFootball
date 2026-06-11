@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using SaturdayPulse.Api.Contracts.Responses;
+using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Data;
 using SaturdayPulse.Models;
 using SaturdayPulse.Repositories.Interfaces;
@@ -73,14 +73,21 @@ namespace SaturdayPulse.Repositories.Implementations
                             ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0))
                 .ToListAsync(token);
 
-        public Task<List<int>> GetPlayedWeeksByYearAsync(int year, CancellationToken token = default)
-            => _context.Games
-                .Where(g => g.Year == year &&
-                            ((g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0))
-                .Select(g => g.Week)
+        public async Task<List<PlayedWeekDto>> GetPlayedWeeksByYearAsync(
+            int year,
+            CancellationToken token = default)
+        {
+            var databaseData = await _context.Games
+                .Where(g => g.Year == year && g.HomePoints != 0 && g.AwayPoints != 0)
+                .Select(g => new { g.Week, g.GameDate })
                 .Distinct()
-                .OrderBy(w => w)
+                .OrderBy(w => w.Week)
                 .ToListAsync(token);
+
+            return databaseData
+                .Select(w => new PlayedWeekDto((int)w.Week, w.GameDate))
+                .ToList();
+        }
 
         public async Task<List<GameParticipant>> GetGameParticipantsAsync(
             int year, CancellationToken token = default)

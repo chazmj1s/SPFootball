@@ -283,7 +283,11 @@ namespace SaturdayPulse.Services
             return list;
         }
 
-
+        public async Task<List<PlayedWeekDto>> GetPlayedWeeksByYearAsync(int year, CancellationToken token = default)
+        {
+            var result = await _uow.Games.GetPlayedWeeksByYearAsync(year, token);
+            return result;
+        }
 
         // ── Teams and Rivalries ──────────────────────────────────────────────────
 

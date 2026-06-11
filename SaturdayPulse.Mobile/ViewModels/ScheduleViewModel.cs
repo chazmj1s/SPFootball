@@ -32,8 +32,11 @@ namespace SaturdayPulse.ViewModels
             _navState            = navState;
             _personalGameService = personalGameService;
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync(forceReload: true)));
+            // No outer Task.Run — LoadDataAsync runs on the main thread; the cache
+            // fetch inside it is offloaded via Task.Run and the continuation
+            // (ApplyFiltersAndSort) returns to the main thread.
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync(forceReload: true));
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
@@ -139,26 +142,13 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var games = await _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload);
+                var games = await Task.Run(() => _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload));
                 if (games == null || games.Count == 0)
                 {
                     StatusMessage = "No games found";
                     EmptyMessage  = "No games found";
                     return;
                 }
-
-                // Populate week strip
-                var weeks = games.Select(g => g.Week).Distinct().OrderBy(w => w).ToList();
-                _navState.SetWeeks(weeks);
-                _navState.ApplyStartupDefaults(
-                    games,
-                    g => g.Week,
-                    g =>
-                    {
-                        if (string.IsNullOrWhiteSpace(g.GameDate)) return null;
-                        var dateStr = $"{g.GameDate} {_navState.SelectedYear}";
-                        return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
-                    });
 
                 ApplyFiltersAndSort();
             }
@@ -238,11 +228,25 @@ namespace SaturdayPulse.ViewModels
 
         // ── Event handlers ────────────────────────────────────────────────
 
-        private void OnNavStateChanged(object? sender, PropertyChangedEventArgs e)
+        private async void OnNavStateChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName != "FilterChanged") return;
-            System.Diagnostics.Debug.WriteLine($"[Schedule] FilterChanged isMain={MainThread.IsMainThread}");
-            MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
+            System.Diagnostics.Debug.WriteLine($"[Schedule] FilterChanged reason={_navState.LastFilterChange} isMain={MainThread.IsMainThread}");
+
+            switch (_navState.LastFilterChange)
+            {
+                case FilterChangeReason.Year:
+                    // New year — Main built the week strip from a lightweight query,
+                    // but the full game data is Schedule's responsibility. Fetch it.
+                    await LoadDataAsync();
+                    break;
+
+                case FilterChangeReason.Week:
+                case FilterChangeReason.Conference:
+                    // The year's games are already cached — just refilter.
+                    MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
+                    break;
+            }
         }
 
         private void OnCacheUpdated()
