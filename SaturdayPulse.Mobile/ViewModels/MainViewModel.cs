@@ -206,10 +206,9 @@ namespace SaturdayPulse.ViewModels
             // sits empty (and acts disabled) for the whole games cold-start window.
             // Each await resumes on the main thread (this method is invoked on the main
             // thread with no ConfigureAwait(false)), so the nav-state mutations are UI-safe.
-            var confTask  = Task.Run(() => _apiService.GetConferencesForYearAsync(year));
+            var conferences = await _apiService.GetConferencesForYearAsync(year);
             var gamesTask = Task.Run(() => _cache.GetGamesForYearAsync(year, forceReload: currentSeason));
 
-            var conferences = await confTask;
             if (conferences != null)
                 _navState.SetAvailableConferences(conferences);   // picker ready ASAP
 
