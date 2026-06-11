@@ -199,13 +199,18 @@ namespace SaturdayPulse.ViewModels
         {
             bool currentSeason = year >= DateTime.Now.Year;
 
-            var confTask  = _apiService.GetConferencesForYearAsync(year);
-            var gamesTask = _cache.GetGamesForYearAsync(year, forceReload: currentSeason);
-
-            await Task.WhenAll(confTask, gamesTask);
-
-            var conferences = await confTask;
-            var games       = await gamesTask;
+            // Fetch + deserialize + conference/tier stamping all happen inside these
+            // calls and are CPU-heavy on device, so run the whole thing on a
+            // background thread. The continuation after the await resumes on the main
+            // thread (this method is invoked on the main thread with no
+            // ConfigureAwait(false)), so every nav-state mutation below stays UI-safe.
+            var (conferences, games) = await Task.Run(async () =>
+            {
+                var confTask  = _apiService.GetConferencesForYearAsync(year);
+                var gamesTask = _cache.GetGamesForYearAsync(year, forceReload: currentSeason);
+                await Task.WhenAll(confTask, gamesTask);
+                return (await confTask, await gamesTask);
+            });
 
             // ── Main-thread continuation: nav-state mutation is UI-safe here ──
 
