@@ -230,18 +230,18 @@ namespace SaturdayPulse.Views
                 // Lazy load on first visit.
                 switch (index)
                 {
-                    // Schedule VM is main-thread-safe (LoadDataAsync awaits async I/O,
-                    // continuation stays on main). No Task.Run — that would push
-                    // ApplyFiltersAndSort back onto a background thread.
+                    // Schedule + Rankings VMs are main-thread-safe (LoadDataAsync
+                    // awaits async I/O, continuation stays on main). No Task.Run —
+                    // that would push their UI mutations onto a background thread.
                     case 0 when _schedulePage.BindingContext is ScheduleViewModel svm && !svm.HasLoaded:
                         _ = svm.LoadDataAsync(); break;
+                    case 1 when _rankingsPage.BindingContext is PowerRankingsViewModel rvm && !rvm.HasLoaded:
+                        _ = rvm.LoadDataAsync(); break;
 
                     // NOTE: the pages below still use Task.Run pending the same
-                    // consumer-only / main-thread refactor applied to ScheduleViewModel.
-                    // Once each VM's LoadDataAsync awaits async I/O without blocking,
-                    // drop the Task.Run here too (same hazard as case 0).
-                    case 1 when _rankingsPage.BindingContext is PowerRankingsViewModel rvm && !rvm.HasLoaded:
-                        _ = Task.Run(async () => await rvm.LoadDataAsync()); break;
+                    // consumer-only / main-thread refactor. Once each VM's
+                    // LoadDataAsync awaits async I/O without blocking, drop the
+                    // Task.Run here too (same hazard as cases 0 and 1).
                     case 2 when _postseasonPage.BindingContext is PostseasonViewModel pvm && !pvm.HasLoaded:
                         _ = Task.Run(async () => await pvm.LoadDataAsync()); break;
                     case 4 when _SettingsPage.BindingContext is SettingsViewModel fvm && !fvm.HasLoaded:

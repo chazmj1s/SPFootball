@@ -1,4 +1,3 @@
-using SaturdayPulse.Helpers;
 using SaturdayPulse.Models;
 using SaturdayPulse.Services;
 using System.Collections.ObjectModel;
@@ -31,8 +30,11 @@ namespace SaturdayPulse.ViewModels
             _apiService = apiService;
             _navState   = navState;
 
-            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
-            RefreshCommand = new Microsoft.Maui.Controls.Command(() => _ = Task.Run(async () => await LoadDataAsync()));
+            // No outer Task.Run — LoadDataAsync runs on the main thread; the HTTP
+            // call inside it is offloaded via its own Task.Run, and the continuation
+            // (ApplyFiltersAndSort) returns to the main thread.
+            LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
             ApplyFilterCommand = new Microsoft.Maui.Controls.Command<string>(ApplyFilter);
             ApplySortCommand      = new Microsoft.Maui.Controls.Command<RankingSort>(ApplySort);
             SortColumnCommand     = new Microsoft.Maui.Controls.Command<string>(SortByColumn);
@@ -310,7 +312,6 @@ namespace SaturdayPulse.ViewModels
             var conf = _navState.SelectedConference;
             if (conf != "All")
             {
-                var abbr = ConferenceHelper.DisplayToAbbr(conf);
                 filtered = filtered.Where(t =>
                     (t.ConferenceAbbr != null &&
                      t.ConferenceAbbr.Equals(conf, StringComparison.OrdinalIgnoreCase)) ||
