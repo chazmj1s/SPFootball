@@ -164,6 +164,13 @@ namespace SaturdayPulse.ViewModels
                     ApplyGamesFilter();
             });
 
+            // Toggle team follow. FollowService.Toggle flips + persists state and raises
+            // TeamFollowChanged, which OnTeamFollowChanged handles to refresh team and
+            // rivalry follow flags and re-filter both lists. Drives the Teams-tab follow
+            // icon and the per-team hearts on the Games cards.
+            ToggleFollowCommand = new Microsoft.Maui.Controls.Command<int>(teamId =>
+                _followService.Toggle(teamId));
+
             ToggleSectionCommand = new Command<string>(section =>
             {
                 _expandedSection = _expandedSection == section ? null : section;
@@ -354,7 +361,7 @@ namespace SaturdayPulse.ViewModels
                 {
                     "🔥 Epic"     => _allRivalries.Where(r => r.RivalryTier == "EPIC"),
                     "⭐ National" => _allRivalries.Where(r => r.RivalryTier == "NATIONAL"),
-                    "🏠 Regional" => _allRivalries.Where(r => r.RivalryTier == "REGIONAL"),
+                    "🏠 Regional" => _allRivalries.Where(r => r.RivalryTier == "STATE"),
                     "• Meh"       => _allRivalries.Where(r => r.RivalryTier == "MEH"),
                     _             => _allRivalries.AsEnumerable()
                 };
@@ -409,7 +416,7 @@ namespace SaturdayPulse.ViewModels
         {
             "EPIC"     => 0,
             "NATIONAL" => 1,
-            "REGIONAL" => 2,
+            "STATE"    => 2,
             "MEH"      => 3,
             _          => 4
         };
