@@ -28,9 +28,18 @@ namespace SaturdayPulse.Models
         public decimal UpsetRate { get; set; }
         public int FirstPlayed { get; set; }
         public int LastPlayed { get; set; }
-        public bool IsGameFavorited { get; set; }
+        private bool _isGameFavorited;
+        public bool IsGameFavorited
+        {
+            get => _isGameFavorited;
+            set { _isGameFavorited = value; OnPropertyChanged(); }
+        }
 
         // Derived display helpers
+        public string DisplayName =>
+            string.IsNullOrWhiteSpace(RivalryName)
+                ? $"{Team1Name} vs {Team2Name}"
+                : RivalryName!;
         public string DisplayMatchup => $"{Team1ShortName} vs {Team2ShortName}";
         public string DisplaySeries => $"{GamesPlayed} games ({FirstPlayed}–{LastPlayed})";
         public string DisplayUpsetRate => $"{UpsetRate:P0} upset rate";
@@ -40,7 +49,7 @@ namespace SaturdayPulse.Models
         {
             "EPIC" => "🔥",
             "NATIONAL" => "⭐",
-            "REGIONAL" => "🏠",
+            "STATE" => "🏠",
             "MEH" => "•",
             _ => ""
         };

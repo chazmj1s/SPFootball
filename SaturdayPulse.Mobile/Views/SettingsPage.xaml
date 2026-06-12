@@ -159,25 +159,114 @@
                                             ItemSizingStrategy="MeasureAllItems">
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:RivalryInfo">
-                                        <Grid ColumnDefinitions="*,Auto" Padding="12,8">
-                                            <VerticalStackLayout Grid.Column="0" Spacing="2">
-                                                <Label Text="{Binding DisplayName}"
-                                                       FontSize="13" />
-                                                <Label Text="{Binding RivalryTier}"
-                                                       FontSize="10" Opacity="0.6" />
-                                            </VerticalStackLayout>
-                                            <Label Grid.Column="1"
-                                                   Text="{Binding IsGameFavorited, Converter={StaticResource FollowGameGlyphConverter}}"
-                                                   TextColor="{Binding IsGameFavorited, Converter={StaticResource FollowGameColorConverter}}"
-                                                   FontSize="{StaticResource GameStarSize}"
-                                                   VerticalOptions="Center">
-                                                <Label.GestureRecognizers>
-                                                    <TapGestureRecognizer
-                                                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
-                                                        CommandParameter="{Binding .}" />
-                                                </Label.GestureRecognizers>
-                                            </Label>
-                                        </Grid>
+                                        <VerticalStackLayout Spacing="0">
+
+                                            <!-- Title + ★ favorite + tier badge -->
+                                            <Grid ColumnDefinitions="*,Auto,Auto" Padding="10,5,10,2">
+
+                                                <Label Grid.Column="0"
+                                                       Text="{Binding DisplayName}"
+                                                       FontSize="12"
+                                                       FontAttributes="Bold"
+                                                       VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+
+                                                <!-- Star: favorite this game -->
+                                                <controls:FollowGameIcon
+                                                        Grid.Column="1"
+                                                        IsFollowed="{Binding IsGameFavorited}"
+                                                        VerticalOptions="Center"
+                                                        HorizontalOptions="End"
+                                                        Margin="8,0">
+                                                    <controls:FollowGameIcon.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    </controls:FollowGameIcon.GestureRecognizers>
+                                                </controls:FollowGameIcon>
+
+                                                <Label Grid.Column="2"
+                                                       Text="{Binding TierBadge}"
+                                                       FontSize="16"
+                                                       VerticalOptions="Center"
+                                                       HorizontalOptions="End" />
+                                            </Grid>
+
+                                            <!-- Team rows: heart · name · series/upset · margin/swing -->
+                                            <Grid ColumnDefinitions="28,*,110,90"
+                                                  RowDefinitions="Auto,Auto"
+                                                  Padding="10,2,10,5">
+
+                                                <!-- Heart: follow team 1 -->
+                                                <controls:FollowTeamIcon
+                                                        Grid.Row="0" Grid.Column="0"
+                                                        IsFollowed="{Binding Team1IsFollowed}"
+                                                        VerticalOptions="Center"
+                                                        HorizontalOptions="Center">
+                                                    <controls:FollowTeamIcon.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                                                            CommandParameter="{Binding Team1Id}" />
+                                                    </controls:FollowTeamIcon.GestureRecognizers>
+                                                </controls:FollowTeamIcon>
+
+                                                <Label Grid.Row="0" Grid.Column="1"
+                                                       Text="{Binding Team1Name}"
+                                                       FontSize="13"
+                                                       VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+
+                                                <Label Grid.Row="0" Grid.Column="2"
+                                                       Text="{Binding DisplaySeries}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                                                       VerticalOptions="Center" />
+
+                                                <Label Grid.Row="0" Grid.Column="3"
+                                                       Text="{Binding DisplayAvgMargin}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                                       VerticalOptions="Center"
+                                                       HorizontalOptions="End" />
+
+                                                <!-- Heart: follow team 2 -->
+                                                <controls:FollowTeamIcon
+                                                        Grid.Row="1" Grid.Column="0"
+                                                        IsFollowed="{Binding Team2IsFollowed}"
+                                                        VerticalOptions="Center"
+                                                        HorizontalOptions="Center">
+                                                    <controls:FollowTeamIcon.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                                                            CommandParameter="{Binding Team2Id}" />
+                                                    </controls:FollowTeamIcon.GestureRecognizers>
+                                                </controls:FollowTeamIcon>
+
+                                                <Label Grid.Row="1" Grid.Column="1"
+                                                       Text="{Binding Team2Name}"
+                                                       FontSize="13"
+                                                       VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+
+                                                <Label Grid.Row="1" Grid.Column="2"
+                                                       Text="{Binding DisplayUpsetRate}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                                                       VerticalOptions="Center" />
+
+                                                <Label Grid.Row="1" Grid.Column="3"
+                                                       Text="{Binding DisplayAvgSwing}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                                       VerticalOptions="Center"
+                                                       HorizontalOptions="End" />
+                                            </Grid>
+
+                                            <!-- Row divider -->
+                                            <BoxView HeightRequest="1" Opacity="0.12"
+                                                     Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                                        </VerticalStackLayout>
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
                             </CollectionView>
