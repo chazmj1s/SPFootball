@@ -49,6 +49,7 @@ builder.Services.AddScoped<DeveloperService>();
 builder.Services.AddScoped<IAvgScoreDifferentialService, AvgScoreDifferentialService>();
 builder.Services.AddScoped<ProjectionAccuracyService>();
 builder.Services.AddScoped<ConferenceTierService>();
+builder.Services.AddScoped<RosterCapacityService>();
 
 builder.Services.AddSingleton<ProjectionCacheService>();
 

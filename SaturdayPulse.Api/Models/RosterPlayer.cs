@@ -10,14 +10,17 @@ namespace SaturdayPulse.Models
     /// that's intentional, it's what lets RosterCapacityService diff T vs T-1 rosters
     /// to find retained / departed / inflow players.
     ///
-    /// Composite key is (PlayerId, Season), NOT PlayerId alone — PlayerId is a stable
-    /// CFBD athlete ID that persists across seasons for a retained player, so it can't
-    /// be the sole key if the same player needs a row in both season snapshots.
+    /// Composite key is (PlayerId, Team, Season) — NOT (PlayerId, Season) alone. CFBD's
+    /// roster payload can legitimately list the same PlayerId under two different Team
+    /// values within a single season (mid-season transfer, or a roster snapshot that
+    /// straddles two programs within one calendar year), which collided on insert when
+    /// Team wasn't part of the key.
     /// </summary>
     [Table("RosterPlayers")]
-    [PrimaryKey(nameof(PlayerId), nameof(Season))]
-    [Index(nameof(Team))]
+    [PrimaryKey(nameof(PlayerId), nameof(Season), nameof(Team))]
     [Index(nameof(Season))]
+	[Index(nameof(Team))]
+    
     public class RosterPlayer
     {
         [Column("PlayerId")]

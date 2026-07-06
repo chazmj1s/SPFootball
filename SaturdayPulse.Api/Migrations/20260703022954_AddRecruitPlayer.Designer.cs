@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260703022954_AddRecruitPlayer")]
+    partial class AddRecruitPlayer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -685,10 +688,6 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<short>("Year")
                         .HasColumnType("smallint")
                         .HasColumnName("Year");
-
-                    b.Property<decimal?>("ZRoster")
-                        .HasColumnType("decimal(10,4)")
-                        .HasColumnName("ZRoster");
 
                     b.HasKey("Id");
 

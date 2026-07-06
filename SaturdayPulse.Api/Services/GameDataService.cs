@@ -678,6 +678,216 @@ namespace SaturdayPulse.Services
             return gamesLoaded + linesLoaded;
         }
 
+        /// <summary>
+        /// Loads current-season roster for all teams from CFBD. Call once with the
+        /// current year (T) and again with the prior year (T-1) — RosterCapacityService
+        /// needs both snapshots to diff retained/departed/inflow players.
+        /// FBS-filtered, same pattern as LoadPortalAsync.
+        /// </summary>
+        public async Task<int> LoadRosterCapacityRosterAsync(int season, CancellationToken token = default)
+        {
+            var response = await CfbdClient.GetAsync($"roster?year={season}", token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdRosterEntryDto>>(cancellationToken: token) ?? [];
+
+            if (dtos.Count == 0) return 0;
+
+            var fbsTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsNames = fbsTeams
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.TeamName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var rosterPlayers = dtos
+                .Where(d => fbsNames.Contains(d.Team))
+                .Select(d => new RosterPlayer
+                {
+                    PlayerId = d.Id,
+                    Season = season,
+                    Team = d.Team,
+                    Position = d.Position ?? "UNK",
+                    ClassYear = d.ClassYear,
+                    RecruitId = d.RecruitIds?.FirstOrDefault(),
+                    // RecruitRating populated separately via LoadRecruitingRatingsAsync
+                    // once that endpoint's shape is confirmed.
+                    RecruitRating = null,
+                    TransferRating = null,
+                    FirstName = d.FirstName,
+                    LastName = d.LastName
+                })
+                .ToList();
+
+            var duplicates = rosterPlayers
+                .GroupBy(r => r.PlayerId)
+                .Where(g => g.Count() > 1)
+                .SelectMany(g => g)
+                .ToList();
+
+            await _uow.RosterPlayers.UpsertSeasonAsync(season, rosterPlayers, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadRosterCapacityRosterAsync: upserted {rosterPlayers.Count} roster rows for {season}");
+            return rosterPlayers.Count;
+        }
+
+        /// <summary>
+        /// Loads player season stats for all teams from CFBD — a single bulk pull,
+        /// no team filter needed (confirmed against the live API). Used for T-1 only,
+        /// to compute departed-player production shares.
+        /// </summary>
+        public async Task<int> LoadRosterCapacityStatsAsync(int season, CancellationToken token = default)
+        {
+            var response = await CfbdClient.GetAsync($"stats/player/season?year={season}", token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdPlayerSeasonStatDto>>(cancellationToken: token) ?? [];
+
+            if (dtos.Count == 0) return 0;
+
+            var fbsTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsNames = fbsTeams
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.TeamName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var playerStats = dtos
+                .Where(d => fbsNames.Contains(d.Team))
+                .Select(d => new PlayerStat
+                {
+                    PlayerId = d.PlayerId,
+                    Season = d.Season,
+                    Team = d.Team,
+                    Position = d.Position ?? "UNK",
+                    Category = d.Category,
+                    StatType = d.StatType,
+                    StatValue = d.Stat
+                })
+                .ToList();
+
+            await _uow.PlayerStats.UpsertSeasonAsync(season, playerStats, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadRosterCapacityStatsAsync: upserted {playerStats.Count} stat rows for {season}");
+            return playerStats.Count;
+        }
+
+        /// <summary>
+        /// Loads head coaches from CFBD and flattens each coach's Seasons[] array into
+        /// one CoachRecord row per (school, year) they coached, filtered to the requested
+        /// year. Used to detect year-over-year HC turnover for the coaching penalty.
+        /// </summary>
+        public async Task<int> LoadRosterCapacityCoachesAsync(int year, CancellationToken token = default)
+        {
+            var response = await CfbdClient.GetAsync($"coaches?year={year}", token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdCoachDto>>(cancellationToken: token) ?? [];
+
+            if (dtos.Count == 0) return 0;
+
+            var fbsTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsNames = fbsTeams
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.TeamName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var flattened = new Dictionary<(string Team, int Year), string>();
+            foreach (var coach in dtos)
+            {
+                var fullName = $"{coach.FirstName} {coach.LastName}".Trim();
+                foreach (var season in coach.Seasons)
+                {
+                    if (season.Year != year) continue;
+                    if (string.IsNullOrWhiteSpace(season.School)) continue;
+                    if (!fbsNames.Contains(season.School)) continue;
+                    flattened[(season.School, season.Year)] = fullName;
+                }
+            }
+
+            var coachRecords = flattened
+                .Select(kvp => new CoachRecord
+                {
+                    Team = kvp.Key.Team,
+                    Year = kvp.Key.Year,
+                    CoachName = kvp.Value
+                })
+                .ToList();
+
+            await _uow.CoachRecords.UpsertYearAsync(year, coachRecords, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadRosterCapacityCoachesAsync: upserted {coachRecords.Count} coach records for {year}");
+            return coachRecords.Count;
+        }
+
+        /// <summary>
+        /// Loads the recruiting class for a single year from CFBD and upserts into
+        /// RecruitPlayers. Only used for the target Z_roster year's incoming freshman
+        /// class — players already on a prior roster get their RecruitRating fallback
+        /// from real PlayerStat history instead, so no year-over-year pull is needed here.
+        /// Filters out uncommitted recruits (no CommittedTo) since they can't map to a team.
+        /// </summary>
+        public async Task<int> LoadRosterCapacityRecruitingAsync(int year, CancellationToken token = default)
+        {
+            var response = await CfbdClient.GetAsync($"recruiting/players?year={year}", token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdRecruitPlayerDto>>(cancellationToken: token) ?? [];
+
+            if (dtos.Count == 0) return 0;
+
+            var recruitPlayers = dtos
+                .Where(d => !string.IsNullOrWhiteSpace(d.CommittedTo))
+                .Select(d => new RecruitPlayer
+                {
+                    Id = d.Id,
+                    AthleteId = d.AthleteId,
+                    RecruitType = d.RecruitType,
+                    Year = d.Year,
+                    Ranking = d.Ranking,
+                    Name = d.Name,
+                    School = d.School,
+                    CommittedTo = d.CommittedTo,
+                    Position = d.Position ?? "UNK",
+                    Height = d.Height,
+                    Weight = d.Weight,
+                    Stars = d.Stars,
+                    Rating = d.Rating,
+                    City = d.City,
+                    StateProvince = d.StateProvince,
+                    Country = d.Country,
+                    Latitude = d.HometownInfo?.Latitude,
+                    Longitude = d.HometownInfo?.Longitude,
+                    FipsCode = d.HometownInfo?.FipsCode
+                })
+                .ToList();
+
+            await _uow.RecruitPlayers.UpsertYearAsync(year, recruitPlayers, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"LoadRosterCapacityRecruitingAsync: upserted {recruitPlayers.Count} recruit rows for {year}");
+            return recruitPlayers.Count;
+        }
+
+        /// <summary>
+        /// Convenience wrapper: loads the recruiting class for a year, then immediately
+        /// joins it into RosterPlayers.RecruitRating for that same year. Requires the
+        /// target year's roster to already be loaded (LoadRosterCapacityRosterAsync) —
+        /// this only updates existing RosterPlayer rows, it doesn't create any.
+        /// </summary>
+        public async Task<(int RecruitsLoaded, int RatingsApplied)> LoadAndApplyRosterCapacityRecruitingAsync(
+            int year, CancellationToken token = default)
+        {
+            var loaded = await LoadRosterCapacityRecruitingAsync(year, token);
+            var applied = await _uow.RosterPlayers.ApplyRecruitRatingsAsync(year, token);
+            return (loaded, applied);
+        }
+
         #endregion
 
         public async Task<int> SetSeasonTypeAsync(List<int> gameIds, string seasonType, CancellationToken token = default)

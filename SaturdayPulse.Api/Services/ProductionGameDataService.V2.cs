@@ -1145,10 +1145,18 @@ namespace SaturdayPulse.Services
                 ? allRecords.Where(r => r.Year >= startYear.Value).ToList()
                 : allRecords;
 
+            // Same gap as the V1 endpoint: only one team's records were in scope.
+            // Reuses the `Teams` dictionary already loaded above for FBS filtering.
+            var minYear = targetRecords.Min(r => r.Year) - 10;
+            var maxYearExclusive = targetRecords.Max(r => r.Year) + 1;
+            var leagueRecords = await _uow.TeamRecords.GetHistoricalAsync(minYear, maxYearExclusive, token);
+            var leagueStatsByYear = RollingAverageService.BuildLeagueYearStats(leagueRecords, Teams);
+
             var results = targetRecords.Select(r =>
             {
                 var priorRecords = history.Where(h => h.Year < r.Year).Take(10).ToList();
-                var avg = _rollingAverageService.Compute(r, priorRecords, useLiveSwap: false);
+                var avg = _rollingAverageService.Compute(
+                    r, priorRecords, useLiveSwap: false, week: null, leagueStatsByYear);
                 return (object)new
                 {
                     year = (int)r.Year, wins = (int)r.Wins, losses = (int)r.Losses,

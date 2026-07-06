@@ -17,6 +17,13 @@ namespace SaturdayPulse.Contracts
         IWeeklyRankingsRepository WeeklyRankings { get; }
         ITeamsConferenceHistoryRepository TeamsConferenceHistory { get; }
         IPortalRepository Portal { get; }
+
+        // ── Roster Capacity Modifier repositories ─────────────────────────────
+        IRosterPlayerRepository RosterPlayers { get; }
+        IPlayerStatRepository   PlayerStats   { get; }
+        ICoachRecordRepository  CoachRecords  { get; }
+        IRecruitPlayerRepository RecruitPlayers { get; }
+
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }
 }

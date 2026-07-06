@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260703010653_AddPlayerStatUniqueIndex")]
+    partial class AddPlayerStatUniqueIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -438,107 +441,6 @@ namespace SaturdayPulse.Api.Migrations
                     b.ToTable("Projections");
                 });
 
-            modelBuilder.Entity("SaturdayPulse.Models.RecruitPlayer", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("Id");
-
-                    b.Property<string>("AthleteId")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("AthleteId");
-
-                    b.Property<string>("City")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("City");
-
-                    b.Property<string>("CommittedTo")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("CommittedTo");
-
-                    b.Property<string>("Country")
-                        .HasMaxLength(8)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("Country");
-
-                    b.Property<string>("FipsCode")
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("FipsCode");
-
-                    b.Property<double?>("Height")
-                        .HasColumnType("REAL")
-                        .HasColumnName("Height");
-
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("REAL")
-                        .HasColumnName("Latitude");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("REAL")
-                        .HasColumnName("Longitude");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("Name");
-
-                    b.Property<string>("Position")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("Position");
-
-                    b.Property<int?>("Ranking")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("Ranking");
-
-                    b.Property<double>("Rating")
-                        .HasColumnType("REAL")
-                        .HasColumnName("Rating");
-
-                    b.Property<string>("RecruitType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("RecruitType");
-
-                    b.Property<string>("School")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("School");
-
-                    b.Property<int>("Stars")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("Stars");
-
-                    b.Property<string>("StateProvince")
-                        .HasMaxLength(8)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("StateProvince");
-
-                    b.Property<int?>("Weight")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("Weight");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("Year");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CommittedTo");
-
-                    b.HasIndex("AthleteId", "Year");
-
-                    b.ToTable("RecruitPlayers");
-                });
-
             modelBuilder.Entity("SaturdayPulse.Models.RosterPlayer", b =>
                 {
                     b.Property<string>("PlayerId")
@@ -685,10 +587,6 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<short>("Year")
                         .HasColumnType("smallint")
                         .HasColumnName("Year");
-
-                    b.Property<decimal?>("ZRoster")
-                        .HasColumnType("decimal(10,4)")
-                        .HasColumnName("ZRoster");
 
                     b.HasKey("Id");
 

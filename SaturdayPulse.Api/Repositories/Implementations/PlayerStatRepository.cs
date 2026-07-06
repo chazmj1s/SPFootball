@@ -42,8 +42,8 @@ namespace SaturdayPulse.Repositories.Implementations
             if (existing.Any())
                 _context.PlayerStats.RemoveRange(existing);
 
+            // No SaveChangesAsync here — see RosterPlayerRepository for why.
             await _context.PlayerStats.AddRangeAsync(entries, token);
-            await _context.SaveChangesAsync(token);
         }
     }
 }
