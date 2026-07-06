@@ -1,18 +1,59 @@
-using Microsoft.EntityFrameworkCore;
-using SaturdayPulse.Data;
+using SaturdayPulse.Contracts;
 using SaturdayPulse.Extensions;
 using SaturdayPulse.Models;
-using SaturdayPulse.Repositories.Interfaces;
 
-namespace SaturdayPulse.Repositories.Implementations
+namespace SaturdayPulse.Services
 {
-    public class PortalRepository : IPortalRepository
+    /// <summary>
+    /// Computes ZRoster — a national Z-score of net roster-composition change for a
+    /// given season — and persists it to TeamRecords.ZRoster. Formerly lived inside
+    /// PortalRepository as ComputePortalMetricsAsync (which computed the now-retired
+    /// RosterStrength/PortalDelta pair); moved here because this is real calculation
+    /// logic (positional weighting, production-share formulas, set reconciliation,
+    /// national z-scoring, coaching-turnover penalty), not data access.
+    ///
+    /// Goes through IUnitOfWork (RosterPlayers, PlayerStats, CoachRecords, Teams,
+    /// TeamRecords) rather than a raw DbContext — matching RollingAverageService's
+    /// own constructor convention.
+    ///
+    /// ZRoster calculation:
+    ///   raw score = Σ(inflow talent × positional weight) − Σ(departed production × positional weight)
+    ///   inflow talent  = RosterPlayer.TransferRating ?? RecruitRating ?? 0.70 floor
+    ///   departed cost  = prior-year production share (from PlayerStat) if available,
+    ///                    else the SAME fallback cascade used for inflow — this is how
+    ///                    the O-line gap (no box-score stats exist for linemen) is
+    ///                    handled, no separate flat-penalty mechanism.
+    ///   raw score is z-scored against the FBS-wide mean/stddev for the season, then
+    ///   adjusted by a coaching-turnover penalty (-1.5 std devs) if the team's HC
+    ///   changed year over year.
+    ///
+    /// Set reconciliation (retained/departed/inflow) diffs RosterPlayer.PlayerId
+    /// between the current season and season-1, matching the existing composite-key
+    /// convention (PlayerId, Season, Team).
+    ///
+    /// ASSUMPTION FLAGGED: assumes RosterPlayer.TransferRating has already been
+    /// populated by some existing portal-application method (mirroring
+    /// ApplyRecruitRatingsAsync's pattern for RecruitRating). That method wasn't
+    /// available to review — if it doesn't exist or hasn't run, TransferRating will
+    /// always be null and every inflow player silently falls back to
+    /// RecruitRating/0.70. Worth confirming before trusting real output.
+    ///
+    /// Only FBS teams are included — matched by team name via the roster's own Team
+    /// field, consistent with the existing FBS-name-matching convention used
+    /// elsewhere in this pipeline. IRosterPlayerRepository/IPlayerStatRepository
+    /// don't offer an FBS-filtered query, so filtering happens client-side after
+    /// GetBySeasonAsync — same two-step pattern (season filter in the query, FBS-name
+    /// dictionary lookup afterward) required to avoid the earlier EF Core
+    /// Dictionary.ContainsKey translation failure.
+    /// </summary>
+    public class RosterCapacityService
     {
-        private readonly NCAAContext _context;
+        private readonly IUnitOfWork _uow;
 
         // Position tier weights — QB touches every play, trenches decide games.
-        // Left as-is per Charlie's call — revisit once we see real ZRoster numbers
-        // rather than collapsing to the 5-group scheme from the spec doc up front.
+        // Carried over unchanged from PortalRepository — left as-is per the call to
+        // revisit once real ZRoster numbers are visible, rather than collapsing to
+        // the five-group scheme from the original spec doc up front.
         private static readonly Dictionary<string, double> PositionWeights = new(StringComparer.OrdinalIgnoreCase)
         {
             ["QB"]   = 2.5,
@@ -41,90 +82,31 @@ namespace SaturdayPulse.Repositories.Implementations
         // recruit rating, and (for departures) no measurable prior-year production.
         private const double UnratedFloor = 0.70;
 
-        public PortalRepository(NCAAContext context) => _context = context;
-
-        public Task<List<PortalEntry>> GetBySeasonAsync(int season, CancellationToken token = default)
-            => _context.PortalEntries
-                .Where(p => p.Season == season)
-                .ToListAsync(token);
-
-        public Task<List<int>> GetDistinctSeasonsAsync(CancellationToken token = default)
-            => _context.PortalEntries
-                .Select(p => p.Season)
-                .Distinct()
-                .OrderBy(s => s)
-                .ToListAsync(token);
-
-        public async Task UpsertSeasonAsync(
-            int season, List<PortalEntry> entries, CancellationToken token = default)
-        {
-            var existing = await _context.PortalEntries
-                .Where(p => p.Season == season)
-                .ToListAsync(token);
-
-            if (existing.Any())
-                _context.PortalEntries.RemoveRange(existing);
-
-            // Withdrawn already filtered at load time but double-check here.
-            var toInsert = entries
-                .Where(e => e.Eligibility != "Withdrawn")
-                .ToList();
-
-            await _context.PortalEntries.AddRangeAsync(toInsert, token);
-        }
+        public RosterCapacityService(IUnitOfWork uow) => _uow = uow;
 
         /// <summary>
-        /// Computes ZRoster for all FBS teams for the given season and persists it to
-        /// TeamRecords. Replaces the old RosterStrength/PortalDelta calculation — those
-        /// two fields are retired (left in the schema, no longer populated).
-        ///
-        /// ZRoster — national Z-score of net roster-composition change:
-        ///   raw score = Σ(inflow talent × positional weight) − Σ(departed production × positional weight)
-        ///   inflow talent  = RosterPlayer.TransferRating ?? RecruitRating ?? 0.70 floor
-        ///   departed cost  = prior-year production share (from PlayerStat) if available,
-        ///                    else the SAME fallback cascade used for inflow (their own
-        ///                    entry-talent rating) — this is deliberately how the O-line
-        ///                    gap (no box-score stats exist for linemen) is handled: no
-        ///                    separate flat-penalty mechanism, just the shared fallback.
-        ///   raw score is then z-scored against the FBS-wide mean/stddev for the season,
-        ///   and a coaching-turnover penalty (-1.5 std devs) is applied if the team's HC
-        ///   changed year over year.
-        ///
-        /// Set reconciliation (retained/departed/inflow) is done per team by diffing
-        /// RosterPlayer.PlayerId between the current season and season-1, matching the
-        /// existing composite-key convention (PlayerId, Season, Team).
-        ///
-        /// ASSUMPTION FLAGGED: this assumes RosterPlayer.TransferRating has already been
-        /// populated by some existing portal-application method (mirroring
-        /// ApplyRecruitRatingsAsync's pattern for RecruitRating). That method wasn't
-        /// available to review — if it doesn't exist or hasn't run, TransferRating will
-        /// always be null here and every inflow player silently falls back to
-        /// RecruitRating/0.70. Worth confirming before trusting real output.
-        ///
-        /// Only FBS teams are included — matched by team name via the roster's own
-        /// Team field, consistent with the existing FBS-name-matching convention used
-        /// elsewhere in this repository. Returns count of teams updated.
+        /// Computes and persists ZRoster for all FBS teams for the given season.
+        /// Returns count of teams updated.
         /// </summary>
-        public async Task<int> ComputePortalMetricsAsync(int season, CancellationToken token = default)
+        public async Task<int> ComputeZRosterAsync(int season, CancellationToken token = default)
         {
             var priorSeason = season - 1;
 
-            var fbsTeams = await _context.Teams
-                .Where(t => t.Division == "fbs" || t.Division == "FBS")
-                .ToListAsync(token);
+            var allTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsTeams = allTeams
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .ToList();
             var fbsNameToId = fbsTeams
                 .ToDictionary(t => t.TeamName, t => t.TeamId, StringComparer.OrdinalIgnoreCase);
 
-            var currentRosterAll = await _context.RosterPlayers
-                .Where(r => r.Season == season)
-                .ToListAsync(token);
+            // GetBySeasonAsync returns all teams for the season — no FBS filter
+            // available at the repo level, so it's applied client-side afterward.
+            var currentRosterAll = await _uow.RosterPlayers.GetBySeasonAsync(season, token);
             var currentRoster = currentRosterAll
                 .Where(r => fbsNameToId.ContainsKey(r.Team))
                 .ToList();
 
-            var priorRosterAll = await _context.RosterPlayers
-                .Where(r => r.Season == priorSeason)
-                .ToListAsync(token);
+            var priorRosterAll = await _uow.RosterPlayers.GetBySeasonAsync(priorSeason, token);
             var priorRoster = priorRosterAll
                 .Where(r => fbsNameToId.ContainsKey(r.Team))
                 .ToList();
@@ -132,19 +114,12 @@ namespace SaturdayPulse.Repositories.Implementations
             if (currentRoster.Count == 0) return 0;
 
             // Prior-year production — used only to score departures.
-            var priorStatsAll = await _context.PlayerStats
-                .Where(s => s.Season == priorSeason)
-                .ToListAsync(token);
+            var priorStatsAll = await _uow.PlayerStats.GetBySeasonAsync(priorSeason, token);
             var priorStats = priorStatsAll
                 .Where(s => fbsNameToId.ContainsKey(s.Team))
                 .ToList();
 
-            var currentCoachByTeam = await _context.CoachRecords
-                .Where(c => c.Year == season)
-                .ToDictionaryAsync(c => c.Team, c => c.CoachName, StringComparer.OrdinalIgnoreCase, token);
-            var priorCoachByTeam = await _context.CoachRecords
-                .Where(c => c.Year == priorSeason)
-                .ToDictionaryAsync(c => c.Team, c => c.CoachName, StringComparer.OrdinalIgnoreCase, token);
+            var coachChangedByTeam = await _uow.CoachRecords.GetCoachChangeByTeamAsync(season, token);
 
             // ── Production-share denominators, built once from prior-year stats ────
             // Simplified proxy per the original spec: offensive skill positions share
@@ -244,21 +219,12 @@ namespace SaturdayPulse.Repositories.Implementations
             // ── Coaching turnover penalty ────────────────────────────────────────────
             foreach (var team in zRosterByTeam.Keys.ToList())
             {
-                var current = currentCoachByTeam.GetValueOrDefault(team);
-                var prior   = priorCoachByTeam.GetValueOrDefault(team);
-
-                var turnedOver = !string.IsNullOrWhiteSpace(current) &&
-                                  !string.IsNullOrWhiteSpace(prior) &&
-                                  !string.Equals(current, prior, StringComparison.OrdinalIgnoreCase);
-
-                if (turnedOver)
+                if (coachChangedByTeam.TryGetValue(team, out var changed) && changed)
                     zRosterByTeam[team] -= CoachingTurnoverPenalty;
             }
 
             // ── Persist to TeamRecords ───────────────────────────────────────────────
-            var teamRecords = await _context.TeamRecords
-                .Where(tr => tr.Year == season)
-                .ToListAsync(token);
+            var teamRecords = await _uow.TeamRecords.GetByYearAsync(season, token);
 
             int updated = 0;
             foreach (var record in teamRecords)
@@ -272,9 +238,26 @@ namespace SaturdayPulse.Repositories.Implementations
                 updated++;
             }
 
-            await _context.SaveChangesAsync(token);
+            await _uow.SaveChangesAsync(token);
 
             return updated;
+        }
+
+        /// <summary>
+        /// Runs ComputeZRosterAsync for every season that has portal data loaded.
+        /// NOTE: still driven off IPortalRepository.GetDistinctSeasonsAsync (i.e.
+        /// PortalEntries) rather than RosterPlayers/PlayerStats/RecruitPlayers — a
+        /// known, flagged mismatch, since those are the tables ZRoster actually
+        /// depends on now. Works fine as long as portal data coverage matches
+        /// roster/recruiting coverage, but isn't guaranteed to.
+        /// </summary>
+        public async Task<int> ComputeZRosterBulkAsync(CancellationToken token = default)
+        {
+            var seasons = await _uow.Portal.GetDistinctSeasonsAsync(token);
+            int total = 0;
+            foreach (var season in seasons)
+                total += await ComputeZRosterAsync(season, token);
+            return total;
         }
 
         private static double WeightedDefensiveValue(string statType, double statValue) => statType switch

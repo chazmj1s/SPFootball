@@ -16,6 +16,9 @@ namespace SaturdayPulse.Interfaces
         Task<int> LoadLinesAsync(int year, int week, CancellationToken token = default);
         Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default);
         Task<int> AssignPostseasonWeeksAsync(int year, CancellationToken token = default);
+        Task<int> LoadRosterCapacityRosterAsync(int season, CancellationToken token = default);
+        Task<int> LoadRosterCapacityStatsAsync(int season, CancellationToken token = default);
+        Task<int> LoadRosterCapacityCoachesAsync(int year, CancellationToken token = default);
 
         // ── CFBD V2 — Bulk load ───────────────────────────────────────────────
         Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default);
@@ -25,6 +28,7 @@ namespace SaturdayPulse.Interfaces
         Task<int> AssignPostseasonWeeksBulkAsync(int startYear, CancellationToken token = default);
         Task<int> LoadPortalAsync(int season, CancellationToken token = default);
         Task<int> LoadPortalBulkAsync(int startSeason, CancellationToken token = default);
-
+        Task<int> LoadRosterCapacityRecruitingAsync(int year, CancellationToken token);
+        Task<(int RecruitsLoaded, int RatingsApplied)> LoadAndApplyRosterCapacityRecruitingAsync(int year, CancellationToken token);
     }
 }

@@ -131,11 +131,22 @@ namespace SaturdayPulse.Services
                 .GroupBy(tr => tr.TeamID)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Year).ToList());
 
+            // League-wide PowerRating distribution, needed to normalize PowerRating
+            // onto a comparable [0,1] scale the same way RollingAverageService does
+            // internally. FBS membership uses the current year's team list as a proxy
+            // for every historical year — same known simplification documented in
+            // RollingAverageService.BuildLeagueYearStats itself.
+            var teamsDictForStats = await _uow.Teams.GetByTeamIdsAsync(
+                currentRecords.Select(r => r.TeamID).ToList(), token);
+            var leagueStatsByYear = RollingAverageService.BuildLeagueYearStats(
+                historicalRecords.Concat(currentRecords), teamsDictForStats);
+
             var results = currentRecords.Select(r =>
             {
                 historyByTeam.TryGetValue(r.TeamID, out var history);
                 history ??= [];
-                var avg = _rollingAverageService.Compute(r, history, useLiveSwap: false);
+                var avg = _rollingAverageService.Compute(
+                    r, history, useLiveSwap: false, week: null, leagueStatsByYear);
                 return (object)new
                 {
                     teamId          = r.TeamID,
@@ -170,10 +181,22 @@ namespace SaturdayPulse.Services
                 ? allRecords.Where(r => r.Year >= startYear.Value).ToList()
                 : allRecords;
 
+            // This endpoint only ever loaded ONE team's records — no league-wide data
+            // was in scope before. Normalizing PowerRating correctly requires it, so
+            // this is a genuinely new query added here (not just a signature fix).
+            // Covers every year that could appear as a "current" or historical year
+            // across all target records being computed below.
+            var minYear = targetRecords.Min(r => r.Year) - 10;
+            var maxYearExclusive = targetRecords.Max(r => r.Year) + 1;
+            var leagueRecords = await _uow.TeamRecords.GetHistoricalAsync(minYear, maxYearExclusive, token);
+            var teamsDictForStats = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var leagueStatsByYear = RollingAverageService.BuildLeagueYearStats(leagueRecords, teamsDictForStats);
+
             var results = targetRecords.Select(r =>
             {
                 var priorRecords = history.Where(h => h.Year < r.Year).Take(10).ToList();
-                var avg          = _rollingAverageService.Compute(r, priorRecords, useLiveSwap: false);
+                var avg          = _rollingAverageService.Compute(
+                    r, priorRecords, useLiveSwap: false, week: null, leagueStatsByYear);
                 return (object)new
                 {
                     year            = (int)r.Year,

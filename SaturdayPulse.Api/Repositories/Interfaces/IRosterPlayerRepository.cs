@@ -29,5 +29,16 @@ namespace SaturdayPulse.Repositories.Interfaces
         /// each with entries already tagged to the correct Season before being passed in).
         /// </summary>
         Task UpsertSeasonAsync(int season, List<RosterPlayer> entries, CancellationToken token = default);
+
+        /// <summary>
+        /// Joins RecruitPlayers (Year == season) to RosterPlayers (Season == season) on
+        /// AthleteId == PlayerId and writes RecruitRating for every match. Recruits with no
+        /// AthleteId, or roster players with no matching recruit row, are left alone — they
+        /// keep whatever RecruitRating they already had (typically null, which falls back to
+        /// the 0.70 unrated floor at compute time). Pure DB computation — self-saves, matching
+        /// the ComputeYAsync convention (no external SaveChangesAsync call needed after this).
+        /// Returns the number of RosterPlayer rows updated.
+        /// </summary>
+        Task<int> ApplyRecruitRatingsAsync(int season, CancellationToken token = default);
     }
 }

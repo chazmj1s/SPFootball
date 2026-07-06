@@ -14,14 +14,17 @@ namespace SaturdayPulse.Repositories.Interfaces
         Task<List<CoachRecord>> GetByYearAsync(int year, CancellationToken token = default);
 
         /// <summary>
-        /// Returns the coach record for a single team in a given year, or null if not found.
+        /// Returns, for every team with a coach record in `year`, whether the head
+        /// coach changed versus year-1. Comparison is whitespace/casing-normalized —
+        /// raw CoachName strings from CFBD can drift between season pulls (extra
+        /// spaces, casing) without representing an actual coaching change, and an
+        /// exact-string comparison was confirmed producing false positives (e.g.
+        /// flagging real, unchanged coaches at teams that kept the same HC). A team
+        /// missing a prior-year record returns false (can't confirm a change, so
+        /// don't penalize) rather than treating missing data as a change.
         /// </summary>
-        Task<CoachRecord?> GetByTeamAndYearAsync(string team, int year, CancellationToken token = default);
-
-        /// <summary>
-        /// Returns all distinct years available in the table.
-        /// </summary>
-        Task<List<int>> GetDistinctYearsAsync(CancellationToken token = default);
+        Task<IReadOnlyDictionary<string, bool>> GetCoachChangeByTeamAsync(
+            int year, CancellationToken token = default);
 
         /// <summary>
         /// Deletes all coach records for the given year and inserts the new batch.

@@ -21,6 +21,7 @@ namespace SaturdayPulse.Services
         private readonly IGameDataService          _gameDataService;
         private readonly TeamMetricsService        _teamMetrics;
         private readonly RollingAverageService     _rollingAverageService;
+        private readonly RosterCapacityService     _rosterCapacityService;
         private readonly ScoreDeltaCalculator      _scoreDeltaCalculator;
         private readonly MatchupHistoryCalculator  _matchupHistoryCalculator;
         private readonly WeeklyRankingsService     _weeklyRankingsService;
@@ -33,6 +34,7 @@ namespace SaturdayPulse.Services
             IGameDataService gameDataService,
             TeamMetricsService teamMetrics,
             RollingAverageService rollingAverageService,
+            RosterCapacityService rosterCapacityService,
             ScoreDeltaCalculator scoreDeltaCalculator,
             MatchupHistoryCalculator matchupHistoryCalculator,
             WeeklyRankingsService weeklyRankingsService,
@@ -44,6 +46,7 @@ namespace SaturdayPulse.Services
             _gameDataService          = gameDataService;
             _teamMetrics              = teamMetrics;
             _rollingAverageService    = rollingAverageService;
+            _rosterCapacityService    = rosterCapacityService;
             _scoreDeltaCalculator     = scoreDeltaCalculator;
             _matchupHistoryCalculator = matchupHistoryCalculator;
             _weeklyRankingsService    = weeklyRankingsService;
@@ -91,23 +94,43 @@ namespace SaturdayPulse.Services
         public Task<int> LoadPortalAsync(int season, CancellationToken token = default)
             => _gameDataService.LoadPortalAsync(season, token);
 
+        public Task<int> LoadRosterCapacityRosterAsync(int season, CancellationToken token = default)
+            => _gameDataService.LoadRosterCapacityRosterAsync(season, token);
+
+        public Task<int> LoadRosterCapacityStatsAsync(int season, CancellationToken token = default)
+            => _gameDataService.LoadRosterCapacityStatsAsync(season, token);
+
+        public Task<int> LoadRosterCapacityCoachesAsync(int year, CancellationToken token = default)
+            => _gameDataService.LoadRosterCapacityCoachesAsync(year, token);
+
+        public Task<int> LoadRosterCapacityRecruitingAsync(int year, CancellationToken token = default)
+            => _gameDataService.LoadRosterCapacityRecruitingAsync(year, token);
+
+        // Loads the recruiting class for a year and immediately joins RecruitRating into
+        // RosterPlayers for that same year. Requires that year's roster already loaded.
+        public Task<(int RecruitsLoaded, int RatingsApplied)> LoadAndApplyRosterCapacityRecruitingAsync(
+            int year, CancellationToken token = default)
+            => _gameDataService.LoadAndApplyRosterCapacityRecruitingAsync(year, token);
+
+        // Convenience wrapper — loads roster for both T and T-1 in one call, since
+        // RosterCapacityService always needs both snapshots together.
+        public async Task<(int CurrentCount, int PriorCount)> LoadRosterCapacityBothSeasonsAsync(
+            int currentSeason, CancellationToken token = default)
+        {
+            var currentCount = await _gameDataService.LoadRosterCapacityRosterAsync(currentSeason, token);
+            await Task.Delay(300, token); // rate limit, matches existing bulk-load pattern
+            var priorCount = await _gameDataService.LoadRosterCapacityRosterAsync(currentSeason - 1, token);
+            return (currentCount, priorCount);
+        }
+
         public Task<int> LoadPortalBulkAsync(int startSeason, CancellationToken token = default)
             => _gameDataService.LoadPortalBulkAsync(startSeason, token);
 
         public Task<int> ComputePortalMetricsAsync(int season, CancellationToken token = default)
-            => _uow.Portal.ComputePortalMetricsAsync(season, token);
+            => _rosterCapacityService.ComputeZRosterAsync(season, token);
 
-        public async Task<int> ComputePortalMetricsBulkAsync(CancellationToken token = default)
-        {
-            var seasons = await _uow.Portal.GetDistinctSeasonsAsync(token);
-            int total = 0;
-            foreach (var season in seasons)
-            {
-                var count = await _uow.Portal.ComputePortalMetricsAsync(season, token);
-                total += count;
-            }
-            return total;
-        }
+        public Task<int> ComputePortalMetricsBulkAsync(CancellationToken token = default)
+            => _rosterCapacityService.ComputeZRosterBulkAsync(token);
 
         // ── Rolling Averages ──────────────────────────────────────────────────────
 
@@ -372,12 +395,17 @@ namespace SaturdayPulse.Services
         ///   • Projections for week 1 games use the week 0 snapshot (0 &lt; 1)
         ///   • TeamRecords are created from week 0 so PredictMatchups works from day one
         ///   • Seed/Trend/Pedigree are computed from the new TeamRecords
-        ///   • RosterStrength from portal data adjusts week 0 PowerRating
+        ///   • ZRoster (national roster-capacity Z-score) is blended into Seed by
+        ///     RollingAverageService itself, decaying across weeks 0-6 — it is no
+        ///     longer applied as a raw PowerRating bump here (see removed
+        ///     RosterStrength adjustment below).
         ///
         /// Safe to call multiple times — skips if week 0 already exists for the year.
         ///
-        /// Prerequisites: ComputePortalMetricsBulk must have been run so that
-        /// TeamRecords for the new year have RosterStrength populated.
+        /// Prerequisites: ComputePortalMetricsAsync (or ComputePortalMetricsBulkAsync)
+        /// must have been run for `year` so that TeamRecords.ZRoster is populated
+        /// BEFORE ComputeAndPersistAsync runs below — otherwise Seed will compute
+        /// against a null ZRoster and silently carry no roster signal for week 0.
         /// </summary>
         public async Task<object> InitializeSeasonAsync(int year, CancellationToken token = default)
         {
@@ -407,31 +435,19 @@ namespace SaturdayPulse.Services
             var priorRankings = await _uow.WeeklyRankings
                 .GetByYearAndWeekAsync(lastSnapshot.Year, lastSnapshot.Week, token);
 
-            // ── Load RosterStrength from current year TeamRecords ─────────────────
-            // Must be loaded BEFORE UpsertFromWeeklyRankingsAsync runs, since that
-            // call will overwrite TeamRecords from the week 0 snapshot (which has no
-            // RosterStrength yet). We load from the existing TeamRecords which were
-            // populated by ComputePortalMetricsAsync.
-            var portalRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
-            var rosterStrengthByTeam = portalRecords
-                .Where(tr => tr.RosterStrength.HasValue)
-                .ToDictionary(tr => tr.TeamID, tr => tr.RosterStrength!.Value);
-
             // ── TODO: Apply draft score adjustments here ──────────────────────────
             // For each team, incorporate draft pick history into the Pedigree
             // component. Load from DraftScore table once that pipeline is built.
             // ─────────────────────────────────────────────────────────────────────
 
-            // Copy prior snapshot into week 0 of the new year,
-            // applying RosterStrength adjustment to PowerRating inline.
+            // Copy prior snapshot into week 0 of the new year. No PowerRating
+            // adjustment happens here anymore — ZRoster's influence is applied
+            // downstream by RollingAverageService.ComputeAndPersistAsync (called
+            // below), which blends it into Seed on a week-based decay curve rather
+            // than as a flat bump to the copied PowerRating.
             int copied = 0;
             foreach (var wr in priorRankings)
             {
-                var rsAdjustment = rosterStrengthByTeam.TryGetValue(wr.TeamID, out var rs)
-                    ? rs : (decimal?)null;
-                var powerAdjustment = rsAdjustment.HasValue
-                    ? (rsAdjustment.Value - 1.0m) * 0.05m : 0m;
-
                 await _uow.WeeklyRankings.AddAsync(new WeeklyRanking
                 {
                     TeamID = wr.TeamID,
@@ -444,7 +460,7 @@ namespace SaturdayPulse.Services
                     BaseSOS = wr.BaseSOS,
                     SubSOS = wr.SubSOS,
                     CombinedSOS = wr.CombinedSOS,
-                    PowerRating = wr.PowerRating + powerAdjustment,
+                    PowerRating = wr.PowerRating,
                     Ranking = wr.Ranking,
                     OverallRank = wr.OverallRank,
                     TierRank = wr.TierRank,
@@ -453,8 +469,7 @@ namespace SaturdayPulse.Services
                     OffensiveZScore = wr.OffensiveZScore,
                     DefensiveZScore = wr.DefensiveZScore,
                     OffensiveRank = wr.OffensiveRank,
-                    DefensiveRank = wr.DefensiveRank,
-                    RosterStrength = rsAdjustment
+                    DefensiveRank = wr.DefensiveRank
                 }, token);
                 copied++;
             }
@@ -463,18 +478,28 @@ namespace SaturdayPulse.Services
 
             // Seed TeamRecords from week 0 snapshot.
             // Note: this overwrites existing TeamRecord fields from WeeklyRankings
-            // but preserves RosterStrength and PortalDelta since those fields are
-            // not mapped in WeeklyRankingsExtensions.UpdateTeamRecord.
+            // but preserves RosterStrength, PortalDelta, and ZRoster since those
+            // fields are not mapped in WeeklyRankingsExtensions.UpdateTeamRecord.
+            // ASSUMPTION FLAGGED: I haven't reviewed WeeklyRankingsExtensions.
+            // UpdateTeamRecord directly — confirm ZRoster is actually excluded from
+            // whatever field list that method maps, the same way RosterStrength/
+            // PortalDelta already are, or this call will null it back out right
+            // before RollingAverageService needs to read it below.
             await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
 
             // Compute Seed/Trend/Pedigree. Pass week 0 — live swap will not activate.
+            // ZRoster (if populated for `year`) gets blended into Seed here, at full
+            // (week 0) decay-schedule strength.
             await _rollingAverageService.ComputeAndPersistAsync(year, 0, token);
             await _uow.SaveChangesAsync(token);
 
+            var zRosterAppliedCount = (await _uow.TeamRecords.GetByYearAsync(year, token))
+                .Count(tr => tr.ZRoster.HasValue);
+
             _logger.LogInformation(
                 "Season {Year} initialized — {Count} teams seeded from {PriorYear} week {PriorWeek}. " +
-                "{PortalCount} teams had RosterStrength applied.",
-                year, copied, lastSnapshot.Year, lastSnapshot.Week, rosterStrengthByTeam.Count);
+                "{ZRosterCount} teams had ZRoster applied to Seed.",
+                year, copied, lastSnapshot.Year, lastSnapshot.Week, zRosterAppliedCount);
 
             return new
             {
@@ -482,7 +507,7 @@ namespace SaturdayPulse.Services
                 year,
                 week = 0,
                 teamsSeeded = copied,
-                portalAdjusted = rosterStrengthByTeam.Count,
+                zRosterApplied = zRosterAppliedCount,
                 seededFrom = new { year = lastSnapshot.Year, week = lastSnapshot.Week }
             };
         }

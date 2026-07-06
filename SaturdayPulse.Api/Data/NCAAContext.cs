@@ -19,11 +19,13 @@ namespace SaturdayPulse.Data
         public DbSet<PortalEntry>           PortalEntries           { get; set; }
 
         // Roster Capacity Modifier tables — PK/index config lives on the entities themselves
-        // via [PrimaryKey]/[Index] attributes (see RosterPlayer.cs, PlayerStat.cs, CoachRecord.cs),
-        // same pattern as PortalEntry above. Nothing needed in OnModelCreating for these three.
+        // via [PrimaryKey]/[Index] attributes (see RosterPlayer.cs, PlayerStat.cs, CoachRecord.cs,
+        // RecruitPlayer.cs), same pattern as PortalEntry above. Nothing needed in OnModelCreating
+        // for these four.
         public DbSet<RosterPlayer> RosterPlayers { get; set; } = null!;
         public DbSet<PlayerStat> PlayerStats { get; set; } = null!;
         public DbSet<CoachRecord> CoachRecords { get; set; } = null!;
+        public DbSet<RecruitPlayer> RecruitPlayers { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -65,33 +65,46 @@ namespace SaturdayPulse.Models
         public int DefensiveRank { get; set; }
 
         [Column("SeedRating", TypeName = "decimal(10,4)")]
-        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20) + portal blend
+        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20), normalized PowerRating base, ZRoster blended in weeks 0-6
 
         [Column("TrendRating", TypeName = "decimal(10,4)")]
-        public decimal? TrendRating { get; set; }     // 5-year weighted (40/25/15/12/8) + portal blend
+        public decimal? TrendRating { get; set; }     // 5-year weighted (40/25/15/12/8), normalized PowerRating — pure historical, no ZRoster
 
         [Column("PedigreeRating", TypeName = "decimal(10,4)")]
-        public decimal? PedigreeRating { get; set; }  // 10-year linear decay
+        public decimal? PedigreeRating { get; set; }  // 10-year linear decay, normalized PowerRating — pure historical, no ZRoster
 
         /// <summary>
-        /// Absolute quality of incoming portal transfers for this season,
-        /// weighted by position tier and normalized against league mean.
-        /// Used in week 0 WeeklyRankings snapshot to adjust PowerRating.
-        /// Computed once by ComputePortalMetricsAsync, carried forward unchanged.
-        /// Null for years before portal data exists (pre-2021).
+        /// RETIRED as of the Roster Capacity Modifier rebuild. No longer populated by
+        /// ComputePortalMetricsAsync and no longer read by InitializeSeasonAsync — the
+        /// (RosterStrength - 1.0) * 0.05 PowerRating bump it used to drive has been
+        /// removed. Column left in place (not dropped) per the project's convention of
+        /// leaving retired fields intact rather than migrating them out. Do not populate
+        /// or consume this going forward; use ZRoster instead.
         /// </summary>
         [Column("RosterStrength", TypeName = "decimal(10,4)")]
         public decimal? RosterStrength { get; set; }
 
         /// <summary>
-        /// Net portal gain/loss for this season (incoming minus outgoing),
-        /// weighted by position tier and normalized against league mean.
-        /// Incorporated into Seed and Trend rolling averages alongside win percentage.
-        /// Positive = net roster upgrade, negative = net roster downgrade.
-        /// Null for years before portal data exists (pre-2021).
+        /// RETIRED as of the Roster Capacity Modifier rebuild. Superseded by ZRoster,
+        /// which is a richer national-Z-score signal (recruit ratings, transfer ratings,
+        /// real prior-year production share for departures, coaching-turnover penalty)
+        /// computed by the same ComputePortalMetricsAsync method, in the same column
+        /// position in the pipeline. No longer populated or consumed. Left in schema.
         /// </summary>
         [Column("PortalDelta", TypeName = "decimal(10,4)")]
         public decimal? PortalDelta { get; set; }
+
+        /// <summary>
+        /// National Z-score of this team's net roster capacity change (weighted inflow
+        /// talent minus weighted departed production, position-scarcity adjusted, minus
+        /// a 1.5-std-dev coaching-turnover penalty if the HC changed). Computed once per
+        /// season by ComputePortalMetricsAsync — replaces PortalDelta as the roster
+        /// signal blended into Seed (weeks 0-6 only, decaying to 0 by week 6). Not used
+        /// by Trend or Pedigree, which are pure historical PowerRating averages.
+        /// Null for years without roster/recruiting/coaching data loaded.
+        /// </summary>
+        [Column("ZRoster", TypeName = "decimal(10,4)")]
+        public decimal? ZRoster { get; set; }
 
         [NotMapped]
         public List<double>? TrendHistory { get; set; }

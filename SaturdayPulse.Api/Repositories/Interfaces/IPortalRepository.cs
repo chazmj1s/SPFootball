@@ -23,12 +23,5 @@ namespace SaturdayPulse.Repositories.Interfaces
         /// </summary>
         Task UpsertSeasonAsync(int season, List<PortalEntry> entries, CancellationToken token = default);
 
-        /// <summary>
-        /// Computes RosterStrength and PortalDelta for all FBS teams for the given season
-        /// and persists them to TeamRecords. Returns count of teams updated.
-        /// Run once after LoadPortalAsync for the season.
-        /// </summary>
-        Task<int> ComputePortalMetricsAsync(int season, CancellationToken token = default);
-
     }
 }

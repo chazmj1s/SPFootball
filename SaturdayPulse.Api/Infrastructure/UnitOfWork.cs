@@ -28,6 +28,12 @@ namespace SaturdayPulse.Infrastructure
         public ITeamsConferenceHistoryRepository TeamsConferenceHistory { get; }
         public IPortalRepository Portal { get; }
 
+        // ── Roster Capacity Modifier repositories ─────────────────────────────
+        public IRosterPlayerRepository RosterPlayers { get; }
+        public IPlayerStatRepository   PlayerStats   { get; }
+        public ICoachRecordRepository  CoachRecords  { get; }
+        public IRecruitPlayerRepository RecruitPlayers { get; }
+
 
         public UnitOfWork(NCAAContext context)
         {
@@ -43,6 +49,11 @@ namespace SaturdayPulse.Infrastructure
             WeeklyRankings = new WeeklyRankingsRepository(_context);
             TeamsConferenceHistory = new TeamsConferenceHistoryRepository(_context);
             Portal = new PortalRepository(_context);
+
+            RosterPlayers = new RosterPlayerRepository(_context);
+            PlayerStats   = new PlayerStatRepository(_context);
+            CoachRecords  = new CoachRecordRepository(_context);
+            RecruitPlayers = new RecruitPlayerRepository(_context);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken token = default)

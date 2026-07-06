@@ -881,6 +881,7 @@ namespace SaturdayPulse.Controllers
         }
 
         #endregion
+
         #region Portal
 
         /// <summary>
@@ -971,7 +972,163 @@ namespace SaturdayPulse.Controllers
             }
         }
 
-        #endregion    
+        #endregion
+
+        #region Roster Capacity
+
+        /// <summary>
+        /// Fetches the roster for a single season from CFBD and upserts into RosterPlayers.
+        /// Call once for the current year (T) and once for the prior year (T-1) —
+        /// RosterCapacityService needs both snapshots.
+        /// Example: POST /api/developer/loadRosterCapacityRoster?season=2026
+        /// </summary>
+        [HttpPost("loadRosterCapacityRoster")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadRosterCapacityRoster(
+            [FromQuery] int season,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadRosterCapacityRosterAsync(season, token);
+                return Ok(new { message = $"Roster loaded for {season}", count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading roster capacity roster for season={Season}", season);
+                return StatusCode(500, "An error occurred while loading roster data.");
+            }
+        }
+
+        /// <summary>
+        /// Loads roster for both the current season and the prior season in one call.
+        /// Example: POST /api/developer/loadRosterCapacityRosterBothSeasons?currentSeason=2026
+        /// </summary>
+        [HttpPost("loadRosterCapacityRosterBothSeasons")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadRosterCapacityRosterBothSeasons(
+            [FromQuery] int currentSeason,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var (currentCount, priorCount) = await developerService.LoadRosterCapacityBothSeasonsAsync(currentSeason, token);
+                return Ok(new
+                {
+                    message = $"Roster loaded for {currentSeason} and {currentSeason - 1}",
+                    currentCount,
+                    priorCount
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading roster capacity roster for both seasons around currentSeason={CurrentSeason}", currentSeason);
+                return StatusCode(500, "An error occurred while loading roster data.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches player season stats for a single season from CFBD (bulk, no team filter)
+        /// and upserts into PlayerStats. Used for T-1 to compute departed-player production shares.
+        /// Example: POST /api/developer/loadRosterCapacityStats?season=2025
+        /// </summary>
+        [HttpPost("loadRosterCapacityStats")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadRosterCapacityStats(
+            [FromQuery] int season,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadRosterCapacityStatsAsync(season, token);
+                return Ok(new { message = $"Player stats loaded for {season}", count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading roster capacity stats for season={Season}", season);
+                return StatusCode(500, "An error occurred while loading player stats.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches head coaches for a single year from CFBD and upserts into CoachRecords.
+        /// Used to detect year-over-year HC turnover for the coaching penalty.
+        /// Example: POST /api/developer/loadRosterCapacityCoaches?year=2026
+        /// </summary>
+        [HttpPost("loadRosterCapacityCoaches")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadRosterCapacityCoaches(
+            [FromQuery] int year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadRosterCapacityCoachesAsync(year, token);
+                return Ok(new { message = $"Coach records loaded for {year}", count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading roster capacity coaches for year={Year}", year);
+                return StatusCode(500, "An error occurred while loading coach data.");
+            }
+        }
+
+        /// <summary>
+        /// Fetches the recruiting class for a single year from CFBD and upserts into
+        /// RecruitPlayers. Filters out uncommitted recruits (no CommittedTo).
+        /// Example: POST /api/developer/loadRosterCapacityRecruiting?year=2025
+        /// </summary>
+        [HttpPost("loadRosterCapacityRecruiting")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadRosterCapacityRecruiting(
+            [FromQuery] int year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var count = await developerService.LoadRosterCapacityRecruitingAsync(year, token);
+                return Ok(new { message = $"Recruiting class loaded for {year}", count });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading roster capacity recruiting for year={Year}", year);
+                return StatusCode(500, "An error occurred while loading recruiting data.");
+            }
+        }
+
+        /// <summary>
+        /// Loads the recruiting class for a year and immediately joins RecruitRating into
+        /// RosterPlayers for that same year. Requires that year's roster already loaded via
+        /// loadRosterCapacityRoster or loadRosterCapacityRosterBothSeasons.
+        /// Example: POST /api/developer/loadAndApplyRosterCapacityRecruiting?year=2025
+        /// </summary>
+        [HttpPost("loadAndApplyRosterCapacityRecruiting")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadAndApplyRosterCapacityRecruiting(
+            [FromQuery] int year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var (recruitsLoaded, ratingsApplied) =
+                    await developerService.LoadAndApplyRosterCapacityRecruitingAsync(year, token);
+                return Ok(new
+                {
+                    message = $"Recruiting class loaded and applied for {year}",
+                    recruitsLoaded,
+                    ratingsApplied
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading/applying roster capacity recruiting for year={Year}", year);
+                return StatusCode(500, "An error occurred while loading and applying recruiting data.");
+            }
+        }
+
+        #endregion
+
+
         #region Postseason Tagging
 
         /// <summary>
