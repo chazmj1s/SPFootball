@@ -51,6 +51,13 @@ builder.Services.AddScoped<ProjectionAccuracyService>();
 builder.Services.AddScoped<ConferenceTierService>();
 builder.Services.AddScoped<RosterCapacityService>();
 
+// ADDED — K=4 inertia-blending experimental comparison path. Registered the same
+// way (Scoped) as the other per-request services above (GamePredictionService,
+// RollingAverageService, etc.). Read-only, not wired into any production path.
+builder.Services.AddScoped<RatingBlendingService>();
+builder.Services.AddScoped<ExperimentalInertiaRatingService>();
+builder.Services.AddScoped<RatingComparisonService>();
+
 builder.Services.AddSingleton<ProjectionCacheService>();
 
 

@@ -112,6 +112,10 @@ namespace SaturdayPulse.Services
             int year, CancellationToken token = default)
             => _gameDataService.LoadAndApplyRosterCapacityRecruitingAsync(year, token);
 
+        public Task<(int PortalLoaded, int RatingsApplied)> LoadAndApplyPortalRatingsAsync(
+            int season, CancellationToken token = default)
+            => _gameDataService.LoadAndApplyPortalRatingsAsync(season, token);
+
         // Convenience wrapper — loads roster for both T and T-1 in one call, since
         // RosterCapacityService always needs both snapshots together.
         public async Task<(int CurrentCount, int PriorCount)> LoadRosterCapacityBothSeasonsAsync(
@@ -387,25 +391,27 @@ namespace SaturdayPulse.Services
         // ── Season Initialization ─────────────────────────────────────────────────
 
         /// <summary>
-        /// Initializes a new season by creating a week 0 WeeklyRankings snapshot
-        /// copied from the prior year's final week. This seeds the new year with
-        /// meaningful power ratings before any games are played.
+        /// Initializes week 0 for a new season — NOT a copy of the prior season's final
+        /// WeeklyRankings row. Every field is either the correct "no games played yet"
+        /// value for its own live formula, or a genuine cross-year-normalized historical
+        /// estimate. See conversation history for the field-by-field reasoning; the prior
+        /// version copied Wins/Losses/PointsFor/PointsAgainst/BaseSOS/SubSOS/CombinedSOS/
+        /// PowerRating/Ranking/OverallRank/TierRank/OffensiveZScore/DefensiveZScore
+        /// verbatim from last season's LAST week, which mixed season-cumulative counters,
+        /// schedule-specific SOS, and non-cross-year-comparable raw PowerRating into a
+        /// row that represented a season with zero games played.
         ///
-        /// Week 0 serves as the preseason baseline:
-        ///   • Projections for week 1 games use the week 0 snapshot (0 &lt; 1)
-        ///   • TeamRecords are created from week 0 so PredictMatchups works from day one
-        ///   • Seed/Trend/Pedigree are computed from the new TeamRecords
-        ///   • ZRoster (national roster-capacity Z-score) is blended into Seed by
-        ///     RollingAverageService itself, decaying across weeks 0-6 — it is no
-        ///     longer applied as a raw PowerRating bump here (see removed
-        ///     RosterStrength adjustment below).
-        ///
-        /// Safe to call multiple times — skips if week 0 already exists for the year.
-        ///
-        /// Prerequisites: ComputePortalMetricsAsync (or ComputePortalMetricsBulkAsync)
-        /// must have been run for `year` so that TeamRecords.ZRoster is populated
-        /// BEFORE ComputeAndPersistAsync runs below — otherwise Seed will compute
-        /// against a null ZRoster and silently carry no roster signal for week 0.
+        /// Ordering note: TrendRating (needed for PowerRating below) doesn't exist for
+        /// `year` until RollingAverageService.ComputeAndPersistAsync runs, which itself
+        /// requires TeamRecords rows for `year` to already exist. Resolved with three
+        /// passes: (1) placeholder week-0 WeeklyRankings rows with correct season-counter
+        /// values (zero) so TeamRecords can be upserted from them; (2) run
+        /// RollingAverageService, which computes Trend from PRIOR years only — never
+        /// reads this year's just-created placeholder PowerRating; (3) overwrite the
+        /// placeholder PowerRating/AvgPointsScored/AvgPointsAllowed/Ranking/OverallRank/
+        /// TierRank/OffensiveZScore/DefensiveZScore/OffensiveRank/DefensiveRank on both
+        /// WeeklyRankings and TeamRecords using the now-available TrendRating and
+        /// weighted historical scoring averages.
         /// </summary>
         public async Task<object> InitializeSeasonAsync(int year, CancellationToken token = default)
         {
@@ -417,101 +423,275 @@ namespace SaturdayPulse.Services
                 return new { message = $"Season {year} already initialized.", year, week = 0 };
             }
 
-            // Find the last snapshot from the prior year.
+            // Confirm we have at least one prior year of WeeklyRankings to build history
+            // from — same guard the old version had, just checked without needing a
+            // specific "last snapshot" row (nothing here copies from one anymore).
             var snapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
-            var lastSnapshot = snapshots
-                .Where(s => s.Year == year - 1)
-                .OrderByDescending(s => s.Week)
-                .FirstOrDefault();
-
-            if (lastSnapshot == default)
+            if (!snapshots.Any(s => s.Year == year - 1))
                 throw new InvalidOperationException(
                     $"No WeeklyRankings found for {year - 1}. Run backfillWeeklyRankings first.");
-
-            _logger.LogInformation(
-                "Initializing season {Year} from {PriorYear} week {PriorWeek} snapshot.",
-                year, lastSnapshot.Year, lastSnapshot.Week);
-
-            var priorRankings = await _uow.WeeklyRankings
-                .GetByYearAndWeekAsync(lastSnapshot.Year, lastSnapshot.Week, token);
 
             // ── TODO: Apply draft score adjustments here ──────────────────────────
             // For each team, incorporate draft pick history into the Pedigree
             // component. Load from DraftScore table once that pipeline is built.
             // ─────────────────────────────────────────────────────────────────────
 
-            // Copy prior snapshot into week 0 of the new year. No PowerRating
-            // adjustment happens here anymore — ZRoster's influence is applied
-            // downstream by RollingAverageService.ComputeAndPersistAsync (called
-            // below), which blends it into Seed on a week-based decay curve rather
-            // than as a flat bump to the copied PowerRating.
-            int copied = 0;
-            foreach (var wr in priorRankings)
+            var allTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsTeams = allTeams
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // ── Pass 1: placeholder week-0 rows, correct season-counters (zero) ────────
+            // PowerRating/AvgPointsScored/AvgPointsAllowed/Ranking/etc. written as 0 here
+            // — not final values, just enough for TeamRecords to be upserted from this
+            // row in the next step. Overwritten for real in Pass 3.
+            foreach (var t in fbsTeams)
             {
                 await _uow.WeeklyRankings.AddAsync(new WeeklyRanking
                 {
-                    TeamID = wr.TeamID,
+                    TeamID = t.TeamId,
                     Year = (short)year,
                     Week = 0,
-                    Wins = wr.Wins,
-                    Losses = wr.Losses,
-                    PointsFor = wr.PointsFor,
-                    PointsAgainst = wr.PointsAgainst,
-                    BaseSOS = wr.BaseSOS,
-                    SubSOS = wr.SubSOS,
-                    CombinedSOS = wr.CombinedSOS,
-                    PowerRating = wr.PowerRating,
-                    Ranking = wr.Ranking,
-                    OverallRank = wr.OverallRank,
-                    TierRank = wr.TierRank,
-                    AvgPointsScored = wr.AvgPointsScored,
-                    AvgPointsAllowed = wr.AvgPointsAllowed,
-                    OffensiveZScore = wr.OffensiveZScore,
-                    DefensiveZScore = wr.DefensiveZScore,
-                    OffensiveRank = wr.OffensiveRank,
-                    DefensiveRank = wr.DefensiveRank
+                    Wins = 0,
+                    Losses = 0,
+                    PointsFor = 0,
+                    PointsAgainst = 0,
+                    BaseSOS = 0,
+                    SubSOS = 0,
+                    CombinedSOS = 0,
+                    PowerRating = 0,
+                    Ranking = 0,
+                    OverallRank = 0,
+                    TierRank = 0,
+                    AvgPointsScored = 0,
+                    AvgPointsAllowed = 0,
+                    OffensiveZScore = 0,
+                    DefensiveZScore = 0,
+                    OffensiveRank = 0,
+                    DefensiveRank = 0
                 }, token);
-                copied++;
+            }
+            await _uow.SaveChangesAsync(token);
+
+            // Seed TeamRecords rows for `year` so RollingAverageService has something to
+            // write SeedRating/TrendRating/PedigreeRating onto. Safe to source from the
+            // placeholder week-0 row above — RollingAverageService.Compute never reads
+            // this year's PowerRating for Trend/Pedigree (pure historical); Seed's
+            // useLiveSwap branch would, but week=0 keeps useLiveSwap off.
+            // ASSUMPTION FLAGGED (carried over from the prior version): haven't reviewed
+            // WeeklyRankingsExtensions.UpdateTeamRecord directly — confirm ZRoster is
+            // excluded from whatever field list it maps, the same way RosterStrength/
+            // PortalDelta already are, or this call nulls it back out before
+            // RollingAverageService needs to read it.
+            await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
+
+            // ── Pass 2: Trend/Seed/Pedigree, from PRIOR years' history only ────────────
+            await _rollingAverageService.ComputeAndPersistAsync(year, 0, token);
+            await _uow.SaveChangesAsync(token);
+
+            // ── Pass 3: real week-0 values, now that TrendRating exists ────────────────
+            var currentYearTeamRecords = (await _uow.TeamRecords.GetByYearAsync(year, token))
+                .ToDictionary(r => r.TeamID);
+
+            var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(
+                fromYear: year - 5, toYearExclusive: year, token);
+            var historyByTeam = historicalRecords
+                .GroupBy(tr => tr.TeamID)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Year).ToList());
+
+            // PowerRating reference scale: most recently completed season's FBS-wide
+            // PowerRating distribution. TrendRating is already z-scored against each of
+            // its OWN source years internally (RollingAverageService.NormalizePowerRating)
+            // — this is only about choosing a scale to render the [0,1] anchor back into
+            // raw PowerRating-point terms, and last year's completed distribution is the
+            // most representative one available before this year has any data of its own.
+            var priorYearRecords = await _uow.TeamRecords.GetByYearAsync(year - 1, token);
+            var priorYearTeamsDict = await _uow.Teams.GetByTeamIdsAsync(
+                priorYearRecords.Select(r => r.TeamID).ToList(), token);
+            var referenceLeagueStats = RollingAverageService.BuildLeagueYearStats(
+                priorYearRecords, priorYearTeamsDict);
+            referenceLeagueStats.TryGetValue((short)(year - 1), out var refStats);
+            // refStats defaults to (Mean: 0.0, StdDev: 0.0) if year-1 has no FBS
+            // PowerRating data for some reason — RatingScaling.FromUnitScale treats
+            // stdDev<=0 by returning `mean` (0.0) for every team: degenerate but safe
+            // rather than a crash. Would be worth a warning log if that ever fires.
+
+            var seedRows = new List<(int TeamId, decimal AvgScored, decimal AvgAllowed, decimal PowerRating, bool HasHistory)>();
+
+            foreach (var t in fbsTeams)
+            {
+                if (!currentYearTeamRecords.TryGetValue(t.TeamId, out var record)) continue;
+
+                historyByTeam.TryGetValue(t.TeamId, out var history);
+                history ??= [];
+
+                var scoredValues = history.Select(h => (double)h.AvgPointsScored).ToList();
+                var allowedValues = history.Select(h => (double)h.AvgPointsAllowed).ToList();
+
+                decimal avgScored = RollingAverageService.ApplyWeights(scoredValues, MetricsConfiguration.TrendWeights);
+                decimal avgAllowed = RollingAverageService.ApplyWeights(allowedValues, MetricsConfiguration.TrendWeights);
+
+                double trendUnit = record.TrendRating.HasValue ? (double)record.TrendRating.Value : 0.5;
+                double powerRatingRaw = RatingScaling.FromUnitScale(trendUnit, refStats.Mean, refStats.StdDev);
+
+                seedRows.Add((t.TeamId, avgScored, avgAllowed, (decimal)Math.Round(powerRatingRaw, 4), history.Count > 0));
+            }
+
+            // Backfill AvgPointsScored/AvgPointsAllowed for teams with ZERO qualifying
+            // history (a program new to FBS, most likely) to the league-mean PPG/PAG
+            // among teams that DO have history — not left at ApplyWeights([]) == 0m.
+            // Raw 0 there is indistinguishable from a real in-season shutout once the
+            // season starts, which is exactly the ambiguity that used to force
+            // GamePredictionService.CalculatePrediction into a blanket 28.0 fallback
+            // (Charlie: "if they played and got shut out, that's a different thing").
+            // Backfilling to a real, data-driven league average here removes the need
+            // for that fallback entirely — CalculatePrediction can now trust
+            // AvgPointsScored/AvgPointsAllowed at face value, always, including a
+            // legitimate 0 for a shutout.
+            //
+            // The 28.0m fallback below is a DIFFERENT, much narrower case than the one
+            // it's replacing — it only fires if NO FBS team anywhere has any qualifying
+            // history at all (i.e., the very first year this system is ever run), not
+            // per-team. Worth keeping distinct in your head from the bug being fixed.
+            var teamsWithHistory = seedRows.Where(r => r.HasHistory).ToList();
+            decimal leagueMeanScored = teamsWithHistory.Count > 0
+                ? Math.Round(teamsWithHistory.Average(r => r.AvgScored), 2) : 28.0m;
+            decimal leagueMeanAllowed = teamsWithHistory.Count > 0
+                ? Math.Round(teamsWithHistory.Average(r => r.AvgAllowed), 2) : 28.0m;
+
+            seedRows = seedRows
+                .Select(r => r.HasHistory
+                    ? r
+                    : (r.TeamId, leagueMeanScored, leagueMeanAllowed, r.PowerRating, r.HasHistory))
+                .ToList();
+
+            // Ordinal ranks — based on the new week-0 PowerRating, NOT the (intentionally
+            // undefined, zeroed) Ranking field. Ranking has no meaning before any games
+            // are played (it's WinPct-based); PowerRating is the only week-0 quality
+            // signal, so it's what OverallRank/TierRank sort on. Per Charlie.
+            var orderedByPower = seedRows.OrderByDescending(r => r.PowerRating).ToList();
+            var overallRankByTeam = orderedByPower
+                .Select((r, i) => new { r.TeamId, Rank = i + 1 })
+                .ToDictionary(x => x.TeamId, x => x.Rank);
+
+            var teamsById = fbsTeams.ToDictionary(t => t.TeamId);
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+            string ConfName(Teams t) =>
+                t.ConferenceId.HasValue && confLookup.TryGetValue(t.ConferenceId.Value, out var c)
+                    ? c.Name ?? string.Empty : string.Empty;
+
+            var tierRankByTeam = new Dictionary<int, int>();
+            foreach (var tierGroup in orderedByPower.GroupBy(r =>
+                RatingCalculator.GetConferenceTier(ConfName(teamsById[r.TeamId]), teamsById[r.TeamId].TeamName)))
+            {
+                int idx = 1;
+                foreach (var r in tierGroup.OrderByDescending(x => x.PowerRating))
+                    tierRankByTeam[r.TeamId] = idx++;
+            }
+
+            // Offensive/Defensive Z-scores — cross-sectional z-score of the new week-0
+            // AvgPointsScored/AvgPointsAllowed across THIS week-0 cohort. Not carried
+            // from last year's z-scores, which were scored against last year's FBS
+            // population — a different, stale reference group.
+            //
+            // Sign convention matches WeeklyRankingsService's live per-game formula
+            // (confirmed by reading it, not assumed):
+            //   offZScore = (TeamPoints - expectedTeamScore) / stdDev    → higher scoring = positive
+            //   defZScore = (expectedOppScore - OpponentPoints) / stdDev → allowing FEWER points = positive
+            // Week-0 cross-sectional analog: Offensive is a plain z-score of
+            // AvgPointsScored. Defensive is the z-score of AvgPointsAllowed, SIGN-FLIPPED
+            // — allowing more points than league average is bad, not good.
+            double scoredMean = seedRows.Count > 0 ? seedRows.Average(r => (double)r.AvgScored) : 0.0;
+            double scoredStdDev = seedRows.Count > 1
+                ? Math.Sqrt(seedRows.Average(r => Math.Pow((double)r.AvgScored - scoredMean, 2))) : 0.0;
+            double allowedMean = seedRows.Count > 0 ? seedRows.Average(r => (double)r.AvgAllowed) : 0.0;
+            double allowedStdDev = seedRows.Count > 1
+                ? Math.Sqrt(seedRows.Average(r => Math.Pow((double)r.AvgAllowed - allowedMean, 2))) : 0.0;
+
+            var offZByTeam = new Dictionary<int, decimal>();
+            var defZByTeam = new Dictionary<int, decimal>();
+            foreach (var r in seedRows)
+            {
+                double offZ = scoredStdDev > 0 ? ((double)r.AvgScored - scoredMean) / scoredStdDev : 0.0;
+                double defZ = allowedStdDev > 0 ? (allowedMean - (double)r.AvgAllowed) / allowedStdDev : 0.0;
+
+                // ASSUMPTION FLAGGED: applying RatingCalculator.DampenZScore here for
+                // consistency with every other z-score WeeklyRankingsService writes —
+                // haven't reviewed its implementation directly. If it assumes something
+                // specific to per-game inputs that doesn't transfer to a cross-sectional
+                // preseason z-score, flag it and I'll adjust.
+                offZByTeam[r.TeamId] = (decimal)RatingCalculator.DampenZScore(offZ);
+                defZByTeam[r.TeamId] = (decimal)RatingCalculator.DampenZScore(defZ);
+            }
+
+            var offensiveRankByTeam = seedRows
+                .OrderByDescending(r => offZByTeam[r.TeamId])
+                .Select((r, i) => new { r.TeamId, Rank = i + 1 })
+                .ToDictionary(x => x.TeamId, x => x.Rank);
+
+            var defensiveRankByTeam = seedRows
+                .OrderByDescending(r => defZByTeam[r.TeamId])
+                .Select((r, i) => new { r.TeamId, Rank = i + 1 })
+                .ToDictionary(x => x.TeamId, x => x.Rank);
+
+            // ── Write it all back ────────────────────────────────────────────────────
+            var weekZeroRows = (await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, 0, token))
+                .ToDictionary(wr => wr.TeamID);
+
+            int seeded = 0;
+            foreach (var r in seedRows)
+            {
+                if (weekZeroRows.TryGetValue(r.TeamId, out var wr))
+                {
+                    wr.PowerRating = r.PowerRating;
+                    wr.Ranking = 0m; // intentionally undefined pre-season, per Charlie
+                    wr.OverallRank = overallRankByTeam.GetValueOrDefault(r.TeamId, 0);
+                    wr.TierRank = tierRankByTeam.GetValueOrDefault(r.TeamId, 0);
+                    wr.AvgPointsScored = r.AvgScored;
+                    wr.AvgPointsAllowed = r.AvgAllowed;
+                    wr.OffensiveZScore = offZByTeam.GetValueOrDefault(r.TeamId, 0m);
+                    wr.DefensiveZScore = defZByTeam.GetValueOrDefault(r.TeamId, 0m);
+                    wr.OffensiveRank = offensiveRankByTeam.GetValueOrDefault(r.TeamId, 0);
+                    wr.DefensiveRank = defensiveRankByTeam.GetValueOrDefault(r.TeamId, 0);
+                }
+
+                if (currentYearTeamRecords.TryGetValue(r.TeamId, out var tr))
+                {
+                    // SeedRating/TrendRating/PedigreeRating/ZRoster deliberately
+                    // untouched — already correctly set by RollingAverageService
+                    // (Pass 2) and the separate roster-capacity pipeline respectively.
+                    tr.PowerRating = r.PowerRating;
+                    tr.Ranking = 0m;
+                    tr.AvgPointsScored = r.AvgScored;
+                    tr.AvgPointsAllowed = r.AvgAllowed;
+                    tr.OffensiveZScore = offZByTeam.GetValueOrDefault(r.TeamId, 0m);
+                    tr.DefensiveZScore = defZByTeam.GetValueOrDefault(r.TeamId, 0m);
+                    tr.OffensiveRank = offensiveRankByTeam.GetValueOrDefault(r.TeamId, 0);
+                    tr.DefensiveRank = defensiveRankByTeam.GetValueOrDefault(r.TeamId, 0);
+                }
+
+                seeded++;
             }
 
             await _uow.SaveChangesAsync(token);
 
-            // Seed TeamRecords from week 0 snapshot.
-            // Note: this overwrites existing TeamRecord fields from WeeklyRankings
-            // but preserves RosterStrength, PortalDelta, and ZRoster since those
-            // fields are not mapped in WeeklyRankingsExtensions.UpdateTeamRecord.
-            // ASSUMPTION FLAGGED: I haven't reviewed WeeklyRankingsExtensions.
-            // UpdateTeamRecord directly — confirm ZRoster is actually excluded from
-            // whatever field list that method maps, the same way RosterStrength/
-            // PortalDelta already are, or this call will null it back out right
-            // before RollingAverageService needs to read it below.
-            await _uow.TeamRecords.UpsertFromWeeklyRankingsAsync(year, token);
-
-            // Compute Seed/Trend/Pedigree. Pass week 0 — live swap will not activate.
-            // ZRoster (if populated for `year`) gets blended into Seed here, at full
-            // (week 0) decay-schedule strength.
-            await _rollingAverageService.ComputeAndPersistAsync(year, 0, token);
-            await _uow.SaveChangesAsync(token);
-
-            var zRosterAppliedCount = (await _uow.TeamRecords.GetByYearAsync(year, token))
-                .Count(tr => tr.ZRoster.HasValue);
+            var zRosterAppliedCount = currentYearTeamRecords.Values.Count(tr => tr.ZRoster.HasValue);
 
             _logger.LogInformation(
-                "Season {Year} initialized — {Count} teams seeded from {PriorYear} week {PriorWeek}. " +
-                "{ZRosterCount} teams had ZRoster applied to Seed.",
-                year, copied, lastSnapshot.Year, lastSnapshot.Week, zRosterAppliedCount);
+                "Season {Year} initialized — {Count} teams seeded from weighted 5-year history " +
+                "(TrendWeights) and TrendRating-derived PowerRating, not copied from {PriorYear}'s " +
+                "final snapshot. {ZRosterCount} teams had ZRoster applied to Seed.",
+                year, seeded, year - 1, zRosterAppliedCount);
 
             return new
             {
                 message = $"Season {year} initialized successfully.",
                 year,
                 week = 0,
-                teamsSeeded = copied,
-                zRosterApplied = zRosterAppliedCount,
-                seededFrom = new { year = lastSnapshot.Year, week = lastSnapshot.Week }
+                teamsSeeded = seeded,
+                zRosterApplied = zRosterAppliedCount
             };
         }
-
         /// <summary>
         /// Backfills week 0 snapshots for all years that have WeeklyRankings data
         /// but no week 0 entry. Safe to run multiple times — skips already-initialized years.
@@ -554,9 +734,9 @@ namespace SaturdayPulse.Services
                 token.ThrowIfCancellationRequested();
                 await InitializeSeasonAsync(year, token);
                 processed++;
-                _logger.LogInformation(
-                    "Initialized season {Year} ({Done}/{Total})",
-                    year, processed, yearsToInitialize.Count);
+                _logger.LogInformation("Initialized season {Year} ({Done}/{Total})",year, processed, yearsToInitialize.Count);
+
+                await BackfillWeeklyRankingsAsync(year, token); //<<=== Add this.
             }
 
             return new BackfillResult(
@@ -666,7 +846,6 @@ namespace SaturdayPulse.Services
                     $"No WeeklyRankings data found from {effectiveStart} onward.");
 
             var teamsById      = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
-            var teamsByName    = teamsById.Values.ToDictionary(t => t.TeamName);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
 
@@ -684,13 +863,6 @@ namespace SaturdayPulse.Services
                     .ToList();
 
                 if (remainingGames.Count == 0) continue;
-
-                var weeklyRankings = await _uow.WeeklyRankings
-                    .GetByYearAndWeekAsync(snapshotYear, snapshotWeek, token);
-
-                var powerByTeamId = weeklyRankings
-                    .Where(wr => wr.PowerRating.HasValue)
-                    .ToDictionary(wr => wr.TeamID, wr => wr.PowerRating!.Value);
 
                 var matchupRequests = new List<MatchupRequest>(remainingGames.Count);
 
@@ -712,21 +884,20 @@ namespace SaturdayPulse.Services
 
                 if (matchupRequests.Count == 0) continue;
 
+                // NOTE: PredictMatchups (via CalculatePrediction) already folds the
+                // team/opponent PowerRating differential into ExpectedMargin — this
+                // used to be re-added a second time here from a separate
+                // WeeklyRankings lookup, silently doubling every backfilled
+                // projection's margin. Removed; `predictions` is used as-is below.
+                //
+                // snapshotWeek (not g.Week) is passed as the as-of week here — every
+                // remaining game in this pass is projected using THIS snapshot's data,
+                // and Projections.Week records THAT as-of week, not the target game's
+                // own week. Multiple rows per GameId across different snapshotWeek
+                // passes is intentional: it's how the UI shows "what we projected this
+                // game as of week N" for whichever week is selected.
                 var predictions = await _predictionService.PredictMatchups(
-                    snapshotYear, matchupRequests, token);
-
-                for (int i = 0; i < predictions.Count; i++)
-                {
-                    var p = predictions[i];
-                    if (teamsByName.TryGetValue(p.TeamName,     out var t) &&
-                        teamsByName.TryGetValue(p.OpponentName, out var opp))
-                    {
-                        var teamPR = powerByTeamId.GetValueOrDefault(t.TeamId,   0m);
-                        var oppPR  = powerByTeamId.GetValueOrDefault(opp.TeamId, 0m);
-                        var delta  = (double)(teamPR - oppPR) * 10.0;
-                        p.ExpectedMargin = Math.Round(p.ExpectedMargin + delta, 1);
-                    }
-                }
+                    snapshotYear, snapshotWeek, matchupRequests, token);
 
                 var projections = new List<Projection>(remainingGames.Count);
 
@@ -744,6 +915,11 @@ namespace SaturdayPulse.Services
 
                     if (pred == null) continue;
 
+                    // week: snapshotWeek — the as-of week this pass is projecting
+                    // FROM, not the target game's own week (g.Week). Multiple rows
+                    // per GameId across different snapshotWeek passes is intentional:
+                    // the UI selects a week and shows every game's projection as
+                    // computed at that point in the season.
                     projections.Add(GamePredictionService.BuildProjection(
                         prediction: pred,
                         gameId:     g.GameId,

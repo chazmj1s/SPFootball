@@ -888,6 +888,14 @@ namespace SaturdayPulse.Services
             return (loaded, applied);
         }
 
+        public async Task<(int PortalLoaded, int RatingsApplied)> LoadAndApplyPortalRatingsAsync(
+            int season, CancellationToken token = default)
+        {
+            var loaded = await LoadPortalAsync(season, token);
+            var applied = await _uow.RosterPlayers.ApplyPortalRatingsAsync(season, token);
+            return (loaded, applied);
+        }
+
         #endregion
 
         public async Task<int> SetSeasonTypeAsync(List<int> gameIds, string seasonType, CancellationToken token = default)

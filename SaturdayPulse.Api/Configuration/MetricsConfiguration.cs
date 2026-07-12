@@ -10,7 +10,7 @@ namespace SaturdayPulse.Configuration
         /// Home field advantage in points (NCAA standard is 2.5).
         /// Applied to expected score margin when calculating Z-scores.
         /// </summary>
-        public double HomeFieldAdvantage { get; set; } = 2.5;
+        public double HomeFieldAdvantage { get; set; } = 3.5;
 
         /// <summary>
         /// Standard number of regular season games used for normalization.
@@ -65,5 +65,26 @@ namespace SaturdayPulse.Configuration
         /// Example: 2.0 means matchup variance can be at most 2x the expected variance.
         /// </summary>
         public double MaxVarianceRatio { get; set; } = 2.0;
+
+        /// <summary>
+        /// ADDED — K in the experimental data-volume-weighted blending formula:
+        ///   currentSeasonWeight = gamesPlayed / (InertiaConstant + gamesPlayed)
+        /// Used only by RatingBlendingService / ExperimentalInertiaRatingService (the
+        /// parallel comparison path against the production week-6 snapshot cliff in
+        /// GamePredictionService.GetRatingsForWeekAsync). Not read by any production
+        /// rating calculation yet.
+        ///
+        /// DEV PLACEHOLDER, not a validated constant. A "K=4 is the industry standard"
+        /// claim was checked against its cited sources and didn't hold up — the source
+        /// that was actually verifiable (a Towards Data Science piece on basketball/golf
+        /// rating systems) never mentions K=4, ESPN FPI, or SP+. Treat 4.0 as a
+        /// reasonable starting guess to tune via RatingComparisonService's backtest
+        /// output, same category of unvalidated constant as ZRosterScalingConstant.
+        /// </summary>
+        public double InertiaConstant { get; set; } = 4.0;
+
+        public static double[] SeedWeights = [0.50, 0.30, 0.20];
+        public static double[] TrendWeights = [0.40, 0.25, 0.15, 0.12, 0.08];
+
     }
 }

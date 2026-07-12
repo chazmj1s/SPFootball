@@ -88,5 +88,81 @@ namespace SaturdayPulse.Repositories.Implementations
 
             return updated;
         }
+
+        // RosterPlayerRepository.cs — add this method
+
+        // Suffixes CFBD embeds directly in portal FirstName/LastName fields (confirmed against
+        // real data: "Emmett Mosley V", "Paris Patterson Jr.") but that may not appear the same
+        // way, if at all, in the roster endpoint's name fields. Stripped from both sides before
+        // comparing so a suffix mismatch doesn't silently break the match.
+        private static readonly string[] NameSuffixes = ["JR", "SR", "II", "III", "IV", "V"];
+
+        private static string NormalizeName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "";
+
+            var trimmed = name.Trim().TrimEnd('.').ToUpperInvariant();
+            var parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length > 1 && NameSuffixes.Contains(parts[^1]))
+                parts = parts[..^1];
+
+            return string.Join(' ', parts);
+        }
+
+        public async Task<int> ApplyPortalRatingsAsync(int season, CancellationToken token = default)
+        {
+            // PortalEntry has no ID shared with RosterPlayer (unlike RecruitPlayer.AthleteId ==
+            // RosterPlayer.PlayerId) — CFBD's portal endpoint only gives us names and teams, so
+            // this join is necessarily name-based. Weaker than ApplyRecruitRatingsAsync's ID join;
+            // treat unmatched/ambiguous names as a known limitation, not a bug.
+            var portalEntries = (await _context.PortalEntries
+                    .Where(p => p.Season == season)
+                    .Where(p => p.Destination != null)
+                    .Select(p => new { p.FirstName, p.LastName, p.Origin, p.Destination, p.Rating })
+                    .ToListAsync(token))
+                // Origin == Destination rows are portal-entry-then-withdrawal noise, not real
+                // transfers — confirmed in real data. string.Equals(..., OrdinalIgnoreCase) doesn't
+                // translate to SQL — same EF Core limitation already documented in
+                // RosterCapacityService for Dictionary.ContainsKey (two-step: SQL filter first,
+                // then filter client-side on the materialized list). Don't recombine these into
+                // one query.
+                .Where(p => !string.Equals(p.Origin, p.Destination, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (portalEntries.Count == 0) return 0;
+
+            // Rating == 0 means CFBD never assigned a transfer grade (confirmed against real
+            // 2021 data — redshirted/no-tape players get skipped by evaluators, not scored as
+            // zero-value) — NOT a genuine zero rating. Coalesced to null here so it doesn't
+            // override the RecruitRating fallback in RosterCapacityService's cascade.
+            var ratingByKey = portalEntries
+                .Where(p => p.Rating.HasValue && p.Rating.Value > 0)
+                .GroupBy(p => (NormalizeName(p.FirstName), NormalizeName(p.LastName), p.Destination!.Trim().ToUpperInvariant()))
+                // Defensive: if two same-named transfers land on the same team in the same
+                // season, take the first rather than throwing — a genuine ambiguity this join
+                // can't resolve with the data CFBD provides, not something to fail loudly on.
+                .ToDictionary(g => g.Key, g => g.First().Rating!.Value);
+
+            var rosterRows = await _context.RosterPlayers
+                .Where(rp => rp.Season == season)
+                .ToListAsync(token);
+
+            var updated = 0;
+            foreach (var rosterRow in rosterRows)
+            {
+                var key = (NormalizeName(rosterRow.FirstName), NormalizeName(rosterRow.LastName),
+                           rosterRow.Team.Trim().ToUpperInvariant());
+
+                if (!ratingByKey.TryGetValue(key, out var rating)) continue;
+                rosterRow.TransferRating = rating;
+                updated++;
+            }
+
+            // Self-saves — matches ApplyRecruitRatingsAsync's convention.
+            if (updated > 0)
+                await _context.SaveChangesAsync(token);
+
+            return updated;
+        }
     }
 }

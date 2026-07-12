@@ -30,5 +30,6 @@ namespace SaturdayPulse.Interfaces
         Task<int> LoadPortalBulkAsync(int startSeason, CancellationToken token = default);
         Task<int> LoadRosterCapacityRecruitingAsync(int year, CancellationToken token);
         Task<(int RecruitsLoaded, int RatingsApplied)> LoadAndApplyRosterCapacityRecruitingAsync(int year, CancellationToken token);
+        Task<(int PortalLoaded, int RatingsApplied)> LoadAndApplyPortalRatingsAsync(int season, CancellationToken token = default);
     }
 }

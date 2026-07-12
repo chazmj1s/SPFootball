@@ -119,7 +119,7 @@ namespace SaturdayPulse.Services
                     .ToList();
 
                 var predictions = await _predictionService.PredictMatchups(
-                    predictionYear, matchupRequests, token);
+                    predictionYear, week, matchupRequests, token);
 
                 foreach (var g in unplayedThisWeek)
                 {
@@ -552,7 +552,7 @@ namespace SaturdayPulse.Services
 
             if (matchupRequestsStep17.Count > 0)
             {
-                var predictions = await _predictionService.PredictMatchups(year, matchupRequestsStep17, token);
+                var predictions = await _predictionService.PredictMatchups(year, week, matchupRequestsStep17, token);
                 var projections = new List<Projection>(remainingGames.Count);
 
                 foreach (var g in remainingGames)
@@ -568,6 +568,11 @@ namespace SaturdayPulse.Services
 
                     if (pred == null) continue;
 
+                    // week: week — the as-of week THIS ComputeAndSaveAsync call is
+                    // computing (P_Week), not the target game's own week (g.Week).
+                    // Multiple rows per GameId across different weekly runs is
+                    // intentional — the UI selects a week and shows every remaining
+                    // game's projection as computed at that point in the season.
                     projections.Add(GamePredictionService.BuildProjection(
                         prediction: pred,
                         gameId:     g.GameId,
