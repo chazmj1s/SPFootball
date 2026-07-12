@@ -35,8 +35,9 @@ namespace SaturdayPulse.Services
             => _predictionService.PredictMatchup(year, teamName, opponentName, location, week, token);
 
         public Task<List<GamePrediction>> PredictMatchupsAsync(
-            int year, List<MatchupRequest> matchups, CancellationToken token = default)
-            => _predictionService.PredictMatchups(year, matchups, token);
+            int year, List<MatchupRequest> matchups, CancellationToken token = default, int? asOfWeek = null)
+            => _predictionService.PredictMatchups(
+                year, asOfWeek ?? matchups.FirstOrDefault()?.Week ?? 0, matchups, token);
 
         public Task<GamePrediction> PredictSandboxMatchupAsync(
             string teamName, int teamYear,

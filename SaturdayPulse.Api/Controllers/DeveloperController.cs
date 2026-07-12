@@ -19,6 +19,7 @@ namespace SaturdayPulse.Controllers
     public class DeveloperController(
         DeveloperService developerService,
         ProjectionAccuracyService _projectionAccuracyService,
+        RatingComparisonService _ratingComparisonService,
         ILogger<DeveloperController> logger) : ControllerBase
     {
         #region CFBD V2 — Load
@@ -880,6 +881,70 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        // <summary>
+        /// EXPERIMENTAL — compares the production snapshot-cliff rating method against the
+        /// K=4 inertia-blended alternative (RatingComparisonService), for every real
+        /// scheduled game across the given week range. Returns predicted spread and O/U from
+        /// both methods side by side, sorted by largest spread disagreement first.
+        /// Read-only — writes nothing to the database.
+        /// Example: GET /api/developer/compareRatingMethods?year=2025&startWeek=1&endWeek=12
+        /// Example testing a candidate HFA: &hfaOverride=5.5
+        /// </summary>
+        [HttpGet("compareRatingMethods")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> CompareRatingMethods(
+            [FromQuery] int year,
+            [FromQuery] int startWeek,
+            [FromQuery] int endWeek,
+            [FromQuery] double? hfaOverride,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var weeks = Enumerable.Range(startWeek, endWeek - startWeek + 1);
+                var result = await _ratingComparisonService.CompareAsync(year, weeks, hfaOverride, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error comparing rating methods for year={Year}, weeks={StartWeek}-{EndWeek}",
+                    year, startWeek, endWeek);
+                return StatusCode(500, "An error occurred comparing rating methods.");
+            }
+        }
+
+        /// <summary>
+        /// EXPERIMENTAL — grades production and K=4-blended predictions against actual
+        /// final scores for the given week range: the real question ("is K=4 more
+        /// accurate"), not just "do the two methods disagree" (see compareRatingMethods).
+        /// Read-only — writes nothing to the database.
+        /// Example: GET /api/developer/compareRatingAccuracy?year=2025&startWeek=1&endWeek=14
+        /// Example testing a candidate HFA: &hfaOverride=5.5 — check byLocation.Home.
+        /// spreadBias afterward to see if it moved closer to zero for production/experimental.
+        /// </summary>
+        [HttpGet("compareRatingAccuracy")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> CompareRatingAccuracy(
+            [FromQuery] int year,
+            [FromQuery] int startWeek,
+            [FromQuery] int endWeek,
+            [FromQuery] double? hfaOverride,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var weeks = Enumerable.Range(startWeek, endWeek - startWeek + 1);
+                var result = await _ratingComparisonService.CompareAccuracyAsync(year, weeks, hfaOverride, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error comparing rating accuracy for year={Year}, weeks={StartWeek}-{EndWeek}",
+                    year, startWeek, endWeek);
+                return StatusCode(500, "An error occurred comparing rating accuracy.");
+            }
+        }
+
         #endregion
 
         #region Portal
@@ -1123,6 +1188,36 @@ namespace SaturdayPulse.Controllers
             {
                 logger.LogError(ex, "Error loading/applying roster capacity recruiting for year={Year}", year);
                 return StatusCode(500, "An error occurred while loading and applying recruiting data.");
+            }
+        }
+
+        /// <summary>
+        /// Loads transfer portal entries for a single season and immediately joins ratings
+        /// into RosterPlayers.TransferRating for that same year. Requires that year's roster
+        /// already loaded via loadRosterCapacityRoster or loadRosterCapacityRosterBothSeasons.
+        /// Example: POST /api/developer/loadAndApplyPortalRatings?season=2025
+        /// </summary>
+        [HttpPost("loadAndApplyPortalRatings")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> LoadAndApplyPortalRatings(
+            [FromQuery] int season,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var (portalLoaded, ratingsApplied) =
+                    await developerService.LoadAndApplyPortalRatingsAsync(season, token);
+                return Ok(new
+                {
+                    message = $"Portal data loaded and applied for {season}",
+                    portalLoaded,
+                    ratingsApplied
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error loading/applying portal ratings for season={Season}", season);
+                return StatusCode(500, "An error occurred while loading and applying portal data.");
             }
         }
 

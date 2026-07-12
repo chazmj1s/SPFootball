@@ -40,5 +40,15 @@ namespace SaturdayPulse.Repositories.Interfaces
         /// Returns the number of RosterPlayer rows updated.
         /// </summary>
         Task<int> ApplyRecruitRatingsAsync(int season, CancellationToken token = default);
+        
+        // IRosterPlayerRepository.cs
+        /// <summary>
+        /// Joins PortalEntry rows (Season == season, Origin != Destination, Rating > 0) to
+        /// RosterPlayers (Season == season) on normalized FirstName/LastName + Team, and writes
+        /// TransferRating for every match. Unlike ApplyRecruitRatingsAsync, there's no shared ID
+        /// to join on — this is a name-based match and inherently fuzzier. Rating == 0 is treated
+        /// as "ungraded" (null), not a real rating. Self-saves. Returns rows updated.
+        /// </summary>
+        Task<int> ApplyPortalRatingsAsync(int season, CancellationToken token = default);
     }
 }

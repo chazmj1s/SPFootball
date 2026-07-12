@@ -2,7 +2,7 @@
 
 namespace SaturdayPulse.Extensions
 {
-    public static class StringExtensions
+    public static class TypedExtensions
     {
         /// <summary>
         /// Safely converts a string to a decimal. Returns 0 if conversion fails.
@@ -19,3 +19,4 @@ namespace SaturdayPulse.Extensions
         }
     }
 }
+    

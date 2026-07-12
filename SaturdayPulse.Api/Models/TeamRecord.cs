@@ -65,7 +65,7 @@ namespace SaturdayPulse.Models
         public int DefensiveRank { get; set; }
 
         [Column("SeedRating", TypeName = "decimal(10,4)")]
-        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20), normalized PowerRating base, ZRoster blended in weeks 0-6
+        public decimal? SeedRating { get; set; }      // 3-year weighted (50/30/20), normalized PowerRating base
 
         [Column("TrendRating", TypeName = "decimal(10,4)")]
         public decimal? TrendRating { get; set; }     // 5-year weighted (40/25/15/12/8), normalized PowerRating — pure historical, no ZRoster
@@ -98,10 +98,11 @@ namespace SaturdayPulse.Models
         /// National Z-score of this team's net roster capacity change (weighted inflow
         /// talent minus weighted departed production, position-scarcity adjusted, minus
         /// a 1.5-std-dev coaching-turnover penalty if the HC changed). Computed once per
-        /// season by ComputePortalMetricsAsync — replaces PortalDelta as the roster
-        /// signal blended into Seed (weeks 0-6 only, decaying to 0 by week 6). Not used
-        /// by Trend or Pedigree, which are pure historical PowerRating averages.
-        /// Null for years without roster/recruiting/coaching data loaded.
+        /// season by ComputePortalMetricsAsync. Applied directly to PowerRating at
+        /// prediction time in GamePredictionService (GetRatingsForWeekAsync), decayed by
+        /// week via the Degraded() extension — NOT blended into Seed (reverted; Seed is
+        /// pure historical again, same as Trend/Pedigree). Null for years without
+        /// roster/recruiting/coaching data loaded.
         /// </summary>
         [Column("ZRoster", TypeName = "decimal(10,4)")]
         public decimal? ZRoster { get; set; }
