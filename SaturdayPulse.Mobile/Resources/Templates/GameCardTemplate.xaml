@@ -1,28 +1,39 @@
 <?xml version="1.0" encoding="utf-8" ?>
+<!--
+  GameCardTemplate.xaml
 
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models="clr-namespace:SaturdayPulse.Models"
-             xmlns:controls="clr-namespace:SaturdayPulse.Controls"
-             x:Class="SaturdayPulse.Views.SchedulePage"
-             x:Name="ThisPage"
-             Shell.NavBarIsVisible="False">
+  Extracted from SchedulePage.xaml so the game card can be reused by any
+  page (SchedulePage, MyTeamsPage) without duplicating markup.
 
+  IMPORTANT — command binding contract:
+  This template calls back to its host page via
+      {Binding Source={x:Reference ThisPage}, Path=BindingContext.<Command>}
+  which means ANY page that merges this dictionary MUST:
+    1. Name its ContentPage root x:Name="ThisPage" (already true for
+       SchedulePage and PowerRankingsPage; MyTeamsPage must match).
+    2. Expose the following commands on its own BindingContext (ViewModel):
+         - TogglePersonalGameCommand (CommandParameter: GameResult)
+         - ToggleFollowCommand       (CommandParameter: int teamId)
+         - ToggleDetailsCommand      (CommandParameter: GameResult)
+    3. Provide items of type models:GameResult with the same shape used
+       today (ShowGroupHeader, GroupHeader, IsOddRow, VegasLines, etc.)
 
-  <Grid RowDefinitions="Auto,*,24">
+  Merge into a page's Resources with:
+      <ResourceDictionary.MergedDictionaries>
+          <ResourceDictionary Source="/Resources/GameCardTemplate.xaml" />
+      </ResourceDictionary.MergedDictionaries>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 1: Games list with pull-to-refresh              -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <RefreshView Grid.Row="1"
-                 Command="{Binding RefreshCommand}"
-                 IsRefreshing="False">
+  Then reference in a CollectionView with:
+      <CollectionView.ItemTemplate>
+          <StaticResource Key="GameCardTemplate" />
+      </CollectionView.ItemTemplate>
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                     xmlns:models="clr-namespace:SaturdayPulse.Models"
+                     xmlns:controls="clr-namespace:SaturdayPulse.Controls">
 
-            <CollectionView ItemsSource="{Binding Games}"
-                            ItemSizingStrategy="MeasureAllItems">
-
-                <CollectionView.ItemTemplate>
-<DataTemplate x:DataType="models:GameResult">
+  <DataTemplate x:Key="GameCardTemplate" x:DataType="models:GameResult">
     <VerticalStackLayout Spacing="0">
 
       <!-- Date group header -->
@@ -317,29 +328,5 @@
 
     </VerticalStackLayout>
   </DataTemplate>
-</CollectionView.ItemTemplate>
 
-                <CollectionView.EmptyView>
-                    <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
-                        <Label Text="{Binding EmptyMessage}" FontSize="14" Opacity="0.7"
-                    HorizontalOptions="Center" Margin="0,10,0,0"/>
-                    </VerticalStackLayout>
-                </CollectionView.EmptyView>
-
-            </CollectionView>
-
-    </RefreshView>
-
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 2: Status bar                                   -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="2" HeightRequest="24"
-          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
-      <Label Text="( ) = projected value"
-             Padding="8,0" FontSize="10" Opacity="0.5"
-             VerticalOptions="Center" HorizontalOptions="Start"
-             TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
-    </Grid>
-
-  </Grid>
-</ContentPage>
+</ResourceDictionary>

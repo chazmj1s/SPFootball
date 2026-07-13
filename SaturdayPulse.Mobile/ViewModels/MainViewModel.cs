@@ -29,18 +29,24 @@ namespace SaturdayPulse.ViewModels
         private readonly SharedNavigationStateService _navState;
         private readonly GameDataApiService           _apiService;
         private readonly GameDataCacheService         _cache;
+        private readonly MyTeamsViewModel              _myTeamsViewModel;
         private int  _selectedIndex = 0;
         private bool _yearChangeInFlight;   // re-entrancy guard (main-thread only)
         private bool _initialized;
 
+        // My Teams is tab 0 — see MainPage.xaml.cs AddPageToHost order.
+        private const int MyTeamsTabIndex = 0;
+
         public MainViewModel(
             SharedNavigationStateService navState,
             GameDataApiService apiService,
-            GameDataCacheService cache)
+            GameDataCacheService cache,
+            MyTeamsViewModel myTeamsViewModel)
         {
-            _navState   = navState;
-            _apiService = apiService;
-            _cache      = cache;
+            _navState         = navState;
+            _apiService       = apiService;
+            _cache            = cache;
+            _myTeamsViewModel = myTeamsViewModel;
 
             SelectTabCommand = new Microsoft.Maui.Controls.Command<int>(idx =>
             {
@@ -96,6 +102,27 @@ namespace SaturdayPulse.ViewModels
                 if (picked != null)
                     _navState.SelectedConference = picked.Abbreviation;
             });
+
+            // Wraps SelectConferenceCommand: on My Teams the pill is a
+            // read-only display of the selected team's conference for the
+            // year (see ConferencePillText below), so tapping it there is a
+            // no-op instead of opening the global conference picker.
+            ConferencePillTapCommand = new Microsoft.Maui.Controls.Command(() =>
+            {
+                if (SelectedIndex == MyTeamsTabIndex) return;
+                SelectConferenceCommand.Execute(null);
+            });
+
+            // Refresh the pill whenever the selected team's ranking changes
+            // (team switch, week change, etc.) while My Teams is on-screen.
+            _myTeamsViewModel.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(MyTeamsViewModel.SelectedTeamRanking) &&
+                    SelectedIndex == MyTeamsTabIndex)
+                {
+                    OnPropertyChanged(nameof(ConferencePillText));
+                }
+            };
 
             // Forward nav state changes to XAML bindings
             _navState.PropertyChanged += (s, e) =>
@@ -254,9 +281,20 @@ namespace SaturdayPulse.ViewModels
                 {
                     _selectedIndex = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(ConferencePillText));
+                    OnPropertyChanged(nameof(IsConferencePillInteractive));
                 }
             }
         }
+
+        /// <summary>
+        /// Sets the initial tab without going through the SelectedIndex
+        /// setter's change-notification path — MainPage.xaml.cs calls
+        /// SyncTabItems/SyncPage explicitly right after this during startup,
+        /// so a duplicate notification-driven SyncPage call isn't needed
+        /// (and would race InitializeAsync's own FilterChanged warm-up).
+        /// </summary>
+        public void SetInitialTabIndex(int index) => _selectedIndex = index;
 
         public ICommand SelectTabCommand   { get; }
         public ICommand NextTabCommand     { get; }
@@ -268,6 +306,22 @@ namespace SaturdayPulse.ViewModels
         public int    SelectedWeek       => _navState.SelectedWeek;
         public string SelectedConference => _navState.SelectedConference;
         public bool   ShowFavoritesFirst => _navState.ShowFavoritesFirst;
+
+        /// <summary>
+        /// On every tab except My Teams: the global conference filter
+        /// (SelectedConference), unchanged behavior. On My Teams: a
+        /// read-only display of the selected team's conference for the
+        /// selected year, sourced from the shared MyTeamsViewModel instance.
+        /// </summary>
+        public string ConferencePillText =>
+            SelectedIndex == MyTeamsTabIndex
+                ? _myTeamsViewModel.SelectedTeamRanking?.DisplayConferenceTier
+                  ?? "No team selected"
+                : _navState.SelectedConference;
+
+        public bool IsConferencePillInteractive => SelectedIndex != MyTeamsTabIndex;
+
+        public ICommand ConferencePillTapCommand { get; }
 
         public ObservableCollection<WeekItem> Weeks => _navState.Weeks;
 

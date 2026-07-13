@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls.Hosting;
@@ -36,6 +37,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<PersonalGameService>();
         builder.Services.AddSingleton<SharedNavigationStateService>();
         builder.Services.AddSingleton<GameDataCacheService>();
+        builder.Services.AddSingleton<RankingsCacheService>();
+        builder.Services.AddSingleton<TeamCacheService>();
 
         // Register Services
         builder.Services.AddHttpClient<GameDataApiService>(client =>
@@ -61,8 +64,10 @@ public static class MauiProgram
         builder.Services.AddSingleton<PostseasonViewModel>();
         builder.Services.AddSingleton<SandboxViewModel>();
         builder.Services.AddSingleton<MainViewModel>();
+        builder.Services.AddSingleton<MyTeamsViewModel>();
 
         // Register Pages
+        builder.Services.AddSingleton<MyTeamsPage>(); 
         builder.Services.AddSingleton<PowerRankingsPage>();
         builder.Services.AddSingleton<SchedulePage>();
         builder.Services.AddSingleton<SettingsPage>();
