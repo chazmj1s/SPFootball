@@ -9,10 +9,14 @@ namespace SaturdayPulse.Services
     public class FollowService
     {
         private const string FollowedTeamsKey = "FollowedTeams";
+        private const string PrimaryTeamKey = "PrimaryTeamId";
         private readonly HashSet<int> _followedIds;
 
         // Fires whenever a team's follow state changes: (TeamID, IsFollowed)
         public event Action<int, bool>? TeamFollowChanged;
+
+        // Fires whenever the primary team changes. Null = primary team cleared.
+        public event Action<int?>? PrimaryTeamChanged;
 
         public FollowService()
         {
@@ -39,6 +43,28 @@ namespace SaturdayPulse.Services
         }
 
         public HashSet<int> GetFollowedIds() => new(_followedIds);
+
+        /// <summary>
+        /// Primary team is intentionally independent of the followed set —
+        /// a team can be primary without being followed. Set from Settings
+        /// (Default team). MyTeams treats changes to this as a filter
+        /// change: it re-points at the new team immediately.
+        /// </summary>
+        public int? GetPrimaryTeamId()
+        {
+            var id = Preferences.Default.Get(PrimaryTeamKey, -1);
+            return id > 0 ? id : null;
+        }
+
+        public void SetPrimaryTeam(int? teamId)
+        {
+            if (teamId.HasValue)
+                Preferences.Default.Set(PrimaryTeamKey, teamId.Value);
+            else
+                Preferences.Default.Remove(PrimaryTeamKey);
+
+            PrimaryTeamChanged?.Invoke(teamId);
+        }
 
         private HashSet<int> LoadFromPreferences()
         {

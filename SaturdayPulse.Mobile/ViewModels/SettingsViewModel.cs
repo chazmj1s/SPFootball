@@ -11,6 +11,7 @@ namespace SaturdayPulse.ViewModels
         private readonly GameDataApiService           _apiService;
         private readonly PersonalGameService          _personalGameService;
         private readonly SharedNavigationStateService _navState;
+        private readonly TeamCacheService              _teamCache;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -82,6 +83,44 @@ namespace SaturdayPulse.ViewModels
             set => _navState.DefaultConference = value;
         }
 
+        // ── User preference: Default team (My Teams' primary team) ────────
+        // Lives on FollowService rather than SharedNavigationStateService —
+        // it's a team-follow concept (see FollowService.SetPrimaryTeam),
+        // not a game-data filter like DefaultWeek/DefaultConference.
+        public string DefaultTeamDisplay =>
+            _followService.GetPrimaryTeamId() is int id
+                ? _teamCache.GetTeam(id)?.TeamName ?? "None"
+                : "None";
+
+        // ── User preference: Default landing page ──────────────────────────
+        // Standalone app-level preference (which tab MainPage.xaml.cs shows
+        // at startup — see GetInitialTabIndex there). Not part of
+        // SharedNavigationStateService since it's navigation UI state, not
+        // game-data filter state.
+        private const string DefaultLandingPageKey = "DefaultLandingPage";
+
+        public string DefaultLandingPage
+        {
+            get => Preferences.Default.Get(DefaultLandingPageKey, "MyTeams");
+            set
+            {
+                Preferences.Default.Set(DefaultLandingPageKey, value);
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DefaultLandingPageDisplay));
+            }
+        }
+
+        public string DefaultLandingPageDisplay => DefaultLandingPage switch
+        {
+            "MyTeams"    => "My Teams",
+            "Scores"     => "Scores",
+            "Rankings"   => "Rankings",
+            "Postseason" => "Postseason",
+            "Sandbox"    => "Sandbox",
+            "Settings"   => "Settings",
+            _            => "My Teams"
+        };
+
         // ── Teams ─────────────────────────────────────────────────────────
         public ObservableCollection<TeamInfo> Teams { get; } = new();
 
@@ -120,6 +159,8 @@ namespace SaturdayPulse.ViewModels
         public ICommand RefreshCommand                 { get; }
         public ICommand SelectDefaultWeekCommand       { get; }
         public ICommand SelectDefaultConferenceCommand { get; }
+        public ICommand SelectDefaultTeamCommand         { get; }
+        public ICommand SelectDefaultLandingPageCommand  { get; }
         public ICommand ClearLogCommand                { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
@@ -127,12 +168,14 @@ namespace SaturdayPulse.ViewModels
             GameDataApiService apiService,
             FollowService followService,
             PersonalGameService personalGameService,
-            SharedNavigationStateService navState)
+            SharedNavigationStateService navState,
+            TeamCacheService teamCache)
             : base(followService)
         {
             _apiService          = apiService;
             _personalGameService = personalGameService;
             _navState            = navState;
+            _teamCache           = teamCache;
 
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
@@ -198,6 +241,57 @@ namespace SaturdayPulse.ViewModels
                         : ConferenceHelper.DisplayToAbbr(result) ?? result;
             });
 
+            SelectDefaultTeamCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                // Settings may be opened before My Teams has ever loaded —
+                // make sure the team list is warm before building the sheet.
+                await _teamCache.EnsureLoadedAsync();
+
+                var options = new List<string> { "None" };
+                options.AddRange(_teamCache.Teams.OrderBy(t => t.TeamName).Select(t => t.TeamName));
+
+                var result = await Shell.Current.DisplayActionSheet(
+                    "Default Team", "Cancel", null, options.ToArray());
+
+                if (result == null || result == "Cancel") return;
+
+                if (result == "None")
+                {
+                    _followService.SetPrimaryTeam(null);
+                }
+                else
+                {
+                    var team = _teamCache.Teams.FirstOrDefault(t => t.TeamName == result);
+                    if (team != null)
+                        _followService.SetPrimaryTeam(team.TeamID);
+                }
+
+                OnPropertyChanged(nameof(DefaultTeamDisplay));
+            });
+
+            SelectDefaultLandingPageCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var options = new[] { "My Teams", "Scores", "Rankings", "Postseason", "Sandbox", "Settings" };
+
+                var result = await Shell.Current.DisplayActionSheet(
+                    "Default Landing Page", "Cancel", null, options);
+
+                if (result == null || result == "Cancel") return;
+
+                // Maps display label -> the same string keys GetInitialTabIndex
+                // in MainPage.xaml.cs switches on.
+                DefaultLandingPage = result switch
+                {
+                    "My Teams"   => "MyTeams",
+                    "Scores"     => "Scores",
+                    "Rankings"   => "Rankings",
+                    "Postseason" => "Postseason",
+                    "Sandbox"    => "Sandbox",
+                    "Settings"   => "Settings",
+                    _            => "MyTeams"
+                };
+            });
+
             ClearLogCommand = new Microsoft.Maui.Controls.Command(() =>
             {
                 AppLogger.Clear();
@@ -209,6 +303,7 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(LogEntryCount));
 
             _followService.TeamFollowChanged         += OnTeamFollowChanged;
+            _followService.PrimaryTeamChanged        += _ => OnPropertyChanged(nameof(DefaultTeamDisplay));
             _personalGameService.GameFavoritedChange += OnGameFavoritedChange;
 
             _navState.PropertyChanged += (s, e) =>

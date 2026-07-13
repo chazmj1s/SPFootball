@@ -9,6 +9,7 @@ namespace SaturdayPulse.ViewModels
     public class PowerRankingsViewModel : BaseViewModel
     {
         private readonly GameDataApiService           _apiService;
+        private readonly RankingsCacheService         _rankingsCache;
         private readonly SharedNavigationStateService _navState;
         private List<TeamRanking> _allTeams = new();
         private ObservableCollection<TeamRanking> _filteredTeams = new();
@@ -23,18 +24,20 @@ namespace SaturdayPulse.ViewModels
 
         public PowerRankingsViewModel(
             GameDataApiService apiService,
+            RankingsCacheService rankingsCache,
             FollowService followService,
             SharedNavigationStateService navState)
             : base(followService)
         {
-            _apiService = apiService;
-            _navState   = navState;
+            _apiService    = apiService;
+            _rankingsCache = rankingsCache;
+            _navState      = navState;
 
             // No outer Task.Run — LoadDataAsync runs on the main thread; the HTTP
             // call inside it is offloaded via its own Task.Run, and the continuation
             // (ApplyFiltersAndSort) returns to the main thread.
             LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
+            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync(forceReload: true));
             ApplyFilterCommand = new Microsoft.Maui.Controls.Command<string>(ApplyFilter);
             ApplySortCommand      = new Microsoft.Maui.Controls.Command<RankingSort>(ApplySort);
             SortColumnCommand     = new Microsoft.Maui.Controls.Command<string>(SortByColumn);
@@ -115,6 +118,7 @@ namespace SaturdayPulse.ViewModels
 
             _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
+            _rankingsCache.CacheUpdated += OnRankingsCacheUpdated;
         }
 
         // ── Bindable collections ──────────────────────────────────────────
@@ -196,7 +200,7 @@ namespace SaturdayPulse.ViewModels
 
         private CancellationTokenSource? _loadCts;
 
-        public async Task LoadDataAsync()
+        public async Task LoadDataAsync(bool forceReload = false)
         {
             _loadCts?.Cancel();
             _loadCts = new CancellationTokenSource();
@@ -210,22 +214,18 @@ namespace SaturdayPulse.ViewModels
             try
             {
                 var teams = await Task.Run(async () =>
-                    await _apiService.GetPowerRankingsAsync(
+                    await _rankingsCache.GetRankingsAsync(
                         _navState.SelectedYear,
-                        _navState.SelectedWeek), token);
+                        _navState.SelectedWeek,
+                        forceReload), token);
 
                 if (token.IsCancellationRequested) return;
 
                 if (teams != null && teams.Any())
                 {
-                    _allTeams = teams;
-
-                    var followedIds = _followService.GetFollowedIds();
-                    foreach (var t in _allTeams)
-                    {
-                        t.IsFollowed = followedIds.Contains(t.TeamID);
-                        t.IsTop25 = t.OverallRank > 0 && t.OverallRank <= 25;
-                    }
+                    // Follow/Top25 flags are stamped once by RankingsCacheService
+                    // on these shared instances — no per-consumer stamping needed.
+                    _allTeams = teams.ToList();
 
                     ApplyFiltersAndSort();
                     StatusMessage = _navState.SelectedWeek > 0
@@ -419,6 +419,24 @@ namespace SaturdayPulse.ViewModels
                 if (_navState.ShowFavoritesFirst)
                     MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
             }
+        }
+
+        /// <summary>
+        /// RankingsCacheService also stamps IsFollowed on TeamFollowChanged and
+        /// fires CacheUpdated. This is a secondary safety net in case another
+        /// consumer (e.g. MyTeamsViewModel) triggers a full cache reload while
+        /// Rankings is active — refilter from the now-current shared list rather
+        /// than going stale. Guarded by HasLoaded so it doesn't double-fire
+        /// immediately after this page's own LoadDataAsync completes.
+        /// </summary>
+        private void OnRankingsCacheUpdated()
+        {
+            if (!HasLoaded || !IsActive) return;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                _allTeams = _rankingsCache.AllRankings.ToList();
+                ApplyFiltersAndSort();
+            });
         }
     }
 }

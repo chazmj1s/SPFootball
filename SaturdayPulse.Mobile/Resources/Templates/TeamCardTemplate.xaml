@@ -1,67 +1,50 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models="clr-namespace:SaturdayPulse.Models"
-             xmlns:controls="clr-namespace:SaturdayPulse.Controls"
-             xmlns:converters="clr-namespace:SaturdayPulse.Converters"
-             xmlns:chart="clr-namespace:Syncfusion.Maui.Charts;assembly=Syncfusion.Maui.Charts"
-             x:Class="SaturdayPulse.Views.PowerRankingsPage"
-             x:Name="ThisPage"
-             Shell.NavBarIsVisible="False">
+<!--
+  TeamCardTemplate.xaml
 
+  Extracted from PowerRankingsPage.xaml so the team row (+ its three lazy
+  expand panels: Trend/Pedigree, Season Arc, Offense/Defense) can be reused
+  by any page (PowerRankingsPage, MyTeamsPage) without duplicating markup.
 
-  <Grid RowDefinitions="Auto,*,24">
+  IMPORTANT — command binding contract:
+  This template calls back to its host page via
+      {Binding Source={x:Reference ThisPage}, Path=BindingContext.<Command>}
+  which means ANY page that merges this dictionary MUST:
+    1. Name its ContentPage root x:Name="ThisPage" (already true for
+       SchedulePage and PowerRankingsPage; MyTeamsPage must match).
+    2. Expose the following commands on its own BindingContext (ViewModel):
+         - ToggleFollowCommand       (CommandParameter: TeamRanking)
+         - ToggleTrendExpandCommand  (CommandParameter: TeamRanking)
+         - ToggleArcExpandCommand    (CommandParameter: TeamRanking)
+         - ToggleStatsExpandCommand  (CommandParameter: TeamRanking)
+    3. Provide items of type models:TeamRanking with the same shape used
+       today (IsOddRow, OverallRank, ArcRankingPoints, TrendPoints, etc.)
+    4. Reference the same StaticResource keys already merged globally:
+       OddRowBackgroundConverter, BoolToColorConverter,
+       FollowTeamGlyphConverter, FollowTeamColorConverter, TeamIconSize.
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 0: Column headers                               -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="0"
-          Padding="4,3"
-          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}"
-          ColumnDefinitions="44,22,*,55,70,60">
+  Merge into a page's Resources with:
+      <ResourceDictionary.MergedDictionaries>
+          <ResourceDictionary Source="/Resources/TeamCardTemplate.xaml" />
+      </ResourceDictionary.MergedDictionaries>
 
-      <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="1" Text="" />
-      <Label Grid.Column="2" Text="Team ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="3" Text="Rec ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="4" Text="Rating ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="5" Text="SOS ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
-        </Label.GestureRecognizers>
-      </Label>
+  Then reference in a CollectionView with:
+      <CollectionView.ItemTemplate>
+          <StaticResource Key="TeamCardTemplate" />
+      </CollectionView.ItemTemplate>
 
-    </Grid>
+  NOTE: MyTeamsPage uses this template for a single selected team (not a
+  list), so IsOddRow should simply be false/unset on the item it's given —
+  the template still works unchanged since IsOddRow just drives the zebra-
+  stripe converter.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                     xmlns:models="clr-namespace:SaturdayPulse.Models"
+                     xmlns:controls="clr-namespace:SaturdayPulse.Controls"
+                     xmlns:chart="clr-namespace:Syncfusion.Maui.Charts;assembly=Syncfusion.Maui.Charts">
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 1: Rankings list with pull-to-refresh           -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <RefreshView Grid.Row="1"
-                 Command="{Binding RefreshCommand}"
-                 IsRefreshing="False">
-
-      <CollectionView ItemsSource="{Binding FilteredTeams}"
-                      SelectionMode="None"
-                      ItemSizingStrategy="MeasureAllItems">
-
-        <CollectionView.ItemTemplate>
-<DataTemplate x:DataType="models:TeamRanking">
+  <DataTemplate x:Key="TeamCardTemplate" x:DataType="models:TeamRanking">
     <VerticalStackLayout Spacing="0">
 
       <!-- ── Main row ── -->
@@ -362,29 +345,5 @@
 
     </VerticalStackLayout>
   </DataTemplate>
-</CollectionView.ItemTemplate>
 
-        <CollectionView.EmptyView>
-          <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
-            <Label Text="{Binding EmptyMessage}" FontSize="14" Opacity="0.7"
-                   HorizontalOptions="Center" Margin="0,10,0,0"/>
-          </VerticalStackLayout>
-        </CollectionView.EmptyView>
-
-      </CollectionView>
-
-    </RefreshView>
-
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 2: Status bar                                   -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="2" HeightRequest="24"
-          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
-      <Label Text="{Binding StatusMessage}"
-             Padding="8,0" FontSize="10" Opacity="0.7"
-             VerticalOptions="Center" HorizontalOptions="Start"/>
-    </Grid>
-
-  </Grid>
-
-</ContentPage>
+</ResourceDictionary>
