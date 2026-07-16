@@ -8,6 +8,7 @@ using SaturdayPulse.Data;
 using SaturdayPulse.Infrastructure;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
+using SaturdayPulse.Swagger;
 using SaturdayPulse.Utilities;
 using System.Net.Http.Headers;
 
@@ -50,6 +51,7 @@ builder.Services.AddScoped<IAvgScoreDifferentialService, AvgScoreDifferentialSer
 builder.Services.AddScoped<ProjectionAccuracyService>();
 builder.Services.AddScoped<ConferenceTierService>();
 builder.Services.AddScoped<RosterCapacityService>();
+builder.Services.AddScoped<UserProfileService>();
 
 // ADDED — K=4 inertia-blending experimental comparison path. Registered the same
 // way (Scoped) as the other per-request services above (GamePredictionService,
@@ -67,6 +69,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "SaturdayPulse API", Version = "v1" });
+    c.OperationFilter<XUserIdHeaderFilter>();
+
 });
 
 builder.Services.AddLogging(loggingBuilder =>

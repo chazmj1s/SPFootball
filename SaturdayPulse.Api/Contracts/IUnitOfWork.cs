@@ -24,6 +24,12 @@ namespace SaturdayPulse.Contracts
         ICoachRecordRepository  CoachRecords  { get; }
         IRecruitPlayerRepository RecruitPlayers { get; }
 
+        // ── User management / entitlement repositories ────────────────────────
+        IUserProfileRepository UserProfiles { get; }
+        IUserContactInfoRepository UserContactInfo { get; }
+        IFollowedTeamRepository FollowedTeams { get; }
+        IFollowedGameRepository FollowedGames { get; }
+
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }
 }

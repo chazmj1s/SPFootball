@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260716022708_AddUserProfileAndContactInfo")]
+    partial class AddUserProfileAndContactInfo
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -140,10 +143,7 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<string>("UserId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Team1Id")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Team2Id")
+                    b.Property<int>("GameId")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("FollowedAt")
@@ -152,7 +152,7 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<bool>("IsSynced")
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("UserId", "Team1Id", "Team2Id");
+                    b.HasKey("UserId", "GameId");
 
                     b.ToTable("FollowedGames");
                 });
@@ -819,8 +819,7 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
-                        .UseCollation("NOCASE");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("EmailVerifiedAt")
                         .HasColumnType("TEXT");

@@ -34,6 +34,12 @@ namespace SaturdayPulse.Infrastructure
         public ICoachRecordRepository  CoachRecords  { get; }
         public IRecruitPlayerRepository RecruitPlayers { get; }
 
+        // ── User management / entitlement repositories ────────────────────────
+        public IUserProfileRepository UserProfiles { get; }
+        public IUserContactInfoRepository UserContactInfo { get; }
+        public IFollowedTeamRepository FollowedTeams { get; }
+        public IFollowedGameRepository FollowedGames { get; }
+
 
         public UnitOfWork(NCAAContext context)
         {
@@ -54,6 +60,11 @@ namespace SaturdayPulse.Infrastructure
             PlayerStats   = new PlayerStatRepository(_context);
             CoachRecords  = new CoachRecordRepository(_context);
             RecruitPlayers = new RecruitPlayerRepository(_context);
+
+            UserProfiles    = new UserProfileRepository(_context);
+            UserContactInfo = new UserContactInfoRepository(_context);
+            FollowedTeams   = new FollowedTeamRepository(_context);
+            FollowedGames   = new FollowedGameRepository(_context);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken token = default)
