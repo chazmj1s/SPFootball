@@ -41,6 +41,7 @@
     <ItemGroup>
         <Folder Include="Migrations\" />
         <Folder Include="Application\" />
+        <Folder Include="Swagger\" />
         <Folder Include="SQL\" />
     </ItemGroup>
 

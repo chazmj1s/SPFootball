@@ -27,6 +27,12 @@ namespace SaturdayPulse.Data
         public DbSet<CoachRecord> CoachRecords { get; set; } = null!;
         public DbSet<RecruitPlayer> RecruitPlayers { get; set; } = null!;
 
+        // User management / entitlement — added for auth + payment build-out.
+        public DbSet<UserProfile> UserProfiles { get; set; } = null!;
+        public DbSet<UserContactInfo> UserContactInfos { get; set; } = null!;
+        public DbSet<FollowedTeam> FollowedTeams { get; set; } = null!;
+        public DbSet<FollowedGame> FollowedGames { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -62,6 +68,49 @@ namespace SaturdayPulse.Data
                 .HasIndex(t => new { t.TeamId, t.StartYear })
                 .IsUnique()
                 .HasDatabaseName("UQ_TeamsConferenceHistory_TeamId_StartYear");
+
+            // --- UserProfile ---
+            // Handle is case-insensitive unique — SQLite NOCASE collation
+            // applied at the property level, which the index below inherits.
+            modelBuilder.Entity<UserProfile>()
+                .Property(u => u.Handle)
+                .UseCollation("NOCASE");
+
+            modelBuilder.Entity<UserProfile>()
+                .HasIndex(u => u.Handle)
+                .IsUnique()
+                .HasDatabaseName("UQ_UserProfile_Handle");
+
+            // --- UserContactInfo ---
+            // 1:1 with UserProfile via shared PK (UserId).
+            modelBuilder.Entity<UserContactInfo>()
+                .HasOne<UserProfile>()
+                .WithOne()
+                .HasForeignKey<UserContactInfo>(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Email is case-insensitive unique — same NOCASE approach as Handle.
+            // Charlie@j1stx.com and charlie@j1stx.com are the same account.
+            modelBuilder.Entity<UserContactInfo>()
+                .Property(c => c.Email)
+                .UseCollation("NOCASE");
+
+            modelBuilder.Entity<UserContactInfo>()
+                .HasIndex(c => c.Email)
+                .IsUnique()
+                .HasDatabaseName("UQ_UserContactInfo_Email");
+
+            // --- FollowedTeam / FollowedGame ---
+            // Composite PK — a follow either exists or it doesn't per pair.
+            modelBuilder.Entity<FollowedTeam>()
+                .HasKey(f => new { f.UserId, f.TeamId });
+
+            // FollowedGame follows a matchup (team pair, canonically ordered
+            // low/high — enforced in the repository), not a single GameId,
+            // so it survives across seasons the same way the old
+            // PersonalGameService's rivalry key did.
+            modelBuilder.Entity<FollowedGame>()
+                .HasKey(f => new { f.UserId, f.Team1Id, f.Team2Id });
         }
     }
 }
