@@ -331,12 +331,24 @@ namespace SaturdayPulse.ViewModels
 
             var dateShort = TryFormatShortDate(g.GameDate); // see class-header note re: field name assumption
 
+            // Raw HomePoints/AwayPoints (not the pre-formatted Display*Score
+            // strings, which append a projection in parens) so this is a
+            // clean numeric comparison from the selected team's perspective.
+            var resultLetter = string.Empty;
+            if (g.IsPlayed)
+            {
+                var myScore  = teamIsHome ? g.HomePoints : g.AwayPoints;
+                var oppScore = teamIsHome ? g.AwayPoints : g.HomePoints;
+                resultLetter = myScore > oppScore ? "(W)" : myScore < oppScore ? "(L)" : "(T)";
+            }
+
             return new MyTeamsGameRow
             {
                 Game               = g,
                 Week               = g.Week,
                 DateShort          = dateShort,
                 AtPrefix           = teamIsHome ? "vs " : "@ ",
+                ResultLetter       = resultLetter,
                 OpponentName       = teamIsHome ? g.VisitorName       : g.HomeName,
                 OpponentTeamId     = teamIsHome ? g.AwayId            : g.HomeId,
                 OpponentIsFollowed = teamIsHome ? g.VisitorIsFollowed : g.HomeIsFollowed,
@@ -455,18 +467,30 @@ namespace SaturdayPulse.ViewModels
             }
         }
 
-        private void OnPrimaryTeamChanged(int? teamId)
+        private async void OnPrimaryTeamChanged(int? teamId)
         {
             BuildChips();
 
             // Per design: primary-team change is treated as a filter change —
-            // re-point at the new team immediately (no network call, same as
-            // any other team switch).
+            // re-point at the new team immediately.
             if (teamId.HasValue)
             {
                 SelectedTeamId = teamId.Value;
                 UpdateChipSelection();
-                ApplyTeamFilter();
+
+                // If this fires before the very first load ever completed —
+                // e.g. FollowService.InitializeAsync() resolving after
+                // InitializeAsync() above already hit its "no teams
+                // followed yet" early-return because the follow cache
+                // wasn't warm yet — the shared rankings/games caches were
+                // never fetched. Refiltering an empty cache leaves chips
+                // and a primary team visible with no game data, until
+                // something else (a tab switch) triggers a real load. Do
+                // the real load here instead of just refiltering.
+                if (HasLoaded)
+                    ApplyTeamFilter();
+                else
+                    await LoadForYearOrWeekChangeAsync();
             }
         }
     }
@@ -499,6 +523,8 @@ namespace SaturdayPulse.ViewModels
         public int         Week               { get; init; }
         public string      DateShort          { get; init; } = string.Empty;
         public string      AtPrefix           { get; init; } = string.Empty; // "@ " or "vs "
+        /// <summary>"W", "L", "T", or "" if the game hasn't been played yet. From the selected team's perspective.</summary>
+        public string      ResultLetter       { get; init; } = string.Empty;
         public string      OpponentName       { get; init; } = string.Empty;
         public int         OpponentTeamId     { get; init; }
         public bool         OpponentIsFollowed { get; init; }

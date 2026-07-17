@@ -415,7 +415,7 @@
   <VerticalStackLayout Spacing="0">
 
     <!-- ── Compact single-line row ── -->
-    <Grid ColumnDefinitions="Auto,*,96,92"
+    <Grid ColumnDefinitions="Auto,*,100,100"
           Padding="6,0,8,0" ColumnSpacing="6">
 
       <Grid.Triggers>
@@ -467,16 +467,33 @@
           </controls:FollowTeamIcon.GestureRecognizers>
         </controls:FollowTeamIcon>
         <Label Grid.Column="2" Text="{Binding OpponentName}"
-               FontSize="13" VerticalOptions="Center"
+               FontSize="12" VerticalOptions="Center"
                LineBreakMode="TailTruncation" />
       </Grid>
 
-      <!-- Score — fixed-width column so it actually lines up across rows -->
-      <Label Grid.Column="2" Text="{Binding ScoreLine}"
-             FontSize="12" FontAttributes="Bold"
-             VerticalOptions="Center" HorizontalTextAlignment="End"
-             LineBreakMode="NoWrap"
-             TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+      <!-- Result letter + Score — fixed-width column so it lines up across rows -->
+      <Grid Grid.Column="2" ColumnDefinitions="Auto,*" ColumnSpacing="2">
+        <Label Grid.Column="0" Text="{Binding ResultLetter}"
+               FontSize="10" FontAttributes="Bold"
+               VerticalOptions="Center">
+          <Label.Triggers>
+            <DataTrigger TargetType="Label" Binding="{Binding ResultLetter}" Value="(W)">
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding ResultLetter}" Value="(L)">
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#C62828, Dark=#EF5350}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding ResultLetter}" Value="(T)">
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#AAAAAA}" />
+            </DataTrigger>
+          </Label.Triggers>
+        </Label>
+        <Label Grid.Column="1" Text="{Binding ScoreLine}"
+               FontSize="10" FontAttributes="Bold"
+               VerticalOptions="Center" HorizontalTextAlignment="End"
+               LineBreakMode="NoWrap"
+               TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+      </Grid>
 
       <!-- Spread / O-U, stacked — fixed-width column, same reason -->
       <VerticalStackLayout Grid.Column="3" Spacing="0"

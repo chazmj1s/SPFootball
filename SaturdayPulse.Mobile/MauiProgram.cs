@@ -57,6 +57,18 @@ public static class MauiProgram
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
 
+        // FollowService/PersonalGameService pull this in automatically via
+        // constructor injection — no changes needed to their registrations
+        // above. X-User-Id is attached per-request inside UserApiService
+        // itself, so no extra DefaultRequestHeaders wiring needed here.
+        builder.Services.AddHttpClient<UserApiService>(client =>
+        {
+            client.BaseAddress = new Uri(ApiConfiguration.ApiRootUrl);
+            client.Timeout = TimeSpan.FromSeconds(15);
+
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
         // Register ViewModels
         builder.Services.AddSingleton<PowerRankingsViewModel>();
         builder.Services.AddSingleton<ScheduleViewModel>();

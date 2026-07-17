@@ -21,6 +21,9 @@ namespace SaturdayPulse.Views
         public MainPage(
             SharedNavigationStateService navState,
             MainViewModel mainViewModel,
+            FollowService followService,
+            PersonalGameService personalGameService,
+            UserApiService userApi,
             MyTeamsPage myTeamsPage,
             SchedulePage schedulePage,
             PowerRankingsPage rankingsPage,
@@ -40,6 +43,16 @@ namespace SaturdayPulse.Views
             _sandboxPage     = sandboxPage;
 
             BindingContext = _vm;
+
+            // Fire-and-forget, kicked off as early as possible so the follow
+            // cache has the best chance of being warm before My Teams (tab 0,
+            // default landing) binds its team cards a few lines down. Same
+            // tolerance already agreed for follow-toggle writes applies to
+            // this read: worst case is a brief flash of "unfollowed" state
+            // that corrects itself once the fetch lands, not a broken app.
+            var followInitTask = followService.InitializeAsync();
+            _ = personalGameService.InitializeAsync();
+            var meTask = userApi.GetMeAsync();
 
             // Build tab items — My Teams is tab 0 (default landing page).
             // Every other index shifted +1 from before.
@@ -109,6 +122,73 @@ namespace SaturdayPulse.Views
             // including ApplyStartupDefaults' property notifications — stays on it.
             // The awaited async cache fetch frees the main thread during I/O.
             _ = _vm.InitializeAsync();
+
+            // GetInitialTabIndex() above ran before either task below could
+            // possibly have resolved — it can't know PrimaryTeamId or Handle
+            // yet. Both post-startup routing decisions (first-launch handle
+            // setup, and the My-Teams-with-no-primary-team fallback) are
+            // combined into ONE sequential continuation rather than two
+            // independent fire-and-forget calls: two independent calls could
+            // race (whichever task resolves first stomps the other's tab
+            // choice), since meTask is a single round trip and followInitTask
+            // is two (it awaits GetMeAsync THEN GetFollowedTeamsAsync
+            // internally). A single continuation makes the precedence
+            // explicit instead of accidental.
+            _ = ApplyStartupRoutingAsync(followInitTask, meTask, followService, initialIndex);
+        }
+
+        /// <summary>
+        /// Runs once, after both the follow cache and the profile fetch land.
+        /// Skippable by design — the person can tap away immediately, this
+        /// just picks where they land:
+        ///   1. First launch (Handle still matches the server's auto-generated
+        ///      "user_{shortguid}" default) → Settings, User Profile expanded,
+        ///      so there's somewhere obvious to pick a real handle. Takes
+        ///      priority over #2 below, since a fresh install triggers both.
+        ///   2. Otherwise, if we're sitting on My Teams (tab 0) with no
+        ///      primary team set, fall back to Scores — My Teams has nothing
+        ///      useful to show without a primary or followed team, and this
+        ///      is checked every launch, not just the very first.
+        /// Runs after the fact rather than blocking startup on the network
+        /// round trip; worst case is a one-frame flash of the original
+        /// landing page before it swaps.
+        /// </summary>
+        private async Task ApplyStartupRoutingAsync(
+            Task followInitTask, Task<UserProfileDto?> meTask,
+            FollowService followService, int initialIndex)
+        {
+            UserProfileDto? profile;
+            try
+            {
+                await Task.WhenAll(followInitTask, meTask);
+                profile = meTask.Result;
+            }
+            catch
+            {
+                return; // startup data failed to load — leave the landing page as-is
+            }
+
+            var isDefaultHandle = profile != null
+                && profile.Handle.StartsWith("user_", StringComparison.OrdinalIgnoreCase);
+
+            if (isDefaultHandle)
+            {
+                _vm.SetInitialTabIndex(5);
+                SyncTabItems(5);
+                SyncPage(5);
+
+                if (_SettingsPage.BindingContext is SettingsViewModel svm)
+                    svm.ToggleSectionCommand.Execute("UserProfile");
+
+                return;
+            }
+
+            if (initialIndex != 0) return;
+            if (followService.GetPrimaryTeamId() != null) return;
+
+            _vm.SetInitialTabIndex(1);
+            SyncTabItems(1);
+            SyncPage(1);
         }
 
         // ── Loading state wiring ──────────────────────────────────────────
