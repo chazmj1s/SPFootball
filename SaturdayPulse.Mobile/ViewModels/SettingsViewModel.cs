@@ -12,6 +12,7 @@ namespace SaturdayPulse.ViewModels
         private readonly PersonalGameService          _personalGameService;
         private readonly SharedNavigationStateService _navState;
         private readonly TeamCacheService              _teamCache;
+        private readonly UserApiService                _userApi;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -35,11 +36,11 @@ namespace SaturdayPulse.ViewModels
         }
 
         // ── Accordion state — only one section open at a time ─────────────
-        private string? _expandedSection = "Following"; // open by default
+        private string? _expandedSection; // nothing expanded by default
 
         public bool IsFollowingExpanded     => _expandedSection == "Following";
         public bool IsUserConfigExpanded    => _expandedSection == "UserConfig";
-        public bool IsMoreCoolStuffExpanded => _expandedSection == "MoreCoolStuff";
+        public bool IsUserProfileExpanded   => _expandedSection == "UserProfile";
         public bool IsDebugLogExpanded      => _expandedSection == "DebugLog";
 
         public bool IsTeamsView => _selectedView == "Teams";
@@ -121,6 +122,54 @@ namespace SaturdayPulse.ViewModels
             _            => "My Teams"
         };
 
+        // ── User preference: Handle ─────────────────────────────────────
+        // Sourced from UserProfile via UserApiService — no local Preferences
+        // copy. Populated by LoadDataAsync alongside teams/rivalries.
+        private string _handle = string.Empty;
+
+        public string Handle
+        {
+            get => _handle;
+            private set
+            {
+                _handle = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsDefaultHandle));
+            }
+        }
+
+        /// <summary>
+        /// True while the handle still matches the server's auto-generated
+        /// "user_{shortguid}" default pattern — i.e. the person has never
+        /// picked one. Drives the first-launch routing in MainPage.xaml.cs.
+        /// </summary>
+        public bool IsDefaultHandle => Handle.StartsWith("user_", StringComparison.OrdinalIgnoreCase);
+
+        private string _email = string.Empty;
+        public string Email
+        {
+            get => _email;
+            private set { _email = value; OnPropertyChanged(); OnPropertyChanged(nameof(EmailDisplay)); }
+        }
+
+        public string EmailDisplay => string.IsNullOrEmpty(Email) ? "Not set" : Email;
+
+        private string _phoneNumber = string.Empty;
+        public string PhoneNumber
+        {
+            get => _phoneNumber;
+            private set { _phoneNumber = value; OnPropertyChanged(); OnPropertyChanged(nameof(PhoneDisplay)); }
+        }
+
+        public string PhoneDisplay => string.IsNullOrEmpty(PhoneNumber) ? "Not set" : PhoneNumber;
+
+        private bool _marketingSmsConsent;
+        public bool MarketingSmsConsent
+        {
+            get => _marketingSmsConsent;
+            private set { _marketingSmsConsent = value; OnPropertyChanged(); }
+        }
+
         // ── Teams ─────────────────────────────────────────────────────────
         public ObservableCollection<TeamInfo> Teams { get; } = new();
 
@@ -161,6 +210,9 @@ namespace SaturdayPulse.ViewModels
         public ICommand SelectDefaultConferenceCommand { get; }
         public ICommand SelectDefaultTeamCommand         { get; }
         public ICommand SelectDefaultLandingPageCommand  { get; }
+        public ICommand EditHandleCommand              { get; }
+        public ICommand EditEmailCommand               { get; }
+        public ICommand EditPhoneCommand               { get; }
         public ICommand ClearLogCommand                { get; }
 
         // ── Constructor ───────────────────────────────────────────────────
@@ -169,13 +221,15 @@ namespace SaturdayPulse.ViewModels
             FollowService followService,
             PersonalGameService personalGameService,
             SharedNavigationStateService navState,
-            TeamCacheService teamCache)
+            TeamCacheService teamCache,
+            UserApiService userApi)
             : base(followService)
         {
             _apiService          = apiService;
             _personalGameService = personalGameService;
             _navState            = navState;
             _teamCache           = teamCache;
+            _userApi             = userApi;
 
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
@@ -219,7 +273,7 @@ namespace SaturdayPulse.ViewModels
                 _expandedSection = _expandedSection == section ? null : section;
                 OnPropertyChanged(nameof(IsFollowingExpanded));
                 OnPropertyChanged(nameof(IsUserConfigExpanded));
-                OnPropertyChanged(nameof(IsMoreCoolStuffExpanded));
+                OnPropertyChanged(nameof(IsUserProfileExpanded));
                 OnPropertyChanged(nameof(IsDebugLogExpanded));
             });
 
@@ -292,6 +346,70 @@ namespace SaturdayPulse.ViewModels
                 };
             });
 
+            // Prompts for a new handle, PATCHes it, and only updates the
+            // bound Handle (and therefore IsDefaultHandle) on success — a
+            // failed/duplicate-handle response leaves the displayed value
+            // untouched rather than showing something that didn't save.
+            EditHandleCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var result = await Shell.Current.DisplayPromptAsync(
+                    "Handle", "Choose a display handle", initialValue: Handle, maxLength: 32);
+
+                if (string.IsNullOrWhiteSpace(result) || result.Trim() == Handle) return;
+
+                var trimmed = result.Trim();
+                var ok = await _userApi.UpdateHandleAsync(trimmed);
+                if (ok)
+                    Handle = trimmed;
+                else
+                    StatusMessage = "Couldn't update handle — it may already be taken.";
+            });
+
+            EditEmailCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var result = await Shell.Current.DisplayPromptAsync(
+                    "Email", "Enter your email address",
+                    initialValue: Email, keyboard: Keyboard.Email, maxLength: 254);
+
+                if (string.IsNullOrWhiteSpace(result) || result.Trim() == Email) return;
+
+                var trimmed = result.Trim();
+                var ok = await _userApi.UpdateEmailAsync(trimmed);
+                if (ok)
+                    Email = trimmed;
+                else
+                    StatusMessage = "Couldn't update email — it may already be in use.";
+            });
+
+            // The phone endpoint bundles marketing SMS consent into the same
+            // PATCH as the number itself (see UserController — there's no
+            // separate consent-only endpoint), so this asks both in one flow
+            // rather than exposing consent as a standalone, always-visible
+            // toggle that would have nothing to save on its own.
+            EditPhoneCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var result = await Shell.Current.DisplayPromptAsync(
+                    "Phone Number", "Enter your phone number",
+                    initialValue: PhoneNumber, keyboard: Keyboard.Telephone, maxLength: 20);
+
+                if (string.IsNullOrWhiteSpace(result)) return;
+                var trimmed = result.Trim();
+
+                var consent = await Shell.Current.DisplayAlert(
+                    "Text Alerts", "OK to text you game and score alerts at this number?", "Yes", "No");
+
+                var ok = await _userApi.UpdatePhoneAsync(trimmed, consent);
+                if (ok)
+                {
+                    PhoneNumber = trimmed;
+                    MarketingSmsConsent = consent;
+                }
+                else
+                {
+                    StatusMessage = "Couldn't update phone number.";
+                }
+            });
+
             ClearLogCommand = new Microsoft.Maui.Controls.Command(() =>
             {
                 AppLogger.Clear();
@@ -326,12 +444,13 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var (teams, rivalries) = await Task.Run(async () =>
+                var (teams, rivalries, profile) = await Task.Run(async () =>
                 {
                     var teamsTask     = _apiService.GetTeamsAsync();
                     var rivalriesTask = _apiService.GetNamedRivalriesAsync();
-                    await Task.WhenAll(teamsTask, rivalriesTask);
-                    return (teamsTask.Result, rivalriesTask.Result);
+                    var profileTask   = _userApi.GetMeAsync();
+                    await Task.WhenAll(teamsTask, rivalriesTask, profileTask);
+                    return (teamsTask.Result, rivalriesTask.Result, profileTask.Result);
                 });
 
                 if (teams != null && teams.Count > 0)
@@ -341,6 +460,14 @@ namespace SaturdayPulse.ViewModels
 
                     _allTeams = [.. teams.OrderBy(t => t.TeamName)];
                     ApplyTeamFilter();
+                }
+
+                if (profile != null)
+                {
+                    Handle = profile.Handle;
+                    Email = profile.Email ?? string.Empty;
+                    PhoneNumber = profile.PhoneNumber ?? string.Empty;
+                    MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
                 }
 
                 var allRivalries = rivalries ?? [];

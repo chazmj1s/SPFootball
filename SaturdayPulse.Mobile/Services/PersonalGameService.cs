@@ -1,22 +1,43 @@
-using System.Text.Json;
-
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// Persists user-followed game matchups (team pair) to local app settings.
-    /// A matchup is stored as a canonical "lowId:highId" string so order doesn't matter.
+    /// Owns user-followed game matchups (team pair) across the app.
+    /// A matchup is cached in-memory as a canonical "lowId:highId" string
+    /// (order-independent), matching FollowedGame's composite PK shape.
+    ///
+    /// Backed by api/user/me/followed-games. IsFavorited() stays
+    /// synchronous — it reads an in-memory cache populated by
+    /// InitializeAsync() at startup. Follow()/Unfollow()/Toggle() update
+    /// the cache immediately and fire off the API write without awaiting
+    /// it: a lost write on a follow toggle is a non-event.
     /// </summary>
     public class PersonalGameService
     {
-        private const string StorageKey = "personal_favorited_games";
-
+        private readonly UserApiService _userApi;
         private readonly HashSet<string> _favorited = new();
 
         public event Action<string, bool>? GameFavoritedChange;
 
-        public PersonalGameService()
+        public PersonalGameService(UserApiService userApi)
         {
-            Load();
+            _userApi = userApi;
+        }
+
+        /// <summary>
+        /// Populates the favorited-matchup cache from the server. Call once
+        /// at app startup, before any page reads IsFavorited() for real data.
+        /// Safe to call again to refresh.
+        /// </summary>
+        public async Task InitializeAsync()
+        {
+            _favorited.Clear();
+
+            var followed = await _userApi.GetFollowedGamesAsync();
+            if (followed != null)
+            {
+                foreach (var pair in followed)
+                    _favorited.Add(Key(pair.Team1Id, pair.Team2Id));
+            }
         }
 
         // ── Public API ────────────────────────────────────────────────────
@@ -29,8 +50,8 @@ namespace SaturdayPulse.Services
             var key = Key(team1Id, team2Id);
             if (_favorited.Add(key))
             {
-                Save();
                 GameFavoritedChange?.Invoke(key, true);
+                _ = SyncFollowAsync(team1Id, team2Id);
             }
         }
 
@@ -39,8 +60,8 @@ namespace SaturdayPulse.Services
             var key = Key(team1Id, team2Id);
             if (_favorited.Remove(key))
             {
-                Save();
                 GameFavoritedChange?.Invoke(key, false);
+                _ = SyncUnfollowAsync(team1Id, team2Id);
             }
         }
 
@@ -71,32 +92,34 @@ namespace SaturdayPulse.Services
             return $"{lo}:{hi}";
         }
 
-        // ── Persistence ───────────────────────────────────────────────────
+        // ── Fire-and-forget sync ─────────────────────────────────────────
 
-        private void Load()
+        private async Task SyncFollowAsync(int team1Id, int team2Id)
         {
             try
             {
-                var json = Preferences.Get(StorageKey, null);
-                if (!string.IsNullOrEmpty(json))
-                {
-                    var list = JsonSerializer.Deserialize<List<string>>(json);
-                    if (list != null)
-                        foreach (var k in list)
-                            _favorited.Add(k);
-                }
+                var ok = await _userApi.FollowGameAsync(team1Id, team2Id);
+                if (!ok)
+                    System.Diagnostics.Debug.WriteLine($"[PersonalGameService] Server sync failed for {team1Id}v{team2Id}");
             }
-            catch { /* start fresh if corrupt */ }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[PersonalGameService] Follow sync error for {team1Id}v{team2Id}: {ex.Message}");
+            }
         }
 
-        private void Save()
+        private async Task SyncUnfollowAsync(int team1Id, int team2Id)
         {
             try
             {
-                var json = JsonSerializer.Serialize(_favorited.ToList());
-                Preferences.Set(StorageKey, json);
+                var ok = await _userApi.UnfollowGameAsync(team1Id, team2Id);
+                if (!ok)
+                    System.Diagnostics.Debug.WriteLine($"[PersonalGameService] Server unfollow sync failed for {team1Id}v{team2Id}");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[PersonalGameService] Unfollow sync error for {team1Id}v{team2Id}: {ex.Message}");
+            }
         }
     }
 }
