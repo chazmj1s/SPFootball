@@ -1,3 +1,4 @@
+using Auth0.OidcClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -68,6 +69,23 @@ public static class MauiProgram
 
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+
+        // Auth0 login (Windows + iOS wired first — see MainPage/Settings for
+        // where LoginAsync/LogoutAsync actually get called; that's not built
+        // yet, this is just the client registration). RedirectUri/
+        // PostLogoutRedirectUri use a placeholder scheme (j1ssports://)
+        // independent of the app's still-unsettled public name — update this
+        // and the matching Info.plist/Package.appxmanifest entries together
+        // if that changes. Matches the Allowed Callback/Logout URLs
+        // configured on the Native Application in the Auth0 dashboard.
+        builder.Services.AddSingleton(new Auth0Client(new Auth0ClientOptions
+        {
+            Domain = "dev-uj415yajuff2lsqw.us.auth0.com",
+            ClientId = "6a5d4f5351fb6b4e6d60bf3a",
+            RedirectUri = "j1ssports://callback",
+            PostLogoutRedirectUri = "j1ssports://callback",
+            Scope = "openid profile email"
+        }));
 
         // Register ViewModels
         builder.Services.AddSingleton<PowerRankingsViewModel>();

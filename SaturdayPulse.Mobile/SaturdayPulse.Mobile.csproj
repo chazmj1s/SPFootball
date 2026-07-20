@@ -80,10 +80,12 @@
   </ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.9" />
-		<PackageReference Include="Syncfusion.Maui.Charts" Version="33.2.5" />
+		<PackageReference Include="Auth0.OidcClient.MAUI" Version="1.2.0" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
+		<PackageReference Include="Syncfusion.Maui.Charts" Version="34.1.31" />
+		<PackageReference Include="Auth0.OidcClient.MAUI" Version="1.2.0" />
 	</ItemGroup>
 
 	<ItemGroup>

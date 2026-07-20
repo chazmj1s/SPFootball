@@ -17,6 +17,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Auth0.OidcClient.MAUI" Version="1.2.0" />
         <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.16" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.16">
