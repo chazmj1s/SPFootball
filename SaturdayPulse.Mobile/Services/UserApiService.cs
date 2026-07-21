@@ -376,7 +376,7 @@ namespace SaturdayPulse.Services
 
     public class UserProfileDto
     {
-        public Guid UserId { get; set; }
+        public string UserId { get; set; } = string.Empty;
         public string Handle { get; set; } = string.Empty;
         public DateTime? HandleChangedAt { get; set; }
         public int? PrimaryTeamId { get; set; }

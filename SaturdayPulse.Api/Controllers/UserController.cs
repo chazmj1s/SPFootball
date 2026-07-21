@@ -24,7 +24,7 @@ namespace SaturdayPulse.Controllers
             if (resolved == null)
             {
                 userId = string.Empty;
-                return BadRequest("X-User-Id header is required (temporary, pre-Auth0).");
+                return BadRequest("Unable to resolve user identity.");
             }
             userId = resolved;
             return null;
