@@ -24,4 +24,6 @@ public static class ApiConfiguration
 #else
         ProductionApiRootUrl;
 #endif
+
+    public const string Audience = "https://api.j1stx.com";
 }

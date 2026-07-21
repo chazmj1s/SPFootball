@@ -477,7 +477,10 @@ namespace SaturdayPulse.ViewModels
                 var isSignup = !_authService.HasAccount;
                 var ok = await _authService.LoginAsync(isSignup);
                 if (ok)
+                {
                     IsLoggedIn = true;
+                    await LoadDataAsync();   // re-pull profile/teams/rivalries under the new identity
+                }
                 else
                     StatusMessage = "Login failed — try again.";
             });

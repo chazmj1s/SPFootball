@@ -1,4 +1,5 @@
 using Auth0.OidcClient;
+using SaturdayPulse.Mobile.Services;
 
 namespace SaturdayPulse.Services
 {
@@ -79,26 +80,39 @@ namespace SaturdayPulse.Services
         /// </param>
         public async Task<bool> LoginAsync(bool isSignup = false)
         {
-            var result = isSignup
-                ? await _auth0Client.LoginAsync(new { screen_hint = "signup" })
-                : await _auth0Client.LoginAsync();
+            Duende.IdentityModel.OidcClient.LoginResult result;
 
-            if (result.IsError)
+            try
             {
-                System.Diagnostics.Debug.WriteLine($"[Auth] Login failed: {result.Error}");
+                if (isSignup)
+                    result = await _auth0Client.LoginAsync(new { audience = ApiConfiguration.Audience, screen_hint = "signup" });
+                else
+                    result = await _auth0Client.LoginAsync(new { audience = ApiConfiguration.Audience });
+
+
+                if (result.IsError)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Auth] Login failed: {result.Error}");
+                    return false;
+                }
+
+                await SecureStorage.Default.SetAsync(AccessTokenKey, result.AccessToken);
+                await SecureStorage.Default.SetAsync(
+                    ExpiresAtKey,
+                    DateTimeOffset.UtcNow.Add(result.AccessTokenExpiration - DateTime.UtcNow).ToString("O"));
+
+                if (!string.IsNullOrEmpty(result.RefreshToken))
+                    await SecureStorage.Default.SetAsync(RefreshTokenKey, result.RefreshToken);
+
+                HasAccount = true;
+                return true;
+
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Auth] Login exception: {ex}");
                 return false;
             }
-
-            await SecureStorage.Default.SetAsync(AccessTokenKey, result.AccessToken);
-            await SecureStorage.Default.SetAsync(
-                ExpiresAtKey,
-                DateTimeOffset.UtcNow.Add(result.AccessTokenExpiration - DateTime.UtcNow).ToString("O"));
-
-            if (!string.IsNullOrEmpty(result.RefreshToken))
-                await SecureStorage.Default.SetAsync(RefreshTokenKey, result.RefreshToken);
-
-            HasAccount = true;
-            return true;
         }
 
         public async Task LogoutAsync()

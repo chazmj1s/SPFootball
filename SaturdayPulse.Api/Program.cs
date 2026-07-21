@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
@@ -35,6 +36,15 @@ builder.Services.AddHttpClient("cfbd", (sp, client) =>
 
 var testSettings = builder.Configuration.GetSection("CfbdApi").Get<CfbdApiSettings>();
 Console.WriteLine($"DEBUG CfbdApi — BaseUrl: '{testSettings?.BaseUrl}' BearerToken empty: {string.IsNullOrEmpty(testSettings?.BearerToken)}");
+
+// ── Auth0 / JWT Bearer ────────────────────────────────────────────────────────
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = $"https://{builder.Configuration["Auth0:Domain"]}/";
+        options.Audience = builder.Configuration["Auth0:Audience"];
+        options.MapInboundClaims = false;
+    });
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<ScoreDeltaCalculator>();
@@ -116,6 +126,7 @@ app.UseCors(policy => policy
     .AllowAnyMethod()
     .AllowAnyHeader());
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapStaticAssets();
 

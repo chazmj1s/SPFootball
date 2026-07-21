@@ -20,7 +20,7 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         SyncfusionLicenseProvider.RegisterLicense(
-            "Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXpfcXVQR2lfWUB+V0RWYEo=");
+            "Ngo9BigBOggjHTQxAR8/V1JAaF5cXmJCd1p/TH5YfUNzdUVEY1ZUTXxaS1ZhSXxVdkJhWH5fdX1RRmFeUUB9XEY=");
         
         var builder = MauiApp.CreateBuilder();
         builder
