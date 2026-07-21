@@ -19,12 +19,25 @@
              VerticalOptions="Fill" 
              HorizontalOptions="Start" />
             <Label Grid.Column="1"
-             Text="SP Football"
+             Text="J1S Sports"
              FontSize="16" FontAttributes="Bold"
              HorizontalOptions="Center"
              HorizontalTextAlignment="Center"
              VerticalOptions="Center"
-             TextColor="White" />
+             TextColor="#BF5700" />
+            <!-- Gear icon — Settings' only tab-strip entry point now that it's
+                 out of TabItems (see MainPage.xaml.cs / MainViewModel.cs).
+                 Column 2 was already reserved (44,*,44) but unused before this. -->
+            <Label Grid.Column="2"
+             Text="&#9881;"
+             FontSize="12"
+             HorizontalOptions="Center"
+             VerticalOptions="Center"
+             TextColor="#BF5700">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenSettingsCommand}" />
+                </Label.GestureRecognizers>
+            </Label>
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════ -->
@@ -147,11 +160,11 @@
                              BindableLayout.ItemsSource="{Binding TabItems}">
         <BindableLayout.ItemTemplate>
           <DataTemplate x:DataType="viewmodels:TabItem">
-            <Grid Padding="2,0" MinimumWidthRequest="72">
+            <Grid Padding="2,0" MinimumWidthRequest="56">
               <VerticalStackLayout Spacing="0">
                 <Label Text="{Binding Label}"
-                       FontSize="13" FontAttributes="Bold"
-                       HorizontalOptions="Center" Padding="12,10">
+                       FontSize="12" FontAttributes="Bold"
+                       HorizontalOptions="Center" Padding="10,10">
                   <Label.Triggers>
                     <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
                       <Setter Property="TextColor" Value="White" />

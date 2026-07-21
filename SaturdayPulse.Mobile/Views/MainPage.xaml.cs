@@ -55,28 +55,45 @@ namespace SaturdayPulse.Views
             var meTask = userApi.GetMeAsync();
 
             // Build tab items — My Teams is tab 0 (default landing page).
-            // Every other index shifted +1 from before.
+            // Settings is NOT in this list — it came out of the tab strip.
+            // It's still hosted at PageHost position 5 below (AddPageToHost
+            // order unchanged), reachable via the header gear icon
+            // (MainViewModel.OpenSettingsCommand) and, if someone has it set
+            // as their default landing page, at startup — just not by
+            // swiping/tapping through the strip.
             _vm.TabItems.Clear();
-            var labels = new[] { "My Teams", "Scores", "Rankings", "Postseason", "Sandbox", "Settings" };
+            var labels = new[] { "My Teams", "Scores", "Rankings", "Postseason", "Sandbox" };
             var initialIndex = GetInitialTabIndex();
             for (int i = 0; i < labels.Length; i++)
                 _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == initialIndex });
 
             // Add pages to AbsoluteLayout — order matches labels[] above,
             // and MUST match tab index order (SyncPage indexes PageHost.Children
-            // positionally).
+            // positionally). Settings stays at index 5 even though it's no
+            // longer in labels[]/TabItems — SyncPage addresses PageHost by
+            // position, not by TabItems, so this still works.
             AddPageToHost(_myTeamsPage);     // 0 — My Teams
             AddPageToHost(_schedulePage);    // 1 — Scores
             AddPageToHost(_rankingsPage);    // 2 — Rankings
             AddPageToHost(_postseasonPage);  // 3 — Postseason
             AddPageToHost(_sandboxPage);     // 4 — Sandbox
-            AddPageToHost(_SettingsPage);    // 5 — Settings
+            AddPageToHost(_SettingsPage);    // 5 — Settings (gear icon / Close link only)
 
             // Wire loading state FIRST before any load fires
             WireLoadingState(_myTeamsPage);
             WireLoadingState(_schedulePage);
             WireLoadingState(_rankingsPage);
             WireLoadingState(_postseasonPage);
+
+            // Settings' Close link lives on SettingsViewModel (its
+            // BindingContext when hosted here), but the tab-switch logic it
+            // needs to trigger (CloseSettingsCommand) lives on MainViewModel
+            // — a different BindingContext outside SettingsPage's own XAML
+            // namescope, so this can't be a direct XAML binding. Forwarded
+            // via event instead, same pattern as the FollowService/
+            // PersonalGameService/_navState subscriptions below.
+            if (_SettingsPage.BindingContext is SettingsViewModel svm)
+                svm.CloseRequested += (s, e) => _vm.CloseSettingsCommand.Execute(null);
 
             // Forward nav state changes
             _vm.PropertyChanged += (s, e) =>
@@ -145,6 +162,10 @@ namespace SaturdayPulse.Views
         ///      "user_{shortguid}" default) → Settings, User Profile expanded,
         ///      so there's somewhere obvious to pick a real handle. Takes
         ///      priority over #2 below, since a fresh install triggers both.
+        ///      Settings is reached the same way the gear icon reaches it —
+        ///      PageHost position 5 — even though it's no longer in TabItems,
+        ///      so SyncTabItems(5) below simply won't highlight anything in
+        ///      the (Settings-less) tab strip, which is expected.
         ///   2. Otherwise, if we're sitting on My Teams (tab 0) with no
         ///      primary team set, fall back to Scores — My Teams has nothing
         ///      useful to show without a primary or followed team, and this
@@ -302,7 +323,10 @@ namespace SaturdayPulse.Views
         /// Reads the "Default landing page" preference set from Settings.
         /// Defaults to My Teams (tab 0) if unset — matches My Teams being
         /// the new default landing page per the feature spec. Index mapping
-        /// MUST match the labels[]/AddPageToHost order above.
+        /// MUST match the labels[]/AddPageToHost order above. "Settings"
+        /// still resolves to 5 even though it's out of labels[] — it's a
+        /// PageHost position, not a labels[] index, so this mapping doesn't
+        /// need to change just because the tab strip entry went away.
         /// </summary>
         private int GetInitialTabIndex()
         {

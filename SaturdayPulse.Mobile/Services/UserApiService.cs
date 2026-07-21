@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -5,11 +6,17 @@ namespace SaturdayPulse.Services
 {
     /// <summary>
     /// Service for calling the NCAA Power Ratings User API (api/user/...).
-    /// Owns the local device UserId and attaches it as the X-User-Id header
-    /// on every request. This header is a temporary, client-supplied identity
-    /// mechanism — HttpContextUserExtensions.GetUserId() reads it server-side
-    /// today. The moment Auth0 lands, this class's AttachUserIdHeader method
-    /// (and the header itself) goes away.
+    ///
+    /// Auth: sends a real "Authorization: Bearer {token}" header when
+    /// AuthService reports a logged-in session, otherwise falls back to the
+    /// legacy X-User-Id header. This mirrors HttpContextUserExtensions.cs on
+    /// the API side, which is dual-mode by design (JWT sub claim first,
+    /// X-User-Id fallback) — see session-handoff-2026-07-19.md.
+    ///
+    /// The fallback path (LocalUserId / ForcedDevUserId / X-User-Id) is
+    /// still transitional plumbing. Per the handoff's "not done yet" list,
+    /// it stays until Windows login (item 1) also works — don't delete it
+    /// yet even though iOS/mobile login is now wired.
     /// </summary>
     public class UserApiService
     {
@@ -19,12 +26,15 @@ namespace SaturdayPulse.Services
         // (6c753c66-a2e2-43f2-91ac-efdee1cbec90 — Handle Chazmj1sTx) instead
         // of whatever random GUID happens to be sitting in this device's
         // Preferences. Unblocks testing against real data pre-Auth0. Delete
-        // this override (and the two lines that use it below) the same day
-        // Auth0 lands — that's the real fix for "how does it know who I am."
+        // this override (and the two lines that use it below) once Auth0
+        // login is wired on every target platform (Windows still pending —
+        // see handoff item 1) — that's the real fix for "how does it know
+        // who I am."
         private static readonly Guid ForcedDevUserId =
             Guid.Parse("6c753c66-a2e2-43f2-91ac-efdee1cbec90");
 
         private readonly HttpClient _httpClient;
+        private readonly AuthService _authService;
         private readonly JsonSerializerOptions _jsonOptions = new()
         {
             PropertyNameCaseInsensitive = true
@@ -32,14 +42,16 @@ namespace SaturdayPulse.Services
 
         private Guid? _cachedUserId;
 
-        public UserApiService(HttpClient httpClient)
+        public UserApiService(HttpClient httpClient, AuthService authService)
         {
             _httpClient = httpClient;
+            _authService = authService;
         }
 
         /// <summary>
         /// The device's local UserId. Generated once and persisted to
         /// Preferences on first access; stable for the life of the install.
+        /// Only used as the fallback identity when there's no Auth0 session.
         /// </summary>
         public Guid LocalUserId
         {
@@ -68,7 +80,7 @@ namespace SaturdayPulse.Services
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, "user/me");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -98,7 +110,7 @@ namespace SaturdayPulse.Services
                 {
                     Content = JsonContent.Create(new { teamId })
                 };
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -127,7 +139,7 @@ namespace SaturdayPulse.Services
                 {
                     Content = JsonContent.Create(new { handle })
                 };
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -154,7 +166,7 @@ namespace SaturdayPulse.Services
                 {
                     Content = JsonContent.Create(new { email })
                 };
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -185,7 +197,7 @@ namespace SaturdayPulse.Services
                 {
                     Content = JsonContent.Create(new { phoneNumber, marketingSmsConsent })
                 };
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -208,7 +220,7 @@ namespace SaturdayPulse.Services
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, "user/me/followed-teams");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -231,7 +243,7 @@ namespace SaturdayPulse.Services
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Put, $"user/me/followed-teams/{teamId}");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -251,7 +263,7 @@ namespace SaturdayPulse.Services
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Delete, $"user/me/followed-teams/{teamId}");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -274,7 +286,7 @@ namespace SaturdayPulse.Services
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, "user/me/followed-games");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -298,7 +310,7 @@ namespace SaturdayPulse.Services
             {
                 using var request = new HttpRequestMessage(
                     HttpMethod.Put, $"user/me/followed-games?team1Id={team1Id}&team2Id={team2Id}");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -319,7 +331,7 @@ namespace SaturdayPulse.Services
             {
                 using var request = new HttpRequestMessage(
                     HttpMethod.Delete, $"user/me/followed-games?team1Id={team1Id}&team2Id={team2Id}");
-                AttachUserIdHeader(request);
+                await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -334,10 +346,24 @@ namespace SaturdayPulse.Services
             }
         }
 
-        // ── Header plumbing ──────────────────────────────────────────────
+        // ── Auth plumbing ──────────────────────────────────────────────
 
-        private void AttachUserIdHeader(HttpRequestMessage request)
+        /// <summary>
+        /// Attaches auth to the outgoing request: a real Bearer token if
+        /// AuthService reports a logged-in Auth0 session, otherwise the
+        /// legacy X-User-Id header. Safe to call unconditionally — the API's
+        /// HttpContextUserExtensions checks the JWT sub claim first and
+        /// falls back to X-User-Id itself, so both paths work today.
+        /// </summary>
+        private async Task AttachAuthAsync(HttpRequestMessage request)
         {
+            var token = await _authService.GetAccessTokenAsync();
+            if (token is not null)
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                return;
+            }
+
             request.Headers.Remove("X-User-Id");
             request.Headers.Add("X-User-Id", LocalUserId.ToString());
         }

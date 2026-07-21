@@ -1,5 +1,7 @@
-﻿using Microsoft.Maui;
+using Microsoft.Maui;
 using Microsoft.Maui.Controls;
+using Auth0.OidcClient;
+
 
 namespace SaturdayPulse;
 
@@ -7,6 +9,11 @@ public partial class App : Application
 {
     public App()
     {
+#if WINDOWS
+        if (Auth0.OidcClient.Platforms.Windows.Activator.Default.CheckRedirectionActivation())
+            return;
+#endif
+
         InitializeComponent();
     }
 
