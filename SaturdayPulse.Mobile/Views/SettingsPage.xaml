@@ -11,13 +11,24 @@
     <Grid RowDefinitions="Auto,*,24">
 
         <!-- ═══════════════════════════════════════════════════ -->
-        <!-- ROW 0: Page title                                   -->
+        <!-- ROW 0: Page title + Close                           -->
         <!-- ═══════════════════════════════════════════════════ -->
-        <Label Grid.Row="0"
-               Text="Settings"
-               FontSize="20" FontAttributes="Bold"
-               Padding="12,10"
-               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="12,10">
+            <Label Grid.Column="0"
+                   Text="Settings"
+                   FontSize="20" FontAttributes="Bold"
+                   VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+            <Label Grid.Column="1"
+                   Text="Close"
+                   FontSize="14" FontAttributes="Bold"
+                   VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding CloseCommand}" />
+                </Label.GestureRecognizers>
+            </Label>
+        </Grid>
 
         <!-- ═══════════════════════════════════════════════════ -->
         <!-- ROW 1: Accordion sections                           -->
@@ -29,7 +40,7 @@
                 <VerticalStackLayout Spacing="0">
 
                     <!-- ─────────────────────────────────────── -->
-                    <!-- SECTION: Following                      -->
+                    <!-- SECTION: User Profile (default expanded) -->
                     <!-- ─────────────────────────────────────── -->
 
                     <Grid ColumnDefinitions="*,24"
@@ -37,10 +48,10 @@
                           BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding ToggleSectionCommand}"
-                                                  CommandParameter="Following" />
+                                                  CommandParameter="UserProfile" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0"
-                               Text="Following"
+                               Text="User Profile"
                                FontSize="15" FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
                                VerticalOptions="Center" />
@@ -49,228 +60,180 @@
                                HorizontalOptions="Center" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
                             <Label.Triggers>
-                                <DataTrigger TargetType="Label"
-                                             Binding="{Binding IsFollowingExpanded}" Value="True">
+                                <DataTrigger TargetType="Label" Binding="{Binding IsUserProfileExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
                                 </DataTrigger>
-                                <DataTrigger TargetType="Label"
-                                             Binding="{Binding IsFollowingExpanded}" Value="False">
+                                <DataTrigger TargetType="Label" Binding="{Binding IsUserProfileExpanded}" Value="False">
                                     <Setter Property="Text" Value="▼" />
                                 </DataTrigger>
                             </Label.Triggers>
                         </Label>
                     </Grid>
 
-                    <VerticalStackLayout IsVisible="{Binding IsFollowingExpanded}" Spacing="0">
+                    <VerticalStackLayout IsVisible="{Binding IsUserProfileExpanded}"
+                                         Padding="16,12" Spacing="16">
 
-                        <Grid ColumnDefinitions="*,*"
-                              BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}">
+                        <!-- Handle -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Handle"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Your display name. Pick one anytime — this is just what shows instead of an auto-generated ID."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding EditHandleCommand}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding Handle}"
+                                       FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                                <Label Grid.Column="1"
+                                       Text="▾" FontSize="14"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
 
-                            <VerticalStackLayout Grid.Column="0" Spacing="0">
-                                <VerticalStackLayout.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Teams" />
-                                </VerticalStackLayout.GestureRecognizers>
-                                <Label Text="Teams" FontSize="13" FontAttributes="Bold"
-                                       HorizontalOptions="Center" Padding="0,8">
-                                    <Label.Triggers>
-                                        <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="True">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                        </DataTrigger>
-                                        <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="False">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
-                                        </DataTrigger>
-                                    </Label.Triggers>
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                        <!-- Email -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Email"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Used for account recovery and, if you opt in elsewhere, updates."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding EditEmailCommand}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding EmailDisplay}"
+                                       FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                                <Label Grid.Column="1"
+                                       Text="▾" FontSize="14"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                        <!-- Phone -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Phone number"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Optional. Asked separately whether it's OK to text game and score alerts."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding EditPhoneCommand}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding PhoneDisplay}"
+                                       FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                                <Label Grid.Column="1"
+                                       Text="▾" FontSize="14"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                            <Label Text="Text alerts: on"
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   IsVisible="{Binding MarketingSmsConsent}" />
+                        </VerticalStackLayout>
+
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                        <!-- Login / Create Account / Logout -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Account"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Only needed for things tied to a real identity, like Season Pass. Everything else works without logging in."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+                            <Border StrokeShape="RoundRectangle 6"
+                                    Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
+                                    StrokeThickness="1"
+                                    BackgroundColor="{AppThemeBinding Light=White, Dark=#2A2A2A}"
+                                    Padding="12,8"
+                                    HorizontalOptions="Start"
+                                    Margin="0,2,0,0">
+                                <Label Text="{Binding AuthButtonText}"
+                                       FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding AuthActionCommand}" />
+                                    </Label.GestureRecognizers>
                                 </Label>
-                                <BoxView HeightRequest="2" HorizontalOptions="Fill">
-                                    <BoxView.Triggers>
-                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="True">
-                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                        </DataTrigger>
-                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="False">
-                                            <Setter Property="Color" Value="Transparent" />
-                                        </DataTrigger>
-                                    </BoxView.Triggers>
-                                </BoxView>
-                            </VerticalStackLayout>
+                            </Border>
+                        </VerticalStackLayout>
 
-                            <VerticalStackLayout Grid.Column="1" Spacing="0">
-                                <VerticalStackLayout.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
-                                </VerticalStackLayout.GestureRecognizers>
-                                <Label Text="Games" FontSize="13" FontAttributes="Bold"
-                                       HorizontalOptions="Center" Padding="0,8">
-                                    <Label.Triggers>
-                                        <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="True">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                        </DataTrigger>
-                                        <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="False">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
-                                        </DataTrigger>
-                                    </Label.Triggers>
-                                </Label>
-                                <BoxView HeightRequest="2" HorizontalOptions="Fill">
-                                    <BoxView.Triggers>
-                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="True">
-                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
-                                        </DataTrigger>
-                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="False">
-                                            <Setter Property="Color" Value="Transparent" />
-                                        </DataTrigger>
-                                    </BoxView.Triggers>
-                                </BoxView>
-                            </VerticalStackLayout>
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
 
+                        <!-- Stay Logged In -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                <Label Text="Stay logged in"
+                                       FontSize="13"
+                                       TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                <Label Text="Keeps you logged in across app launches. Turn off to require logging in again next time."
+                                       FontSize="11"
+                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                       LineBreakMode="WordWrap" />
+                            </VerticalStackLayout>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding StayLoggedIn}"
+                                    VerticalOptions="Center"
+                                    OnColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                         </Grid>
 
-                        <!-- Teams list -->
-                        <CollectionView ItemsSource="{Binding Teams}"
-                                        IsVisible="{Binding IsTeamsView}"
-                                        ItemSizingStrategy="MeasureAllItems">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="models:TeamInfo">
-                                    <Grid ColumnDefinitions="*,Auto" Padding="12,8">
-                                        <Label Grid.Column="0"
-                                               Text="{Binding TeamName}"
-                                               FontSize="13" VerticalOptions="Center" />
-                                        <Label Grid.Column="1"
-                                               Text="{Binding IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
-                                               TextColor="{Binding IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
-                                               FontSize="{StaticResource TeamIconSize}"
-                                               VerticalOptions="Center">
-                                            <Label.GestureRecognizers>
-                                                <TapGestureRecognizer
-                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                                                    CommandParameter="{Binding TeamID}" />
-                                            </Label.GestureRecognizers>
-                                        </Label>
-                                    </Grid>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                        <BoxView HeightRequest="1" Opacity="0.1"
+                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
 
-                        <!-- Games list -->
-                        <VerticalStackLayout IsVisible="{Binding IsGamesView}" Spacing="0">
-
-                            <Picker ItemsSource="{Binding TierFilters}"
-                                    SelectedItem="{Binding SelectedTier}"
-                                    Margin="12,8" FontSize="13" />
-
-                            <CollectionView ItemsSource="{Binding Games}"
-                                            ItemSizingStrategy="MeasureAllItems">
-                                <CollectionView.ItemTemplate>
-                                    <DataTemplate x:DataType="models:RivalryInfo">
-                                        <VerticalStackLayout Spacing="0">
-
-                                            <!-- Title + ★ favorite + tier badge -->
-                                            <Grid ColumnDefinitions="*,Auto,Auto" Padding="10,5,10,2">
-
-                                                <Label Grid.Column="0"
-                                                       Text="{Binding DisplayName}"
-                                                       FontSize="12"
-                                                       FontAttributes="Bold"
-                                                       VerticalOptions="Center"
-                                                       LineBreakMode="TailTruncation" />
-
-                                                <!-- Star: favorite this game -->
-                                                <controls:FollowGameIcon
-                                                        Grid.Column="1"
-                                                        IsFollowed="{Binding IsGameFavorited}"
-                                                        VerticalOptions="Center"
-                                                        HorizontalOptions="End"
-                                                        Margin="8,0">
-                                                    <controls:FollowGameIcon.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
-                                                            CommandParameter="{Binding .}" />
-                                                    </controls:FollowGameIcon.GestureRecognizers>
-                                                </controls:FollowGameIcon>
-
-                                                <Label Grid.Column="2"
-                                                       Text="{Binding TierBadge}"
-                                                       FontSize="16"
-                                                       VerticalOptions="Center"
-                                                       HorizontalOptions="End" />
-                                            </Grid>
-
-                                            <!-- Team rows: heart · name · series/upset · margin/swing -->
-                                            <Grid ColumnDefinitions="28,*,110,90"
-                                                  RowDefinitions="Auto,Auto"
-                                                  Padding="10,2,10,5">
-
-                                                <!-- Heart: follow team 1 -->
-                                                <controls:FollowTeamIcon
-                                                        Grid.Row="0" Grid.Column="0"
-                                                        IsFollowed="{Binding Team1IsFollowed}"
-                                                        VerticalOptions="Center"
-                                                        HorizontalOptions="Center">
-                                                    <controls:FollowTeamIcon.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                                                            CommandParameter="{Binding Team1Id}" />
-                                                    </controls:FollowTeamIcon.GestureRecognizers>
-                                                </controls:FollowTeamIcon>
-
-                                                <Label Grid.Row="0" Grid.Column="1"
-                                                       Text="{Binding Team1Name}"
-                                                       FontSize="13"
-                                                       VerticalOptions="Center"
-                                                       LineBreakMode="TailTruncation" />
-
-                                                <Label Grid.Row="0" Grid.Column="2"
-                                                       Text="{Binding DisplaySeries}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
-                                                       VerticalOptions="Center" />
-
-                                                <Label Grid.Row="0" Grid.Column="3"
-                                                       Text="{Binding DisplayAvgMargin}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                                       VerticalOptions="Center"
-                                                       HorizontalOptions="End" />
-
-                                                <!-- Heart: follow team 2 -->
-                                                <controls:FollowTeamIcon
-                                                        Grid.Row="1" Grid.Column="0"
-                                                        IsFollowed="{Binding Team2IsFollowed}"
-                                                        VerticalOptions="Center"
-                                                        HorizontalOptions="Center">
-                                                    <controls:FollowTeamIcon.GestureRecognizers>
-                                                        <TapGestureRecognizer
-                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
-                                                            CommandParameter="{Binding Team2Id}" />
-                                                    </controls:FollowTeamIcon.GestureRecognizers>
-                                                </controls:FollowTeamIcon>
-
-                                                <Label Grid.Row="1" Grid.Column="1"
-                                                       Text="{Binding Team2Name}"
-                                                       FontSize="13"
-                                                       VerticalOptions="Center"
-                                                       LineBreakMode="TailTruncation" />
-
-                                                <Label Grid.Row="1" Grid.Column="2"
-                                                       Text="{Binding DisplayUpsetRate}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
-                                                       VerticalOptions="Center" />
-
-                                                <Label Grid.Row="1" Grid.Column="3"
-                                                       Text="{Binding DisplayAvgSwing}"
-                                                       FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                                       VerticalOptions="Center"
-                                                       HorizontalOptions="End" />
-                                            </Grid>
-
-                                            <!-- Row divider -->
-                                            <BoxView HeightRequest="1" Opacity="0.12"
-                                                     Color="{AppThemeBinding Light=Black, Dark=White}" />
-
-                                        </VerticalStackLayout>
-                                    </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
-
+                        <!-- Season Pass (placeholder — Stripe is a separate feature) -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Season Pass"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                            <Label Text="Coming soon."
+                                   FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   LineBreakMode="WordWrap" />
+                            <Border StrokeShape="RoundRectangle 6"
+                                    Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
+                                    StrokeThickness="1"
+                                    BackgroundColor="{AppThemeBinding Light=White, Dark=#2A2A2A}"
+                                    Padding="12,8"
+                                    HorizontalOptions="Start"
+                                    Margin="0,2,0,0">
+                                <Label Text="Get Season Pass"
+                                       FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SeasonPassCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </Border>
                         </VerticalStackLayout>
 
                     </VerticalStackLayout>
@@ -517,7 +480,7 @@
                              Color="{AppThemeBinding Light=Black, Dark=White}" />
 
                     <!-- ─────────────────────────────────────── -->
-                    <!-- SECTION: More Cool Stuff                -->
+                    <!-- SECTION: Following                      -->
                     <!-- ─────────────────────────────────────── -->
 
                     <Grid ColumnDefinitions="*,24"
@@ -525,10 +488,10 @@
                           BackgroundColor="{AppThemeBinding Light=#F0EBF8, Dark=#2A2040}">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding ToggleSectionCommand}"
-                                                  CommandParameter="UserProfile" />
+                                                  CommandParameter="Following" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0"
-                               Text="User Profile"
+                               Text="Following"
                                FontSize="15" FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
                                VerticalOptions="Center" />
@@ -537,102 +500,228 @@
                                HorizontalOptions="Center" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
                             <Label.Triggers>
-                                <DataTrigger TargetType="Label" Binding="{Binding IsUserProfileExpanded}" Value="True">
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsFollowingExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
                                 </DataTrigger>
-                                <DataTrigger TargetType="Label" Binding="{Binding IsUserProfileExpanded}" Value="False">
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsFollowingExpanded}" Value="False">
                                     <Setter Property="Text" Value="▼" />
                                 </DataTrigger>
                             </Label.Triggers>
                         </Label>
                     </Grid>
 
-                    <VerticalStackLayout IsVisible="{Binding IsUserProfileExpanded}"
-                                         Padding="16,12" Spacing="16">
+                    <VerticalStackLayout IsVisible="{Binding IsFollowingExpanded}" Spacing="0">
 
-                        <!-- Handle -->
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="Handle"
-                                   FontSize="13"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                            <Label Text="Your display name. Pick one anytime — this is just what shows instead of an auto-generated ID."
-                                   FontSize="11"
-                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                   LineBreakMode="WordWrap" />
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding EditHandleCommand}" />
-                                </Grid.GestureRecognizers>
-                                <Label Grid.Column="0"
-                                       Text="{Binding Handle}"
-                                       FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
-                                       VerticalOptions="Center" />
-                                <Label Grid.Column="1"
-                                       Text="▾" FontSize="14"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
-                                       VerticalOptions="Center" />
-                            </Grid>
-                        </VerticalStackLayout>
+                        <Grid ColumnDefinitions="*,*"
+                              BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}">
 
-                        <BoxView HeightRequest="1" Opacity="0.1"
-                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
+                            <VerticalStackLayout Grid.Column="0" Spacing="0">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Teams" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="Teams" FontSize="13" FontAttributes="Bold"
+                                       HorizontalOptions="Center" Padding="0,8">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="True">
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="False">
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                                <BoxView HeightRequest="2" HorizontalOptions="Fill">
+                                    <BoxView.Triggers>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="True">
+                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="False">
+                                            <Setter Property="Color" Value="Transparent" />
+                                        </DataTrigger>
+                                    </BoxView.Triggers>
+                                </BoxView>
+                            </VerticalStackLayout>
 
-                        <!-- Email -->
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="Email"
-                                   FontSize="13"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                            <Label Text="Used for account recovery and, if you opt in elsewhere, updates."
-                                   FontSize="11"
-                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                   LineBreakMode="WordWrap" />
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding EditEmailCommand}" />
-                                </Grid.GestureRecognizers>
-                                <Label Grid.Column="0"
-                                       Text="{Binding EmailDisplay}"
-                                       FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
-                                       VerticalOptions="Center" />
-                                <Label Grid.Column="1"
-                                       Text="▾" FontSize="14"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
-                                       VerticalOptions="Center" />
-                            </Grid>
-                        </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="0">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Games" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="Games" FontSize="13" FontAttributes="Bold"
+                                       HorizontalOptions="Center" Padding="0,8">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="True">
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="False">
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                                <BoxView HeightRequest="2" HorizontalOptions="Fill">
+                                    <BoxView.Triggers>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="True">
+                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="False">
+                                            <Setter Property="Color" Value="Transparent" />
+                                        </DataTrigger>
+                                    </BoxView.Triggers>
+                                </BoxView>
+                            </VerticalStackLayout>
 
-                        <BoxView HeightRequest="1" Opacity="0.1"
-                                 Color="{AppThemeBinding Light=Black, Dark=White}" />
+                        </Grid>
 
-                        <!-- Phone -->
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="Phone number"
-                                   FontSize="13"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
-                            <Label Text="Optional. Asked separately whether it's OK to text game and score alerts."
-                                   FontSize="11"
-                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                   LineBreakMode="WordWrap" />
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2,0,0">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding EditPhoneCommand}" />
-                                </Grid.GestureRecognizers>
-                                <Label Grid.Column="0"
-                                       Text="{Binding PhoneDisplay}"
-                                       FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
-                                       VerticalOptions="Center" />
-                                <Label Grid.Column="1"
-                                       Text="▾" FontSize="14"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
-                                       VerticalOptions="Center" />
-                            </Grid>
-                            <Label Text="Text alerts: on"
-                                   FontSize="11"
-                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
-                                   IsVisible="{Binding MarketingSmsConsent}" />
+                        <!-- Teams list -->
+                        <CollectionView ItemsSource="{Binding Teams}"
+                                        IsVisible="{Binding IsTeamsView}"
+                                        ItemSizingStrategy="MeasureAllItems">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:TeamInfo">
+                                    <Grid ColumnDefinitions="*,Auto" Padding="12,8">
+                                        <Label Grid.Column="0"
+                                               Text="{Binding TeamName}"
+                                               FontSize="13" VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               Text="{Binding IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+                                               TextColor="{Binding IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+                                               FontSize="{StaticResource TeamIconSize}"
+                                               VerticalOptions="Center">
+                                            <Label.GestureRecognizers>
+                                                <TapGestureRecognizer
+                                                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                                                    CommandParameter="{Binding TeamID}" />
+                                            </Label.GestureRecognizers>
+                                        </Label>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <!-- Games list -->
+                        <VerticalStackLayout IsVisible="{Binding IsGamesView}" Spacing="0">
+
+                            <Picker ItemsSource="{Binding TierFilters}"
+                                    SelectedItem="{Binding SelectedTier}"
+                                    Margin="12,8" FontSize="13" />
+
+                            <CollectionView ItemsSource="{Binding Games}"
+                                            ItemSizingStrategy="MeasureAllItems">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:RivalryInfo">
+                                        <VerticalStackLayout Spacing="0">
+
+                                            <!-- Title + ★ favorite + tier badge -->
+                                            <Grid ColumnDefinitions="*,Auto,Auto" Padding="10,5,10,2">
+
+                                                <Label Grid.Column="0"
+                                                       Text="{Binding DisplayName}"
+                                                       FontSize="12"
+                                                       FontAttributes="Bold"
+                                                       VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+
+                                                <!-- Star: favorite this game -->
+                                                <controls:FollowGameIcon
+                                                        Grid.Column="1"
+                                                        IsFollowed="{Binding IsGameFavorited}"
+                                                        VerticalOptions="Center"
+                                                        HorizontalOptions="End"
+                                                        Margin="8,0">
+                                                    <controls:FollowGameIcon.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    </controls:FollowGameIcon.GestureRecognizers>
+                                                </controls:FollowGameIcon>
+
+                                                <Label Grid.Column="2"
+                                                       Text="{Binding TierBadge}"
+                                                       FontSize="16"
+                                                       VerticalOptions="Center"
+                                                       HorizontalOptions="End" />
+                                            </Grid>
+
+                                            <!-- Team rows: heart · name · series/upset · margin/swing -->
+                                            <Grid ColumnDefinitions="28,*,110,90"
+                                                  RowDefinitions="Auto,Auto"
+                                                  Padding="10,2,10,5">
+
+                                                <!-- Heart: follow team 1 -->
+                                                <controls:FollowTeamIcon
+                                                        Grid.Row="0" Grid.Column="0"
+                                                        IsFollowed="{Binding Team1IsFollowed}"
+                                                        VerticalOptions="Center"
+                                                        HorizontalOptions="Center">
+                                                    <controls:FollowTeamIcon.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                                                            CommandParameter="{Binding Team1Id}" />
+                                                    </controls:FollowTeamIcon.GestureRecognizers>
+                                                </controls:FollowTeamIcon>
+
+                                                <Label Grid.Row="0" Grid.Column="1"
+                                                       Text="{Binding Team1Name}"
+                                                       FontSize="13"
+                                                       VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+
+                                                <Label Grid.Row="0" Grid.Column="2"
+                                                       Text="{Binding DisplaySeries}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                                                       VerticalOptions="Center" />
+
+                                                <Label Grid.Row="0" Grid.Column="3"
+                                                       Text="{Binding DisplayAvgMargin}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                                       VerticalOptions="Center"
+                                                       HorizontalOptions="End" />
+
+                                                <!-- Heart: follow team 2 -->
+                                                <controls:FollowTeamIcon
+                                                        Grid.Row="1" Grid.Column="0"
+                                                        IsFollowed="{Binding Team2IsFollowed}"
+                                                        VerticalOptions="Center"
+                                                        HorizontalOptions="Center">
+                                                    <controls:FollowTeamIcon.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                                                            CommandParameter="{Binding Team2Id}" />
+                                                    </controls:FollowTeamIcon.GestureRecognizers>
+                                                </controls:FollowTeamIcon>
+
+                                                <Label Grid.Row="1" Grid.Column="1"
+                                                       Text="{Binding Team2Name}"
+                                                       FontSize="13"
+                                                       VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+
+                                                <Label Grid.Row="1" Grid.Column="2"
+                                                       Text="{Binding DisplayUpsetRate}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                                                       VerticalOptions="Center" />
+
+                                                <Label Grid.Row="1" Grid.Column="3"
+                                                       Text="{Binding DisplayAvgSwing}"
+                                                       FontSize="9"
+                                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                                       VerticalOptions="Center"
+                                                       HorizontalOptions="End" />
+                                            </Grid>
+
+                                            <!-- Row divider -->
+                                            <BoxView HeightRequest="1" Opacity="0.12"
+                                                     Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+
                         </VerticalStackLayout>
 
                     </VerticalStackLayout>

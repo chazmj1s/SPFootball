@@ -13,6 +13,7 @@ namespace SaturdayPulse.ViewModels
         private readonly SharedNavigationStateService _navState;
         private readonly TeamCacheService              _teamCache;
         private readonly UserApiService                _userApi;
+        private readonly AuthService                   _authService;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -36,7 +37,9 @@ namespace SaturdayPulse.ViewModels
         }
 
         // ── Accordion state — only one section open at a time ─────────────
-        private string? _expandedSection; // nothing expanded by default
+        // User Profile is the default-expanded section (was "nothing" before
+        // the Auth0 login/Season Pass controls landed there).
+        private string? _expandedSection = "UserProfile";
 
         public bool IsFollowingExpanded     => _expandedSection == "Following";
         public bool IsUserConfigExpanded    => _expandedSection == "UserConfig";
@@ -170,6 +173,39 @@ namespace SaturdayPulse.ViewModels
             private set { _marketingSmsConsent = value; OnPropertyChanged(); }
         }
 
+        // ── Auth0 — login state / Season Pass ───────────────────────────
+        // No forced login anywhere in the app. This is purely opt-in: the
+        // person taps Login/Create Account (or Season Pass, which offers to
+        // log in first) when THEY want to. See AuthService for StayLoggedIn.
+
+        private bool _isLoggedIn;
+        public bool IsLoggedIn
+        {
+            get => _isLoggedIn;
+            private set
+            {
+                if (_isLoggedIn == value) return;
+                _isLoggedIn = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AuthButtonText));
+            }
+        }
+
+        /// <summary>
+        /// "Logout" if there's an active session; otherwise "Login" if this
+        /// device has logged in before, or "Create Account" if it hasn't —
+        /// AuthService.HasAccount is the local (device-level) signal for that,
+        /// there's no server round trip to determine it.
+        /// </summary>
+        public string AuthButtonText =>
+            IsLoggedIn ? "Logout" : (_authService.HasAccount ? "Login" : "Create Account");
+
+        public bool StayLoggedIn
+        {
+            get => _authService.StayLoggedIn;
+            set { _authService.StayLoggedIn = value; OnPropertyChanged(); }
+        }
+
         // ── Teams ─────────────────────────────────────────────────────────
         public ObservableCollection<TeamInfo> Teams { get; } = new();
 
@@ -214,6 +250,19 @@ namespace SaturdayPulse.ViewModels
         public ICommand EditEmailCommand               { get; }
         public ICommand EditPhoneCommand               { get; }
         public ICommand ClearLogCommand                { get; }
+        public ICommand AuthActionCommand              { get; }
+        public ICommand SeasonPassCommand              { get; }
+        public ICommand CloseCommand                   { get; }
+
+        /// <summary>
+        /// Raised when the Close link is tapped. Settings' BindingContext is
+        /// this ViewModel, not MainViewModel (see AddPageToHost in
+        /// MainPage.xaml.cs), so the tab-switch logic that actually closes
+        /// Settings can't be reached via a XAML binding — MainPage.xaml.cs
+        /// subscribes to this event and forwards to
+        /// MainViewModel.CloseSettingsCommand.
+        /// </summary>
+        public event EventHandler? CloseRequested;
 
         // ── Constructor ───────────────────────────────────────────────────
         public SettingsViewModel(
@@ -222,7 +271,8 @@ namespace SaturdayPulse.ViewModels
             PersonalGameService personalGameService,
             SharedNavigationStateService navState,
             TeamCacheService teamCache,
-            UserApiService userApi)
+            UserApiService userApi,
+            AuthService authService)
             : base(followService)
         {
             _apiService          = apiService;
@@ -230,6 +280,7 @@ namespace SaturdayPulse.ViewModels
             _navState            = navState;
             _teamCache           = teamCache;
             _userApi             = userApi;
+            _authService         = authService;
 
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
@@ -410,6 +461,60 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
+            // Single button whose label (AuthButtonText) already reflects
+            // what tapping it will do — Create Account and Login both just
+            // call AuthService.LoginAsync (isSignup only changes which tab
+            // Auth0's hosted page opens on), Logout calls LogoutAsync.
+            AuthActionCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                if (IsLoggedIn)
+                {
+                    await _authService.LogoutAsync();
+                    IsLoggedIn = false;
+                    return;
+                }
+
+                var isSignup = !_authService.HasAccount;
+                var ok = await _authService.LoginAsync(isSignup);
+                if (ok)
+                    IsLoggedIn = true;
+                else
+                    StatusMessage = "Login failed — try again.";
+            });
+
+            // Placeholder — Stripe isn't wired up yet (separate feature).
+            // The only real behavior here is the login check: buying a
+            // Season Pass should be tied to a real identity, so if nobody's
+            // logged in this offers to log in first rather than letting the
+            // "purchase" proceed anonymously. Nothing else needs validating
+            // since there's no other purchase path yet.
+            SeasonPassCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                if (!IsLoggedIn)
+                {
+                    var proceed = await Shell.Current.DisplayAlert(
+                        "Season Pass",
+                        "You'll need to log in first to purchase a Season Pass.",
+                        "Log In", "Cancel");
+                    if (!proceed) return;
+
+                    var isSignup = !_authService.HasAccount;
+                    var ok = await _authService.LoginAsync(isSignup);
+                    if (!ok)
+                    {
+                        StatusMessage = "Login failed — try again.";
+                        return;
+                    }
+                    IsLoggedIn = true;
+                }
+
+                await Shell.Current.DisplayAlert(
+                    "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
+            });
+
+            CloseCommand = new Microsoft.Maui.Controls.Command(() =>
+                CloseRequested?.Invoke(this, EventArgs.Empty));
+
             ClearLogCommand = new Microsoft.Maui.Controls.Command(() =>
             {
                 AppLogger.Clear();
@@ -469,6 +574,8 @@ namespace SaturdayPulse.ViewModels
                     PhoneNumber = profile.PhoneNumber ?? string.Empty;
                     MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
                 }
+
+                IsLoggedIn = await _authService.IsAuthenticatedAsync();
 
                 var allRivalries = rivalries ?? [];
                 var followedIds  = _followService.GetFollowedIds();

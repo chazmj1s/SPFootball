@@ -40,6 +40,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<GameDataCacheService>();
         builder.Services.AddSingleton<RankingsCacheService>();
         builder.Services.AddSingleton<TeamCacheService>();
+        builder.Services.AddSingleton<AuthService>();
 
         // Register Services
         builder.Services.AddHttpClient<GameDataApiService>(client =>
@@ -81,7 +82,7 @@ public static class MauiProgram
         builder.Services.AddSingleton(new Auth0Client(new Auth0ClientOptions
         {
             Domain = "dev-uj415yajuff2lsqw.us.auth0.com",
-            ClientId = "6a5d4f5351fb6b4e6d60bf3a",
+            ClientId = "uWtUlEKnLY6ZiXlS38BkzwTTGIa20mA5",
             RedirectUri = "j1ssports://callback",
             PostLogoutRedirectUri = "j1ssports://callback",
             Scope = "openid profile email"

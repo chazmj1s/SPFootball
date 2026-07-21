@@ -35,7 +35,7 @@
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
-		<WindowsPackageType>None</WindowsPackageType>
+		<WindowsPackageType>MSIX</WindowsPackageType>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
@@ -67,10 +67,6 @@
 
     <!-- Images -->
     <MauiImage Include="Resources\Images\*" />
-    <MauiImage Update="Resources\Images\applogo.png">
-      <Color>#0D0D1A</Color>
-    </MauiImage>
-    <MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
     <!-- Custom Fonts -->
     <MauiFont Include="Resources\Fonts\*" />
@@ -79,8 +75,15 @@
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
-	<ItemGroup>
+	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
+		<PackageReference Include="Auth0.OidcClient.MAUI" Version="1.3.0" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' != 'net9.0-windows10.0.19041.0'">
 		<PackageReference Include="Auth0.OidcClient.MAUI" Version="1.2.0" />
+	</ItemGroup>
+	
+	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />

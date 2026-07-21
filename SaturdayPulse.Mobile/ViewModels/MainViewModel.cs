@@ -37,6 +37,18 @@ namespace SaturdayPulse.ViewModels
         // My Teams is tab 0 — see MainPage.xaml.cs AddPageToHost order.
         private const int MyTeamsTabIndex = 0;
 
+        // Settings still lives at PageHost position 5 (AddPageToHost order is
+        // unchanged), it's just no longer one of the entries in TabItems, so
+        // the tab strip can't scroll/swipe to it. Only the gear icon
+        // (OpenSettingsCommand) and Settings' own Close link
+        // (CloseSettingsCommand) reach it now.
+        private const int SettingsTabIndex = 5;
+
+        // Where to return to when Settings' Close link is tapped. Captured
+        // right before OpenSettingsCommand switches to SettingsTabIndex, so
+        // Close always lands back wherever the person actually came from.
+        private int _previousIndexBeforeSettings = MyTeamsTabIndex;
+
         public MainViewModel(
             SharedNavigationStateService navState,
             GameDataApiService apiService,
@@ -61,6 +73,26 @@ namespace SaturdayPulse.ViewModels
             PreviousTabCommand = new Microsoft.Maui.Controls.Command(() =>
             {
                 if (SelectedIndex > 0) SelectedIndex--;
+            });
+
+            // Gear icon in the header (MainPage.xaml row 0). Settings isn't in
+            // TabItems anymore, so this is the only tap-driven way in (besides
+            // DefaultLandingPage == "Settings" at startup) — bypasses the
+            // TabItems.Count bound in Next/PreviousTabCommand on purpose.
+            OpenSettingsCommand = new Microsoft.Maui.Controls.Command(() =>
+            {
+                if (SelectedIndex != SettingsTabIndex)
+                    _previousIndexBeforeSettings = SelectedIndex;
+
+                SelectedIndex = SettingsTabIndex;
+            });
+
+            // Settings' "Close" link. SettingsViewModel raises CloseRequested;
+            // MainPage.xaml.cs subscribes and forwards to this command (cross-
+            // page, so it can't be a direct XAML binding — see MainPage.xaml.cs).
+            CloseSettingsCommand = new Microsoft.Maui.Controls.Command(() =>
+            {
+                SelectedIndex = _previousIndexBeforeSettings;
             });
 
             SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
@@ -296,9 +328,11 @@ namespace SaturdayPulse.ViewModels
         /// </summary>
         public void SetInitialTabIndex(int index) => _selectedIndex = index;
 
-        public ICommand SelectTabCommand   { get; }
-        public ICommand NextTabCommand     { get; }
-        public ICommand PreviousTabCommand { get; }
+        public ICommand SelectTabCommand     { get; }
+        public ICommand NextTabCommand       { get; }
+        public ICommand PreviousTabCommand   { get; }
+        public ICommand OpenSettingsCommand  { get; }
+        public ICommand CloseSettingsCommand { get; }
 
         // ── Shared navigation proxy properties ────────────────────────────
 
