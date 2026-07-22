@@ -14,6 +14,7 @@ namespace SaturdayPulse.ViewModels
         private readonly TeamCacheService              _teamCache;
         private readonly UserApiService                _userApi;
         private readonly AuthService                   _authService;
+        private readonly FeedbackService                _feedbackService;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -44,6 +45,7 @@ namespace SaturdayPulse.ViewModels
         public bool IsFollowingExpanded     => _expandedSection == "Following";
         public bool IsUserConfigExpanded    => _expandedSection == "UserConfig";
         public bool IsUserProfileExpanded   => _expandedSection == "UserProfile";
+        public bool IsFeedbackExpanded      => _expandedSection == "Feedback";
         public bool IsDebugLogExpanded      => _expandedSection == "DebugLog";
 
         public bool IsTeamsView => _selectedView == "Teams";
@@ -206,6 +208,24 @@ namespace SaturdayPulse.ViewModels
             set { _authService.StayLoggedIn = value; OnPropertyChanged(); }
         }
 
+        // ── Season Pass entitlement ──────────────────────────────────────
+        // Sourced directly from UserProfileResponse.IsEntitled (server-computed:
+        // ExpiryDate.HasValue && ExpiryDate > UtcNow) — no client-side date math,
+        // avoids clock-skew disagreements between device and server. Populated
+        // by LoadDataAsync alongside the rest of the profile.
+        private bool _hasSeasonPass;
+        public bool HasSeasonPass
+        {
+            get => _hasSeasonPass;
+            private set
+            {
+                if (_hasSeasonPass == value) return;
+                _hasSeasonPass = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanAccessFeedback));
+            }
+        }
+
         // ── Teams ─────────────────────────────────────────────────────────
         public ObservableCollection<TeamInfo> Teams { get; } = new();
 
@@ -228,6 +248,35 @@ namespace SaturdayPulse.ViewModels
             }
         }
 
+        // ── Feedback (Season Pass gated) ────────────────────────────────
+        // Beta access: Season Pass is being granted free to beta testers
+        // specifically so this can sit behind the same entitlement gate
+        // real paying members will eventually use.
+        public bool CanAccessFeedback => HasSeasonPass;
+
+        private string _feedbackText = string.Empty;
+        public string FeedbackText
+        {
+            get => _feedbackText;
+            set { _feedbackText = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanSubmitFeedback)); }
+        }
+
+        private bool _isSendingFeedback;
+        public bool IsSendingFeedback
+        {
+            get => _isSendingFeedback;
+            private set { _isSendingFeedback = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanSubmitFeedback)); }
+        }
+
+        public bool CanSubmitFeedback => !IsSendingFeedback && !string.IsNullOrWhiteSpace(FeedbackText);
+
+        private string _feedbackStatus = string.Empty;
+        public string FeedbackStatus
+        {
+            get => _feedbackStatus;
+            private set { _feedbackStatus = value; OnPropertyChanged(); }
+        }
+
         // ── Debug Log ─────────────────────────────────────────────────────
 
         /// <summary>Bound to the Debug Log CollectionView in Settings.</summary>
@@ -248,10 +297,11 @@ namespace SaturdayPulse.ViewModels
         public ICommand SelectDefaultLandingPageCommand  { get; }
         public ICommand EditHandleCommand              { get; }
         public ICommand EditEmailCommand               { get; }
-        public ICommand EditPhoneCommand               { get; }
+        public ICommand EditPhoneCommand                { get; }
         public ICommand ClearLogCommand                { get; }
         public ICommand AuthActionCommand              { get; }
         public ICommand SeasonPassCommand              { get; }
+        public ICommand SubmitFeedbackCommand          { get; }
         public ICommand CloseCommand                   { get; }
 
         /// <summary>
@@ -272,7 +322,8 @@ namespace SaturdayPulse.ViewModels
             SharedNavigationStateService navState,
             TeamCacheService teamCache,
             UserApiService userApi,
-            AuthService authService)
+            AuthService authService,
+            FeedbackService feedbackService)
             : base(followService)
         {
             _apiService          = apiService;
@@ -281,6 +332,7 @@ namespace SaturdayPulse.ViewModels
             _teamCache           = teamCache;
             _userApi             = userApi;
             _authService         = authService;
+            _feedbackService     = feedbackService;
 
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
@@ -325,6 +377,7 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsFollowingExpanded));
                 OnPropertyChanged(nameof(IsUserConfigExpanded));
                 OnPropertyChanged(nameof(IsUserProfileExpanded));
+                OnPropertyChanged(nameof(IsFeedbackExpanded));
                 OnPropertyChanged(nameof(IsDebugLogExpanded));
             });
 
@@ -515,6 +568,27 @@ namespace SaturdayPulse.ViewModels
                     "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
             });
 
+            SubmitFeedbackCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                if (!CanSubmitFeedback) return;
+
+                IsSendingFeedback = true;
+                FeedbackStatus = string.Empty;
+
+                var ok = await _feedbackService.SubmitFeedbackAsync(FeedbackText);
+
+                IsSendingFeedback = false;
+                if (ok)
+                {
+                    FeedbackText = string.Empty;
+                    FeedbackStatus = "Thanks — feedback sent!";
+                }
+                else
+                {
+                    FeedbackStatus = "Couldn't send — try again.";
+                }
+            });
+
             CloseCommand = new Microsoft.Maui.Controls.Command(() =>
                 CloseRequested?.Invoke(this, EventArgs.Empty));
 
@@ -576,6 +650,7 @@ namespace SaturdayPulse.ViewModels
                     Email = profile.Email ?? string.Empty;
                     PhoneNumber = profile.PhoneNumber ?? string.Empty;
                     MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
+                    HasSeasonPass = profile.IsEntitled;
                 }
 
                 IsLoggedIn = await _authService.IsAuthenticatedAsync();

@@ -384,6 +384,7 @@ namespace SaturdayPulse.Services
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public bool IsSynced { get; set; }
+        public bool IsEntitled { get; set; }
 
         // ASSUMPTION: GetMe() merges UserContactInfo into the same response
         // (the controller's class summary is "Profile, contact info, and

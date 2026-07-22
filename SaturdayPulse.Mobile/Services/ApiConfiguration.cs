@@ -26,4 +26,5 @@ public static class ApiConfiguration
 #endif
 
     public const string Audience = "https://api.j1stx.com";
+    public const string DiscordWebhook = "https://discordapp.com/api/webhooks/1529270867761168395/l8QXZRf3nk8vPdKucQWddTHobsf8ebDC4S7PCij4V9ugg5GXJztq_jYkj7i33fLDEv0j";
 }

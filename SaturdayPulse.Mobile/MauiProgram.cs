@@ -41,6 +41,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<RankingsCacheService>();
         builder.Services.AddSingleton<TeamCacheService>();
         builder.Services.AddSingleton<AuthService>();
+        builder.Services.AddSingleton<FeedbackService>();
 
         // Register Services
         builder.Services.AddHttpClient<GameDataApiService>(client =>
