@@ -33,8 +33,12 @@ namespace SaturdayPulse.Controllers
         #region Profile
 
         /// <summary>
-        /// GET /api/user/me — returns the current profile, provisioning one
-        /// on first-ever contact from this UserId.
+        /// GET /api/user/me — returns the current profile, or 404 if none
+        /// exists for this identity. NEVER creates a profile — this is the
+        /// Login path's lookup. A 404 here means "no account for this
+        /// login," which the client should surface to the person (try again
+        /// / create account), not paper over. See CreateAccount below for
+        /// the only path that creates a profile.
         /// </summary>
         [HttpGet("me")]
         public async Task<IActionResult> GetMe(CancellationToken token = default)
@@ -43,13 +47,43 @@ namespace SaturdayPulse.Controllers
 
             try
             {
-                var profile = await userProfileService.GetOrCreateProfileAsync(userId, defaultEmail: null, token);
+                var profile = await userProfileService.GetProfileAsync(userId, token);
+                if (profile == null) return NotFound();
                 return Ok(profile);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error retrieving profile for {UserId}", userId);
                 return StatusCode(500, "An error occurred while retrieving the profile.");
+            }
+        }
+
+        /// <summary>
+        /// POST /api/user/me — creates a NEW profile for the calling
+        /// identity. THE ONLY endpoint that creates a UserProfile. Call this
+        /// only immediately after Auth0 signup (LoginAsync(isSignup: true))
+        /// completes — never after a plain login, and never from a passive
+        /// fetch. 409 if a profile already exists for this identity, or if
+        /// the supplied email is already in use by a different account —
+        /// same conflict shape as UpdateEmail/UpdateHandle below, not a new
+        /// error type.
+        /// </summary>
+        [HttpPost("me")]
+        public async Task<IActionResult> CreateAccount(
+            [FromQuery] string? email, CancellationToken token = default)
+        {
+            if (TryResolveUserId(out var userId) is { } badRequest) return badRequest;
+
+            try
+            {
+                var profile = await userProfileService.CreateProfileAsync(userId, email, token);
+                return Ok(profile);
+            }
+            catch (InvalidOperationException ex) { return Conflict(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error creating account for {UserId}", userId);
+                return StatusCode(500, "An error occurred while creating the account.");
             }
         }
 

@@ -33,6 +33,11 @@ namespace SaturdayPulse.Data
         public DbSet<FollowedTeam> FollowedTeams { get; set; } = null!;
         public DbSet<FollowedGame> FollowedGames { get; set; } = null!;
 
+        // Season Pass / entitlement grants — added 2026-07-22, replaces
+        // UserProfile.ExpiryDate as the source of truth for IsEntitled.
+        // Scoped to CFB only for now (see UserEntitlement.cs class summary).
+        public DbSet<UserEntitlement> UserEntitlements { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -111,6 +116,14 @@ namespace SaturdayPulse.Data
             // PersonalGameService's rivalry key did.
             modelBuilder.Entity<FollowedGame>()
                 .HasKey(f => new { f.UserId, f.Team1Id, f.Team2Id });
+
+            // --- UserEntitlement ---
+            // Not unique — a user can accumulate multiple rows over time
+            // (renewals, or eventually multiple products), so this is a
+            // lookup-performance index, not a constraint.
+            modelBuilder.Entity<UserEntitlement>()
+                .HasIndex(e => new { e.UserId, e.ProductKey })
+                .HasDatabaseName("IX_UserEntitlement_UserId_ProductKey");
         }
     }
 }

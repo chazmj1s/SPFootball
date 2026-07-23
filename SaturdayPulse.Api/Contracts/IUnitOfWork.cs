@@ -29,6 +29,7 @@ namespace SaturdayPulse.Contracts
         IUserContactInfoRepository UserContactInfo { get; }
         IFollowedTeamRepository FollowedTeams { get; }
         IFollowedGameRepository FollowedGames { get; }
+        IUserEntitlementRepository Entitlements { get; }
 
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }

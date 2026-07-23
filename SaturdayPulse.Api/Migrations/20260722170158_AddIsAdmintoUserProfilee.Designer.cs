@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260722170158_AddIsAdmintoUserProfilee")]
+    partial class AddIsAdmintoUserProfilee
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -861,41 +864,6 @@ namespace SaturdayPulse.Api.Migrations
                         .HasDatabaseName("UQ_UserContactInfo_Email");
 
                     b.ToTable("UserContactInfos");
-                });
-
-            modelBuilder.Entity("SaturdayPulse.Models.UserEntitlement", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ExpiryDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProductKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "ProductKey")
-                        .HasDatabaseName("IX_UserEntitlement_UserId_ProductKey");
-
-                    b.ToTable("UserEntitlements");
                 });
 
             modelBuilder.Entity("SaturdayPulse.Models.UserProfile", b =>

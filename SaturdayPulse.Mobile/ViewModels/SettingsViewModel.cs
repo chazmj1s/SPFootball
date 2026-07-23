@@ -180,6 +180,10 @@ namespace SaturdayPulse.ViewModels
         // person taps Login/Create Account (or Season Pass, which offers to
         // log in first) when THEY want to. See AuthService for StayLoggedIn.
 
+        // IsLoggedIn now means "authenticated AND a profile was found" —
+        // not just "Auth0 handed back a token." A successful Auth0 login
+        // with no server-side account is deliberately NOT treated as
+        // logged in here; see LoginCommand/TryLoginAsync below.
         private bool _isLoggedIn;
         public bool IsLoggedIn
         {
@@ -189,18 +193,14 @@ namespace SaturdayPulse.ViewModels
                 if (_isLoggedIn == value) return;
                 _isLoggedIn = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(AuthButtonText));
+                OnPropertyChanged(nameof(IsLoggedOut));
             }
         }
 
-        /// <summary>
-        /// "Logout" if there's an active session; otherwise "Login" if this
-        /// device has logged in before, or "Create Account" if it hasn't —
-        /// AuthService.HasAccount is the local (device-level) signal for that,
-        /// there's no server round trip to determine it.
-        /// </summary>
-        public string AuthButtonText =>
-            IsLoggedIn ? "Logout" : (_authService.HasAccount ? "Login" : "Create Account");
+        /// <summary>Drives which button row Settings shows — Login/Create
+        /// Account, or Logout. Two separate actions now (2026-07-22), not
+        /// one button whose behavior was inferred from HasAccount.</summary>
+        public bool IsLoggedOut => !IsLoggedIn;
 
         public bool StayLoggedIn
         {
@@ -299,7 +299,9 @@ namespace SaturdayPulse.ViewModels
         public ICommand EditEmailCommand               { get; }
         public ICommand EditPhoneCommand                { get; }
         public ICommand ClearLogCommand                { get; }
-        public ICommand AuthActionCommand              { get; }
+        public ICommand LoginCommand                   { get; }
+        public ICommand CreateAccountCommand           { get; }
+        public ICommand LogoutCommand                  { get; }
         public ICommand SeasonPassCommand              { get; }
         public ICommand SubmitFeedbackCommand          { get; }
         public ICommand CloseCommand                   { get; }
@@ -514,28 +516,21 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
-            // Single button whose label (AuthButtonText) already reflects
-            // what tapping it will do — Create Account and Login both just
-            // call AuthService.LoginAsync (isSignup only changes which tab
-            // Auth0's hosted page opens on), Logout calls LogoutAsync.
-            AuthActionCommand = new Microsoft.Maui.Controls.Command(async () =>
-            {
-                if (IsLoggedIn)
-                {
-                    await _authService.LogoutAsync();
-                    IsLoggedIn = false;
-                    return;
-                }
+            // Two distinct actions now, not one button whose behavior was
+            // inferred from HasAccount (2026-07-22). See TryLoginAsync/
+            // TryCreateAccountAsync below for what each actually does.
+            LoginCommand = new Microsoft.Maui.Controls.Command(async () => await TryLoginAsync());
+            CreateAccountCommand = new Microsoft.Maui.Controls.Command(async () => await TryCreateAccountAsync());
 
-                var isSignup = !_authService.HasAccount;
-                var ok = await _authService.LoginAsync(isSignup);
-                if (ok)
-                {
-                    IsLoggedIn = true;
-                    await LoadDataAsync();   // re-pull profile/teams/rivalries under the new identity
-                }
-                else
-                    StatusMessage = "Login failed — try again.";
+            LogoutCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                await _authService.LogoutAsync();
+                IsLoggedIn = false;
+                Handle = string.Empty;
+                Email = string.Empty;
+                PhoneNumber = string.Empty;
+                MarketingSmsConsent = false;
+                HasSeasonPass = false;
             });
 
             // Placeholder — Stripe isn't wired up yet (separate feature).
@@ -550,18 +545,14 @@ namespace SaturdayPulse.ViewModels
                 {
                     var proceed = await Shell.Current.DisplayAlert(
                         "Season Pass",
-                        "You'll need to log in first to purchase a Season Pass.",
+                        "You'll need an account to purchase a Season Pass.",
                         "Log In", "Cancel");
                     if (!proceed) return;
 
-                    var isSignup = !_authService.HasAccount;
-                    var ok = await _authService.LoginAsync(isSignup);
-                    if (!ok)
-                    {
-                        StatusMessage = "Login failed — try again.";
-                        return;
-                    }
-                    IsLoggedIn = true;
+                    // No account found here routes through the same
+                    // StatusMessage guidance as the Login button — person
+                    // can tap Create Account in Settings if that's the case.
+                    if (!await TryLoginAsync()) return;
                 }
 
                 await Shell.Current.DisplayAlert(
@@ -617,6 +608,94 @@ namespace SaturdayPulse.ViewModels
             };
         }
 
+        // ── Auth actions ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Login flow: Auth0 auth, then a fetch-only profile lookup (never
+        /// creates — see UserApiService.GetMeAsync / UserController.GetMe).
+        /// A successful Auth0 login with no matching profile is surfaced as
+        /// "no account found," not silently treated as logged in — that's
+        /// the whole point of splitting Login from Create Account. Shared by
+        /// LoginCommand and the Season Pass "log in first" prompt so both
+        /// have identical no-account handling. Returns true only if an
+        /// actual account was found and IsLoggedIn is now true.
+        /// </summary>
+        private async Task<bool> TryLoginAsync()
+        {
+            var authOk = await _authService.LoginAsync(isSignup: false);
+            if (!authOk)
+            {
+                StatusMessage = "Login failed — try again.";
+                return false;
+            }
+
+            var profile = await _userApi.GetMeAsync();
+            if (profile == null)
+            {
+                StatusMessage = "No account found for that login. Try again, or tap Create Account.";
+                return false;
+            }
+
+            ApplyProfile(profile);
+            IsLoggedIn = true;
+            StatusMessage = string.Empty;
+            return true;
+        }
+
+        /// <summary>
+        /// Create Account flow: Auth0 signup, then the one endpoint allowed
+        /// to create a profile (UserApiService.CreateAccountAsync ->
+        /// POST /user/me). A 409 (account already exists for this identity,
+        /// or the email's already in use by a different account) surfaces
+        /// the server's own conflict message rather than a generic failure.
+        /// </summary>
+        private async Task<bool> TryCreateAccountAsync()
+        {
+            var authOk = await _authService.LoginAsync(isSignup: true);
+            if (!authOk)
+            {
+                StatusMessage = "Sign up failed — try again.";
+                return false;
+            }
+
+            // TODO: pass the Auth0-supplied email through once AuthService
+            // exposes it (LoginResult carries it, but AuthService doesn't
+            // currently surface it) — lets the server catch "that email's
+            // already in use by a different account" instead of always
+            // falling back to the {userId}@unset.local placeholder.
+            var outcome = await _userApi.CreateAccountAsync();
+
+            if (outcome.IsConflict)
+            {
+                StatusMessage = outcome.ConflictMessage ?? "That account already exists.";
+                return false;
+            }
+
+            if (!outcome.IsSuccess || outcome.Profile == null)
+            {
+                StatusMessage = "Couldn't create account — try again.";
+                return false;
+            }
+
+            ApplyProfile(outcome.Profile);
+            IsLoggedIn = true;
+            StatusMessage = string.Empty;
+            return true;
+        }
+
+        /// <summary>Applies a fetched/created profile's fields — shared by
+        /// LoadDataAsync (passive startup fetch) and both auth actions above,
+        /// so there's one place that knows how a UserProfileDto maps onto
+        /// this ViewModel's bound properties.</summary>
+        private void ApplyProfile(UserProfileDto profile)
+        {
+            Handle = profile.Handle;
+            Email = profile.Email ?? string.Empty;
+            PhoneNumber = profile.PhoneNumber ?? string.Empty;
+            MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
+            HasSeasonPass = profile.IsEntitled;
+        }
+
         // ── Load ──────────────────────────────────────────────────────────
         public async Task LoadDataAsync()
         {
@@ -644,16 +723,20 @@ namespace SaturdayPulse.ViewModels
                     ApplyTeamFilter();
                 }
 
+                // IsLoggedIn is derived from "did GetMeAsync find a profile,"
+                // not a separate IsAuthenticatedAsync() token check — a
+                // valid Auth0 token with no matching server-side profile is
+                // NOT logged in, from this ViewModel's perspective. Keeps
+                // this in lockstep with TryLoginAsync/TryCreateAccountAsync.
                 if (profile != null)
                 {
-                    Handle = profile.Handle;
-                    Email = profile.Email ?? string.Empty;
-                    PhoneNumber = profile.PhoneNumber ?? string.Empty;
-                    MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
-                    HasSeasonPass = profile.IsEntitled;
+                    ApplyProfile(profile);
+                    IsLoggedIn = true;
                 }
-
-                IsLoggedIn = await _authService.IsAuthenticatedAsync();
+                else
+                {
+                    IsLoggedIn = false;
+                }
 
                 var allRivalries = rivalries ?? [];
                 var followedIds  = _followService.GetFollowedIds();
