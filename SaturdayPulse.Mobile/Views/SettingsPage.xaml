@@ -170,18 +170,49 @@
                                    FontSize="11"
                                    TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
                                    LineBreakMode="WordWrap" />
+                            <HorizontalStackLayout Spacing="8" Margin="0,2,0,0"
+                                                   IsVisible="{Binding IsLoggedOut}">
+                                <Border StrokeShape="RoundRectangle 6"
+                                        Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
+                                        StrokeThickness="1"
+                                        BackgroundColor="{AppThemeBinding Light=White, Dark=#2A2A2A}"
+                                        Padding="12,8">
+                                    <Label Text="Login"
+                                           FontSize="13" FontAttributes="Bold"
+                                           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                        <Label.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding LoginCommand}" />
+                                        </Label.GestureRecognizers>
+                                    </Label>
+                                </Border>
+                                <Border StrokeShape="RoundRectangle 6"
+                                        Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
+                                        StrokeThickness="1"
+                                        BackgroundColor="{AppThemeBinding Light=White, Dark=#2A2A2A}"
+                                        Padding="12,8">
+                                    <Label Text="Create Account"
+                                           FontSize="13" FontAttributes="Bold"
+                                           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                        <Label.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding CreateAccountCommand}" />
+                                        </Label.GestureRecognizers>
+                                    </Label>
+                                </Border>
+                            </HorizontalStackLayout>
+
                             <Border StrokeShape="RoundRectangle 6"
                                     Stroke="{AppThemeBinding Light=#CCCCCC, Dark=#444444}"
                                     StrokeThickness="1"
                                     BackgroundColor="{AppThemeBinding Light=White, Dark=#2A2A2A}"
                                     Padding="12,8"
                                     HorizontalOptions="Start"
-                                    Margin="0,2,0,0">
-                                <Label Text="{Binding AuthButtonText}"
+                                    Margin="0,2,0,0"
+                                    IsVisible="{Binding IsLoggedIn}">
+                                <Label Text="Logout"
                                        FontSize="13" FontAttributes="Bold"
                                        TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
                                     <Label.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding AuthActionCommand}" />
+                                        <TapGestureRecognizer Command="{Binding LogoutCommand}" />
                                     </Label.GestureRecognizers>
                                 </Label>
                             </Border>

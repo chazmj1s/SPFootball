@@ -1,6 +1,8 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Services
 {
@@ -17,6 +19,17 @@ namespace SaturdayPulse.Services
     /// still transitional plumbing. Per the handoff's "not done yet" list,
     /// it stays until Windows login (item 1) also works — don't delete it
     /// yet even though iOS/mobile login is now wired.
+    ///
+    /// Login vs. Create Account (2026-07-22): GetMeAsync is fetch-only and
+    /// NEVER creates a profile — a null result means "no account for this
+    /// identity," which callers must surface to the person (try again /
+    /// create account), not paper over. CreateAccountAsync is the only
+    /// method that creates one, and must only be called immediately after
+    /// AuthService.LoginAsync(isSignup: true) succeeds. See
+    /// session-handoff-2026-07-22 for why this split exists.
+    ///
+    /// UserProfileDto/FollowedGamePairDto moved to Models/UserProfileDto.cs
+    /// on 2026-07-22 — see that file if you're looking for the DTOs.
     /// </summary>
     public class UserApiService
     {
@@ -72,8 +85,13 @@ namespace SaturdayPulse.Services
         // ── Profile ──────────────────────────────────────────────────────
 
         /// <summary>
-        /// GET /user/me. Server auto-provisions a UserProfile row on first
-        /// contact for a UserId it hasn't seen.
+        /// GET /user/me — Login's lookup. Returns null if no account exists
+        /// for the current identity (a 404, NOT an error — the server never
+        /// creates anything here). Callers driving an interactive Login
+        /// button should treat null as "no account found" and offer
+        /// try-again / create-account, not silently proceed. Callers using
+        /// this passively at startup (MainPage) should treat null as
+        /// "logged out" and route to the login/create-account entry point.
         /// </summary>
         public async Task<UserProfileDto?> GetMeAsync()
         {
@@ -83,6 +101,10 @@ namespace SaturdayPulse.Services
                 await AttachAuthAsync(request);
 
                 using var response = await _httpClient.SendAsync(request);
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                    return null; // expected: no account for this identity — not a failure
+
                 if (!response.IsSuccessStatusCode)
                 {
                     System.Diagnostics.Debug.WriteLine($"[UserAPI] GetMe failed: {response.StatusCode}");
@@ -95,6 +117,51 @@ namespace SaturdayPulse.Services
             {
                 System.Diagnostics.Debug.WriteLine($"[UserAPI] Error GetMe: {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// POST /user/me — the ONLY method that creates a profile. Call this
+        /// exactly once, immediately after AuthService.LoginAsync(isSignup: true)
+        /// succeeds. Never call this after a plain login, and never from
+        /// passive/startup code — see the class summary.
+        /// </summary>
+        /// <param name="email">
+        /// The email the person just signed up with via Auth0, if available.
+        /// Passed through so the server can reject creation with the same
+        /// "email already in use" conflict UpdateEmailAsync already uses,
+        /// rather than silently creating a second account for an email
+        /// that's really tied to an existing one.
+        /// </param>
+        public async Task<CreateAccountOutcome> CreateAccountAsync(string? email = null)
+        {
+            try
+            {
+                var url = email != null ? $"user/me?email={Uri.EscapeDataString(email)}" : "user/me";
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                await AttachAuthAsync(request);
+
+                using var response = await _httpClient.SendAsync(request);
+
+                if (response.StatusCode == HttpStatusCode.Conflict)
+                {
+                    var message = await response.Content.ReadAsStringAsync();
+                    return CreateAccountOutcome.Conflict(message);
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UserAPI] CreateAccount failed: {response.StatusCode}");
+                    return CreateAccountOutcome.Failed();
+                }
+
+                var profile = await response.Content.ReadFromJsonAsync<UserProfileDto>(_jsonOptions);
+                return CreateAccountOutcome.Succeeded(profile);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UserAPI] Error CreateAccount: {ex.Message}");
+                return CreateAccountOutcome.Failed();
             }
         }
 
@@ -369,37 +436,23 @@ namespace SaturdayPulse.Services
         }
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────────────
-    // Mirrors UserProfile / the followed-games list shape. Move into
-    // SaturdayPulse.Models if that's where the rest of the DTOs live —
-    // kept local here since UserController.cs wasn't available to confirm.
-
-    public class UserProfileDto
+    /// <summary>Result shape for CreateAccountAsync — distinguishes success,
+    /// a real conflict (account/email already exists — show the message),
+    /// and a generic failure (network/server error — show something generic).</summary>
+    public class CreateAccountOutcome
     {
-        public string UserId { get; set; } = string.Empty;
-        public string Handle { get; set; } = string.Empty;
-        public DateTime? HandleChangedAt { get; set; }
-        public int? PrimaryTeamId { get; set; }
-        public DateTime? ExpiryDate { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime UpdatedAt { get; set; }
-        public bool IsSynced { get; set; }
-        public bool IsEntitled { get; set; }
+        public bool IsSuccess { get; private init; }
+        public bool IsConflict { get; private init; }
+        public string? ConflictMessage { get; private init; }
+        public UserProfileDto? Profile { get; private init; }
 
-        // ASSUMPTION: GetMe() merges UserContactInfo into the same response
-        // (the controller's class summary is "Profile, contact info, and
-        // follow management"). If it doesn't, these just deserialize as
-        // null/false and Email/Phone show blank in Settings until a
-        // dedicated contact-info fetch is added — confirm against
-        // UserProfileService.cs when you get a chance.
-        public string? Email { get; set; }
-        public string? PhoneNumber { get; set; }
-        public bool? MarketingSmsConsent { get; set; }
-    }
+        public static CreateAccountOutcome Succeeded(UserProfileDto? profile) =>
+            new() { IsSuccess = true, Profile = profile };
 
-    public class FollowedGamePairDto
-    {
-        public int Team1Id { get; set; }
-        public int Team2Id { get; set; }
+        public static CreateAccountOutcome Conflict(string message) =>
+            new() { IsSuccess = false, IsConflict = true, ConflictMessage = message };
+
+        public static CreateAccountOutcome Failed() =>
+            new() { IsSuccess = false, IsConflict = false };
     }
 }

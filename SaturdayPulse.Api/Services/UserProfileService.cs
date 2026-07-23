@@ -26,36 +26,69 @@ namespace SaturdayPulse.Services
         private static readonly Regex E164Pattern = new(@"^\+[1-9]\d{6,14}$", RegexOptions.Compiled);
 
         /// <summary>
-        /// Returns the current profile, provisioning a new one on first-ever
-        /// contact from this UserId.
+        /// Returns the current profile for this identity, or null if none
+        /// exists. NEVER creates anything — this backs the Login action's
+        /// lookup. A null here means "no account for this identity," which
+        /// the caller (UserController.GetMe -> 404) surfaces to the person
+        /// rather than silently provisioning one. Safe to call from app
+        /// startup / any polling path with no risk of side effects.
         /// </summary>
-        public async Task<UserProfileResponse> GetOrCreateProfileAsync(
-            string userId, string? defaultEmail, CancellationToken token = default)
+        public async Task<UserProfileResponse?> GetProfileAsync(string userId, CancellationToken token = default)
         {
             var profile = await _uow.UserProfiles.GetByUserIdAsync(userId, token);
+            if (profile == null) return null;
+
             var contact = await _uow.UserContactInfo.GetByUserIdAsync(userId, token);
+            var activeEntitlement = await _uow.Entitlements.GetActiveCfbSeasonPassAsync(userId, token);
 
-            if (profile == null)
+            return ToResponse(profile, contact!, activeEntitlement);
+        }
+
+        /// <summary>
+        /// Creates a NEW profile for this identity. THE ONLY method that
+        /// creates a UserProfile — call this only immediately after Auth0
+        /// signup completes (the explicit Create Account action), never
+        /// after a plain login and never from a passive fetch. Throws
+        /// InvalidOperationException (-> 409 at the controller) if a profile
+        /// already exists for this identity, or if the given email is
+        /// already in use by a different account — same conflict shape as
+        /// UpdateEmailAsync/UpdateHandleAsync below, not a new error type.
+        ///
+        /// Previously this behavior lived inside a "get or create" method
+        /// called from every GetMe request, which meant any unrecognized
+        /// identity — including a stale/mismatched dev fallback GUID —
+        /// silently spawned a new blank profile with no user awareness.
+        /// See session-handoff-2026-07-22.
+        /// </summary>
+        public async Task<UserProfileResponse> CreateProfileAsync(
+            string userId, string? email, CancellationToken token = default)
+        {
+            var existing = await _uow.UserProfiles.GetByUserIdAsync(userId, token);
+            if (existing != null)
+                throw new InvalidOperationException("An account already exists for this login.");
+
+            if (email != null && !await _uow.UserContactInfo.IsEmailAvailableAsync(email, excludingUserId: null, token))
+                throw new InvalidOperationException("That email is already in use.");
+
+            var profile = new UserProfile
             {
-                profile = new UserProfile
-                {
-                    UserId = userId,
-                    Handle = $"user_{userId[..Math.Min(8, userId.Length)]}"
-                };
-                await _uow.UserProfiles.CreateAsync(profile, token);
+                UserId = userId,
+                Handle = $"user_{userId[..Math.Min(8, userId.Length)]}"
+            };
+            await _uow.UserProfiles.CreateAsync(profile, token);
 
-                contact = new UserContactInfo
-                {
-                    UserId = userId,
-                    Email = defaultEmail ?? $"{userId}@unset.local"
-                };
-                await _uow.UserContactInfo.CreateAsync(contact, token);
+            var contact = new UserContactInfo
+            {
+                UserId = userId,
+                Email = email ?? $"{userId}@unset.local"
+            };
+            await _uow.UserContactInfo.CreateAsync(contact, token);
 
-                await _uow.SaveChangesAsync(token);
-                _logger.LogInformation("Provisioned new UserProfile for {UserId}", userId);
-            }
+            await _uow.SaveChangesAsync(token);
+            _logger.LogInformation("Created new UserProfile for {UserId}", userId);
 
-            return ToResponse(profile, contact!);
+            // Brand new — never has an entitlement yet, no lookup needed.
+            return ToResponse(profile, contact, activeEntitlement: null);
         }
 
         public async Task UpdateHandleAsync(string userId, string newHandle, CancellationToken token = default)
@@ -165,12 +198,15 @@ namespace SaturdayPulse.Services
         public Task<List<FollowedGame>> GetFollowedGamesAsync(string userId, CancellationToken token = default)
             => _uow.FollowedGames.GetByUserIdAsync(userId, token);
 
-        private static UserProfileResponse ToResponse(UserProfile profile, UserContactInfo contact) => new()
+        private static UserProfileResponse ToResponse(
+            UserProfile profile, UserContactInfo contact, UserEntitlement? activeEntitlement) => new()
         {
             UserId = profile.UserId,
             Handle = profile.Handle,
             PrimaryTeamId = profile.PrimaryTeamId,
-            ExpiryDate = profile.ExpiryDate,
+            ExpiryDate = activeEntitlement?.ExpiryDate,
+            IsEntitled = activeEntitlement != null,
+            IsAdmin = profile.IsAdmin,
             Email = contact.Email,
             EmailVerified = contact.EmailVerifiedAt.HasValue,
             PhoneNumber = contact.PhoneNumber,

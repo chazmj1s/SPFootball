@@ -2,8 +2,10 @@ namespace SaturdayPulse.Contracts.Responses
 {
     /// <summary>
     /// Combined view of UserProfile + UserContactInfo for GET /api/user/me.
-    /// Never exposes ExpiryDate directly as an editable field — read-only,
-    /// set only by the entitlement/payment sync process.
+    /// ExpiryDate/IsEntitled reflect the active CFB Season Pass row in
+    /// UserEntitlement — set by UserProfileService.ToResponse, not computed here.
+    /// UserProfile.ExpiryDate remains in the schema but is no longer this
+    /// response's source of truth for entitlement.
     /// </summary>
     public class UserProfileResponse
     {
@@ -11,8 +13,8 @@ namespace SaturdayPulse.Contracts.Responses
         public string Handle { get; set; } = null!;
         public int? PrimaryTeamId { get; set; }
         public DateTime? ExpiryDate { get; set; }
-        public bool IsEntitled => ExpiryDate.HasValue && ExpiryDate.Value > DateTime.UtcNow;
-
+        public bool IsEntitled { get; set; }
+        public bool IsAdmin { get; set; }
         public string Email { get; set; } = null!;
         public bool EmailVerified { get; set; }
         public string? PhoneNumber { get; set; }

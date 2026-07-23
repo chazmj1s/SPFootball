@@ -1,6 +1,7 @@
 using Microsoft.Maui.Layouts;
 using SaturdayPulse.Services;
 using SaturdayPulse.ViewModels;
+using SaturdayPulse.Models;
 using System.ComponentModel;
 
 namespace SaturdayPulse.Views
@@ -158,14 +159,25 @@ namespace SaturdayPulse.Views
         /// Runs once, after both the follow cache and the profile fetch land.
         /// Skippable by design — the person can tap away immediately, this
         /// just picks where they land:
-        ///   1. First launch (Handle still matches the server's auto-generated
-        ///      "user_{shortguid}" default) → Settings, User Profile expanded,
-        ///      so there's somewhere obvious to pick a real handle. Takes
-        ///      priority over #2 below, since a fresh install triggers both.
-        ///      Settings is reached the same way the gear icon reaches it —
-        ///      PageHost position 5 — even though it's no longer in TabItems,
-        ///      so SyncTabItems(5) below simply won't highlight anything in
-        ///      the (Settings-less) tab strip, which is expected.
+        ///   0. No profile at all (meTask resolved to null) → Settings, with
+        ///      the logged-out Login/Create Account entry point visible.
+        ///      GetMeAsync's GET /user/me NEVER creates a profile (see
+        ///      session-handoff-2026-07-22) — a null result here means there
+        ///      genuinely is no account for this identity yet, whether that's
+        ///      because nobody's logged in on this device at all, or because
+        ///      a stored session's identity has no server-side record. Either
+        ///      way, silently falling through to My Teams/Scores as if this
+        ///      were a normal user is exactly the bug that prompted this
+        ///      split — don't reintroduce it here. Takes priority over
+        ///      everything below.
+        ///   1. First launch with a real account (Handle still matches the
+        ///      server's auto-generated "user_{shortguid}" default) →
+        ///      Settings, User Profile expanded, so there's somewhere
+        ///      obvious to pick a real handle. Settings is reached the same
+        ///      way the gear icon reaches it — PageHost position 5 — even
+        ///      though it's no longer in TabItems, so SyncTabItems(5) below
+        ///      simply won't highlight anything in the (Settings-less) tab
+        ///      strip, which is expected.
         ///   2. Otherwise, if we're sitting on My Teams (tab 0) with no
         ///      primary team set, fall back to Scores — My Teams has nothing
         ///      useful to show without a primary or followed team, and this
@@ -189,8 +201,19 @@ namespace SaturdayPulse.Views
                 return; // startup data failed to load — leave the landing page as-is
             }
 
-            var isDefaultHandle = profile != null
-                && profile.Handle.StartsWith("user_", StringComparison.OrdinalIgnoreCase);
+            if (profile == null)
+            {
+                _vm.SetInitialTabIndex(5);
+                SyncTabItems(5);
+                SyncPage(5);
+
+                if (_SettingsPage.BindingContext is SettingsViewModel loggedOutSvm)
+                    loggedOutSvm.ToggleSectionCommand.Execute("UserProfile");
+
+                return;
+            }
+
+            var isDefaultHandle = profile.Handle.StartsWith("user_", StringComparison.OrdinalIgnoreCase);
 
             if (isDefaultHandle)
             {
