@@ -16,9 +16,8 @@ using System.Net.Http.Headers;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Database ──────────────────────────────────────────────────────────────────
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "SaturdayPulse.db");
 builder.Services.AddDbContext<NCAAContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ── CFBD HTTP Client ──────────────────────────────────────────────────────────
 builder.Services.Configure<CfbdApiSettings>(
