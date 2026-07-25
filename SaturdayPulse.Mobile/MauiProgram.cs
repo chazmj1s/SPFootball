@@ -17,6 +17,23 @@ namespace SaturdayPulse;
 
 public static class MauiProgram
 {
+    // Android emulator hits the local dev API over the loopback alias
+    // (10.0.2.2) using the ASP.NET Core self-signed dev cert, which Android
+    // does not trust by default. Rather than fighting Android's CA-install
+    // UI, this bypasses server certificate validation ONLY for DEBUG builds
+    // on Android — Release builds and every other platform still validate
+    // real certificates normally. Production Android traffic (ApiConfiguration.
+    // ProductionApiUrl) is unaffected since this only ever compiles into
+    // DEBUG builds.
+#if DEBUG && ANDROID
+    static HttpMessageHandler GetInsecureAndroidHandler() =>
+        new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+#endif
+
     public static MauiApp CreateMauiApp()
     {
         SyncfusionLicenseProvider.RegisterLicense(
@@ -44,33 +61,42 @@ public static class MauiProgram
         builder.Services.AddSingleton<FeedbackService>();
 
         // Register Services
-        builder.Services.AddHttpClient<GameDataApiService>(client =>
+        var gameDataClientBuilder = builder.Services.AddHttpClient<GameDataApiService>(client =>
         {
             client.BaseAddress = new Uri(ApiConfiguration.BaseUrl);
             client.Timeout = TimeSpan.FromSeconds(30);
 
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+#if DEBUG && ANDROID
+        gameDataClientBuilder.ConfigurePrimaryHttpMessageHandler(GetInsecureAndroidHandler);
+#endif
 
-        builder.Services.AddHttpClient<PredictionApiService>(client =>
+        var predictionClientBuilder = builder.Services.AddHttpClient<PredictionApiService>(client =>
         {
             client.BaseAddress = new Uri(ApiConfiguration.BaseUrl);
             client.Timeout = TimeSpan.FromSeconds(15);
 
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+#if DEBUG && ANDROID
+        predictionClientBuilder.ConfigurePrimaryHttpMessageHandler(GetInsecureAndroidHandler);
+#endif
 
         // FollowService/PersonalGameService pull this in automatically via
         // constructor injection — no changes needed to their registrations
         // above. X-User-Id is attached per-request inside UserApiService
         // itself, so no extra DefaultRequestHeaders wiring needed here.
-        builder.Services.AddHttpClient<UserApiService>(client =>
+        var userApiClientBuilder = builder.Services.AddHttpClient<UserApiService>(client =>
         {
             client.BaseAddress = new Uri(ApiConfiguration.ApiRootUrl);
             client.Timeout = TimeSpan.FromSeconds(15);
 
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+#if DEBUG && ANDROID
+        userApiClientBuilder.ConfigurePrimaryHttpMessageHandler(GetInsecureAndroidHandler);
+#endif
 
         // Auth0 login (Windows + iOS wired first — see MainPage/Settings for
         // where LoginAsync/LogoutAsync actually get called; that's not built
