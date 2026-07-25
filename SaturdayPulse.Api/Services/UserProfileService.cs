@@ -90,6 +90,59 @@ namespace SaturdayPulse.Services
             // Brand new — never has an entitlement yet, no lookup needed.
             return ToResponse(profile, contact, activeEntitlement: null);
         }
+        /// <summary>
+        /// Admin-only dev toggle for the CFB Season Pass entitlement — lets an
+        /// admin flip their own entitlement on/off without a real purchase, to
+        /// verify both experiences without jumping through Stripe. Throws
+        /// UnauthorizedAccessException for any non-admin caller; UserController
+        /// maps that to a 403. Reuses the existing Entitlements repository
+        /// methods (GetActiveCfbSeasonPassAsync / AddAsync) rather than adding
+        /// new ones — toggling off expires the existing row (sets ExpiryDate to
+        /// now) instead of deleting it, so there's a history of grants/revokes.
+        /// </summary>
+        public async Task<UserProfileResponse> SetDevEntitlementAsync(
+            string userId, bool enabled, CancellationToken token = default)
+        {
+            var profile = await _uow.UserProfiles.GetByUserIdAsync(userId, token);
+            if (profile == null || !profile.IsAdmin)
+                throw new UnauthorizedAccessException("Only admins can use the dev entitlement toggle.");
+
+            var active = await _uow.Entitlements.GetActiveCfbSeasonPassAsync(userId, token);
+
+            if (enabled)
+            {
+                if (active != null)
+                {
+                    active.ExpiryDate = new DateTime(2999, 12, 31);
+                }
+                else
+                {
+                    await _uow.Entitlements.AddAsync(new UserEntitlement
+                    {
+                        UserId = userId,
+                        ProductKey = "cfb-season-pass",
+                        ExpiryDate = new DateTime(2999, 12, 31),
+                        Source = "manual-grant"
+                    }, token);
+                }
+            }
+            else if (active != null)
+            {
+                active.ExpiryDate = DateTime.UtcNow;
+            }
+
+            await _uow.SaveChangesAsync(token);
+
+            var contact = await _uow.UserContactInfo.GetByUserIdAsync(userId, token);
+            var refreshedActive = await _uow.Entitlements.GetActiveCfbSeasonPassAsync(userId, token);
+
+            // ASSUMPTION: your current ToResponse signature matches what you
+            // pasted earlier — ToResponse(UserProfile, UserContactInfo, UserEntitlement?).
+            // If GetProfileAsync builds the response differently now, call
+            // whatever that current path is instead of ToResponse directly.
+            return ToResponse(profile, contact!, refreshedActive);
+        }
+
 
         public async Task UpdateHandleAsync(string userId, string newHandle, CancellationToken token = default)
         {

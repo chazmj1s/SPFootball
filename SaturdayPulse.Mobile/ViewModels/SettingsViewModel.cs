@@ -208,6 +208,35 @@ namespace SaturdayPulse.ViewModels
             set { _authService.StayLoggedIn = value; OnPropertyChanged(); }
         }
 
+        // ── Admin ────────────────────────────────────────────────────────
+        // Sourced directly from UserProfileResponse.IsAdmin — server-side
+        // only, never client-writable. Gates the Debug Log section and
+        // swaps the Season Pass "Get Season Pass" button for the dev
+        // toggle below. Populated by ApplyProfile alongside everything else.
+        private bool _isAdmin;
+        public bool IsAdmin
+        {
+            get => _isAdmin;
+            private set
+            {
+                if (_isAdmin == value) return;
+                _isAdmin = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanAccessDebugLog));
+                OnPropertyChanged(nameof(IsNotAdmin));
+            }
+        }
+
+        /// <summary>Admin-only — same shape as CanAccessFeedback below, but
+        /// gated on IsAdmin rather than HasSeasonPass per its own
+        /// requirement (Debug Log is a dev/support tool, not a paid feature).</summary>
+        public bool CanAccessDebugLog => IsAdmin;
+
+        /// <summary>Inverse of IsAdmin — exists purely so SettingsPage.xaml
+        /// can show/hide the two Season Pass UI states (real button vs. dev
+        /// toggle) without needing an inverse-bool converter registered.</summary>
+        public bool IsNotAdmin => !IsAdmin;
+
         // ── Season Pass entitlement ──────────────────────────────────────
         // Sourced directly from UserProfileResponse.IsEntitled (server-computed:
         // ExpiryDate.HasValue && ExpiryDate > UtcNow) — no client-side date math,
@@ -303,6 +332,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand CreateAccountCommand           { get; }
         public ICommand LogoutCommand                  { get; }
         public ICommand SeasonPassCommand              { get; }
+        public ICommand SetDevEntitlementCommand       { get; }
         public ICommand SubmitFeedbackCommand          { get; }
         public ICommand CloseCommand                   { get; }
 
@@ -531,6 +561,7 @@ namespace SaturdayPulse.ViewModels
                 PhoneNumber = string.Empty;
                 MarketingSmsConsent = false;
                 HasSeasonPass = false;
+                IsAdmin = false;
             });
 
             // Placeholder — Stripe isn't wired up yet (separate feature).
@@ -538,7 +569,10 @@ namespace SaturdayPulse.ViewModels
             // Season Pass should be tied to a real identity, so if nobody's
             // logged in this offers to log in first rather than letting the
             // "purchase" proceed anonymously. Nothing else needs validating
-            // since there's no other purchase path yet.
+            // since there's no other purchase path yet. Shared by the
+            // Settings button AND the gated Details paywall message
+            // (2026-07-24) — one command means Stripe only needs to be
+            // wired up in one place once it exists.
             SeasonPassCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 if (!IsLoggedIn)
@@ -557,6 +591,29 @@ namespace SaturdayPulse.ViewModels
 
                 await Shell.Current.DisplayAlert(
                     "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
+            });
+
+            // Admin-only dev toggle (2026-07-24) — replaces the "Get Season
+            // Pass" button in Settings when IsAdmin, letting an admin flip
+            // their own entitlement on/off to verify both experiences
+            // without a real purchase. Server enforces the IsAdmin check
+            // independently (UserProfileService.SetDevEntitlementAsync) —
+            // this command being hidden from non-admins client-side is a UX
+            // convenience, not the actual security boundary.
+            SetDevEntitlementCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                if (!IsAdmin) return;
+
+                var target = !HasSeasonPass;
+                var profile = await _userApi.SetDevEntitlementAsync(target);
+                if (profile != null)
+                {
+                    ApplyProfile(profile);
+                }
+                else
+                {
+                    StatusMessage = "Couldn't update entitlement — try again.";
+                }
             });
 
             SubmitFeedbackCommand = new Microsoft.Maui.Controls.Command(async () =>
@@ -637,8 +694,6 @@ namespace SaturdayPulse.ViewModels
             }
 
             ApplyProfile(profile);
-            await _followService.InitializeAsync();
-            
             IsLoggedIn = true;
             StatusMessage = string.Empty;
             return true;
@@ -680,17 +735,15 @@ namespace SaturdayPulse.ViewModels
             }
 
             ApplyProfile(outcome.Profile);
-            await _followService.InitializeAsync();
-
             IsLoggedIn = true;
             StatusMessage = string.Empty;
             return true;
         }
 
         /// <summary>Applies a fetched/created profile's fields — shared by
-        /// LoadDataAsync (passive startup fetch) and both auth actions above,
-        /// so there's one place that knows how a UserProfileDto maps onto
-        /// this ViewModel's bound properties.</summary>
+        /// LoadDataAsync (passive startup fetch), both auth actions above,
+        /// and SetDevEntitlementCommand, so there's one place that knows how
+        /// a UserProfileDto maps onto this ViewModel's bound properties.</summary>
         private void ApplyProfile(UserProfileDto profile)
         {
             Handle = profile.Handle;
@@ -698,6 +751,7 @@ namespace SaturdayPulse.ViewModels
             PhoneNumber = profile.PhoneNumber ?? string.Empty;
             MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
             HasSeasonPass = profile.IsEntitled;
+            IsAdmin = profile.IsAdmin;
         }
 
         // ── Load ──────────────────────────────────────────────────────────
@@ -709,9 +763,9 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var teamsTask = Task.Run(() => _apiService.GetTeamsAsync());
+                var teamsTask     = Task.Run(() => _apiService.GetTeamsAsync());
                 var rivalriesTask = Task.Run(() => _apiService.GetNamedRivalriesAsync());
-                var profileTask = _userApi.GetMeAsync();
+                var profileTask   = _userApi.GetMeAsync();
 
                 await Task.WhenAll(teamsTask, rivalriesTask, profileTask);
                 var (teams, rivalries, profile) = (teamsTask.Result, rivalriesTask.Result, profileTask.Result);

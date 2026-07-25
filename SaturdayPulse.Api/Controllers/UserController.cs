@@ -171,6 +171,32 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        /// <summary>
+        /// PATCH /api/user/me/dev-entitlement — admin-only toggle to flip the
+        /// caller's own CFB Season Pass entitlement on/off for testing, without
+        /// a real purchase. UserProfileService.SetDevEntitlementAsync enforces
+        /// the IsAdmin check server-side — this endpoint being reachable at all
+        /// is not the security boundary, that check is.
+        /// </summary>
+        [HttpPatch("me/dev-entitlement")]
+        public async Task<IActionResult> SetDevEntitlement(
+            [FromBody] SetDevEntitlementRequest request, CancellationToken token = default)
+        {
+            if (TryResolveUserId(out var userId) is { } badRequest) return badRequest;
+
+            try
+            {
+                var profile = await userProfileService.SetDevEntitlementAsync(userId, request.Enabled, token);
+                return Ok(profile);
+            }
+            catch (UnauthorizedAccessException) { return Forbid(); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error setting dev entitlement for {UserId}", userId);
+                return StatusCode(500, "An error occurred while updating the entitlement.");
+            }
+        }
+
         #endregion
 
         #region Follows
