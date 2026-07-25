@@ -279,6 +279,43 @@ namespace SaturdayPulse.Services
             }
         }
 
+        /// <summary>
+        /// PATCH /user/me/dev-entitlement — admin-only toggle to flip the
+        /// caller's own Season Pass entitlement on/off for testing. Server
+        /// enforces the IsAdmin check (UserProfileService.SetDevEntitlementAsync)
+        /// — this call being reachable at all is not the security boundary.
+        /// Returns the refreshed profile on success so the caller can apply
+        /// the updated HasSeasonPass/ExpiryDate without a second round trip,
+        /// or null on failure (including a 403 for a non-admin caller, which
+        /// shouldn't happen since the UI only shows this toggle when IsAdmin
+        /// is already true, but the server doesn't trust that alone).
+        /// </summary>
+        public async Task<UserProfileDto?> SetDevEntitlementAsync(bool enabled)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Patch, "user/me/dev-entitlement")
+                {
+                    Content = JsonContent.Create(new { enabled })
+                };
+                await AttachAuthAsync(request);
+
+                using var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UserAPI] SetDevEntitlement failed: {response.StatusCode}");
+                    return null;
+                }
+
+                return await response.Content.ReadFromJsonAsync<UserProfileDto>(_jsonOptions);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UserAPI] Error SetDevEntitlement: {ex.Message}");
+                return null;
+            }
+        }
+
         // ── Followed teams ──────────────────────────────────────────────
 
         /// <summary>GET /user/me/followed-teams. ASSUMPTION: returns a flat List&lt;int&gt; of team ids.</summary>
