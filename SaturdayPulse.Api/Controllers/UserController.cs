@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Extensions;
@@ -14,6 +15,7 @@ namespace SaturdayPulse.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class UserController(
         UserProfileService userProfileService,
         ILogger<UserController> logger) : ControllerBase

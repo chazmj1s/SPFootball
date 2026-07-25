@@ -135,6 +135,8 @@ namespace SaturdayPulse.Services
             if (!StayLoggedIn) return null;
 
             var token = await SecureStorage.Default.GetAsync(AccessTokenKey);
+            System.Diagnostics.Debug.WriteLine($"[Auth] GetAccessTokenAsync: token is {(string.IsNullOrEmpty(token) ? "NULL/EMPTY" : "present")}");
+
             if (string.IsNullOrEmpty(token)) return null;
 
             var expiresAtRaw = await SecureStorage.Default.GetAsync(ExpiresAtKey);

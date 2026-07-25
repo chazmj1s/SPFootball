@@ -637,6 +637,8 @@ namespace SaturdayPulse.ViewModels
             }
 
             ApplyProfile(profile);
+            await _followService.InitializeAsync();
+            
             IsLoggedIn = true;
             StatusMessage = string.Empty;
             return true;
@@ -678,6 +680,8 @@ namespace SaturdayPulse.ViewModels
             }
 
             ApplyProfile(outcome.Profile);
+            await _followService.InitializeAsync();
+
             IsLoggedIn = true;
             StatusMessage = string.Empty;
             return true;
@@ -705,14 +709,12 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                var (teams, rivalries, profile) = await Task.Run(async () =>
-                {
-                    var teamsTask     = _apiService.GetTeamsAsync();
-                    var rivalriesTask = _apiService.GetNamedRivalriesAsync();
-                    var profileTask   = _userApi.GetMeAsync();
-                    await Task.WhenAll(teamsTask, rivalriesTask, profileTask);
-                    return (teamsTask.Result, rivalriesTask.Result, profileTask.Result);
-                });
+                var teamsTask = Task.Run(() => _apiService.GetTeamsAsync());
+                var rivalriesTask = Task.Run(() => _apiService.GetNamedRivalriesAsync());
+                var profileTask = _userApi.GetMeAsync();
+
+                await Task.WhenAll(teamsTask, rivalriesTask, profileTask);
+                var (teams, rivalries, profile) = (teamsTask.Result, rivalriesTask.Result, profileTask.Result);
 
                 if (teams != null && teams.Count > 0)
                 {
