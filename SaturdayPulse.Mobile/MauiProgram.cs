@@ -59,6 +59,10 @@ public static class MauiProgram
         builder.Services.AddSingleton<TeamCacheService>();
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<FeedbackService>();
+        // EntitlementService depends on AuthService + UserApiService (both
+        // registered elsewhere in this method) — DI resolves the graph at
+        // request time, so registration order here doesn't matter.
+        builder.Services.AddSingleton<EntitlementService>();
 
         // Register Services
         var gameDataClientBuilder = builder.Services.AddHttpClient<GameDataApiService>(client =>

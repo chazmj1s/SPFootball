@@ -16,8 +16,27 @@ namespace SaturdayPulse.Views
         private readonly PostseasonPage               _postseasonPage;
         private readonly SandboxPage                  _sandboxPage;
         private readonly SharedNavigationStateService _navState;
+        private readonly EntitlementService           _entitlementService;
 
         private CancellationTokenSource? _loadingAnimCts;
+
+        // ── Season Pass tab gating (2026-07-25) ─────────────────────────
+        // PageHostIndex MUST match AddPageToHost order below (fixed
+        // regardless of gating: 0=MyTeams,1=Schedule,2=Rankings,
+        // 3=Postseason,4=Sandbox). Postseason/Sandbox are hidden entirely
+        // without a Season Pass per the locked design — both gated
+        // together, always as the trailing two entries, so Next/
+        // PreviousTabCommand's existing SelectedIndex arithmetic in
+        // MainViewModel keeps working unmodified: hiding never creates a
+        // gap in the middle of the visible index range.
+        private static readonly (string Label, int PageHostIndex, bool RequiresSeasonPass)[] GatedTabs =
+        {
+            ("My Teams",   0, false),
+            ("Scores",     1, false),
+            ("Rankings",   2, false),
+            ("Postseason", 3, true),
+            ("Sandbox",    4, true),
+        };
 
         public MainPage(
             SharedNavigationStateService navState,
@@ -30,7 +49,8 @@ namespace SaturdayPulse.Views
             PowerRankingsPage rankingsPage,
             SettingsPage SettingsPage,
             PostseasonPage postseasonPage,
-            SandboxPage sandboxPage)
+            SandboxPage sandboxPage,
+            EntitlementService entitlementService)
         {
             InitializeComponent();
 
@@ -42,6 +62,7 @@ namespace SaturdayPulse.Views
             _SettingsPage    = SettingsPage;
             _postseasonPage  = postseasonPage;
             _sandboxPage     = sandboxPage;
+            _entitlementService = entitlementService;
 
             BindingContext = _vm;
 
@@ -62,11 +83,11 @@ namespace SaturdayPulse.Views
             // (MainViewModel.OpenSettingsCommand) and, if someone has it set
             // as their default landing page, at startup — just not by
             // swiping/tapping through the strip.
-            _vm.TabItems.Clear();
-            var labels = new[] { "My Teams", "Scores", "Rankings", "Postseason", "Sandbox" };
+            //
+            // Postseason/Sandbox are additionally hidden without a Season
+            // Pass (2026-07-25) — see BuildTabItems/GatedTabs above.
             var initialIndex = GetInitialTabIndex();
-            for (int i = 0; i < labels.Length; i++)
-                _vm.TabItems.Add(new TabItem { Label = labels[i], Index = i, IsSelected = i == initialIndex });
+            BuildTabItems(initialIndex);
 
             // Add pages to AbsoluteLayout — order matches labels[] above,
             // and MUST match tab index order (SyncPage indexes PageHost.Children
@@ -118,6 +139,12 @@ namespace SaturdayPulse.Views
                     //SyncPage(_vm.SelectedIndex);
                 }
             };
+
+            // Season Pass tab gating (2026-07-25) — surfaces/hides
+            // Postseason/Sandbox live if entitlement changes while the app
+            // is open (login, logout, admin dev-toggle flip), not just at
+            // startup.
+            _entitlementService.EntitlementChanged += OnEntitlementChanged;
 
             // Show initial page — visibility only, no load
             for (int i = 0; i < PageHost.Count; i++)
@@ -199,6 +226,18 @@ namespace SaturdayPulse.Views
             catch
             {
                 return; // startup data failed to load — leave the landing page as-is
+            }
+
+            if (profile != null)
+            {
+                // Season Pass tab gating (2026-07-25) — seed EntitlementService
+                // from this same profile fetch rather than issuing a second
+                // GetMeAsync. Raises EntitlementChanged -> OnEntitlementChanged
+                // -> BuildTabItems if this profile grants a pass, surfacing
+                // Postseason/Sandbox in the tab strip. Doesn't auto-navigate
+                // the person there — same "settle after a flash" tolerance as
+                // the routing decisions below.
+                _entitlementService.ApplyProfile(profile);
             }
 
             if (profile == null)
@@ -354,7 +393,7 @@ namespace SaturdayPulse.Views
         private int GetInitialTabIndex()
         {
             var stored = Preferences.Default.Get(DefaultLandingPageKey, "MyTeams");
-            return stored switch
+            var index = stored switch
             {
                 "MyTeams"    => 0,
                 "Scores"     => 1,
@@ -364,6 +403,21 @@ namespace SaturdayPulse.Views
                 "Settings"   => 5,
                 _            => 0
             };
+
+            // Season Pass tab gating (2026-07-25): this runs synchronously
+            // during construction, before meTask/EntitlementService have
+            // resolved — so HasSeasonPass reads as false even for an
+            // entitled person on this very first frame. Treat a gated
+            // default landing page as unreachable here rather than showing
+            // Postseason/Sandbox content with no matching tab-strip entry;
+            // ApplyStartupRoutingAsync -> OnEntitlementChanged will surface
+            // the tab once entitlement resolves, it just won't auto-navigate
+            // the person there — same flash-then-settle tolerance already
+            // documented on ApplyStartupRoutingAsync itself.
+            if ((index == 3 || index == 4) && !_entitlementService.HasSeasonPass)
+                return 0;
+
+            return index;
         }
 
         private void AddPageToHost(ContentPage page)
@@ -380,6 +434,51 @@ namespace SaturdayPulse.Views
         }
 
         // ── Tab sync ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Rebuilds TabItems from GatedTabs, filtered by the current Season
+        /// Pass entitlement. Index stays fixed to each tab's real PageHost
+        /// position regardless of which entries are included — see
+        /// GatedTabs' remarks for why this never breaks
+        /// Next/PreviousTabCommand's arithmetic in MainViewModel.
+        /// </summary>
+        private void BuildTabItems(int selectedIndex)
+        {
+            _vm.TabItems.Clear();
+            foreach (var tab in GatedTabs)
+            {
+                if (tab.RequiresSeasonPass && !_entitlementService.HasSeasonPass) continue;
+                _vm.TabItems.Add(new TabItem
+                {
+                    Label = tab.Label,
+                    Index = tab.PageHostIndex,
+                    IsSelected = tab.PageHostIndex == selectedIndex
+                });
+            }
+        }
+
+        /// <summary>
+        /// Fires on login/logout/dev-toggle flips while the app is open.
+        /// Rebuilds the tab strip for the current entitlement, then — only
+        /// if the tab the person is actually sitting on just disappeared
+        /// (Season Pass revoked while viewing Postseason/Sandbox) —
+        /// redirects to My Teams rather than leaving a gated page visible
+        /// with no matching tab-strip entry. Gaining entitlement just adds
+        /// the tabs back; it never needs to redirect anyone.
+        /// </summary>
+        private void OnEntitlementChanged()
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                BuildTabItems(_vm.SelectedIndex);
+
+                if (_vm.TabItems.Any(t => t.Index == _vm.SelectedIndex)) return;
+
+                _vm.SetInitialTabIndex(0);
+                SyncTabItems(0);
+                SyncPage(0);
+            });
+        }
 
         private void SyncTabItems(int index)
         {

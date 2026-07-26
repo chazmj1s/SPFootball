@@ -1,0 +1,264 @@
+@page "/postseason"
+@inject AdminApiService Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h5" Class="mb-4">Postseason Tagging</MudText>
+
+<div class="controls-row">
+    <MudNumericField @bind-Value="_year" Label="Year" Variant="Variant.Outlined" Disabled="_running" Class="year-field" />
+
+    <MudButton Variant="Variant.Outlined" Disabled="_running" OnClick="LoadPostseasonAsync"
+               StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.CloudDownload)">
+        @(_running ? "Loading..." : "Load Postseason")
+    </MudButton>
+
+    <span class="divider">|</span>
+
+    <MudButton Variant="Variant.Outlined" Disabled="_running" OnClick="FetchGamesAsync" StartIcon="@Icons.Material.Filled.Refresh">
+        Refresh List
+    </MudButton>
+
+    <div style="flex:1"></div>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_saving || _running || DirtyCount == 0)"
+               OnClick="SaveAsync" StartIcon="@Icons.Material.Filled.Save">
+        Save (@DirtyCount playoff)
+    </MudButton>
+
+    @if (_log.Count > 0 && !_running)
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Title="Clear log" OnClick="ClearLog" />
+    }
+</div>
+
+@if (_running)
+{
+    <MudProgressLinear Indeterminate="true" Class="progress" />
+}
+
+@if (_log.Count > 0)
+{
+    <div class="console-panel" @ref="_logPanelRef">
+        @foreach (var entry in _log)
+        {
+            <div class="log-entry @StatusClass(entry.Status)">
+                <span class="log-time">@entry.Time</span>
+                <span class="log-message">@entry.Message</span>
+            </div>
+        }
+    </div>
+}
+
+@if (!_running && _gamesByWeek.Count > 0)
+{
+    <p class="instructions">
+        Check each CFP playoff game. Bowl games should remain unchecked. Hit <strong>Save</strong> when done.
+    </p>
+
+    @foreach (var group in _gamesByWeek)
+    {
+        <div class="week-group">
+            <div class="week-label" @onclick="() => ToggleWeek(group.Week)">
+                <MudIcon Icon="@(IsWeekCollapsed(group.Week) ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ExpandMore)" Class="chevron" />
+                <span class="week-title">Week @group.Week</span>
+                <span class="week-counts">
+                    @if (group.BowlCount > 0)
+                    {
+                        <span class="count-bowl">Bowls (@group.BowlCount)</span>
+                    }
+                    @if (group.BowlCount > 0 && group.PlayoffCount > 0)
+                    {
+                        <span class="count-sep">·</span>
+                    }
+                    @if (group.PlayoffCount > 0)
+                    {
+                        <span class="count-playoff">Playoffs (@group.PlayoffCount)</span>
+                    }
+                </span>
+            </div>
+
+            @if (!IsWeekCollapsed(group.Week))
+            {
+                <div class="game-list">
+                    @foreach (var game in group.Games)
+                    {
+                        <div class="game-row @(IsChecked(game.Id) ? "tagged" : "")">
+                            <MudCheckBox T="bool" Value="IsChecked(game.Id)" ValueChanged="@((bool v) => Toggle(game.Id, v))" />
+                            <span class="matchup">@game.AwayName @@ @game.HomeName</span>
+                            <span class="game-date">@game.GameDay, @game.GameDate</span>
+                            <span class="season-type type-@game.SeasonType">@game.SeasonType</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (!_running && _gamesByWeek.Count == 0 && _log.Count == 0)
+{
+    <div class="empty-state">
+        <MudIcon Icon="@Icons.Material.Filled.SportsFootball" />
+        <p>Set a year and click Load Postseason to fetch games from CFBD.</p>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.Now.Year;
+    private List<PostseasonGameDto> _games = new();
+    private List<WeekGroup> _gamesByWeek = new();
+    private readonly HashSet<int> _playoffIds = new();
+    private readonly HashSet<int> _collapsedWeeks = new();
+    private bool _running;
+    private bool _saving;
+    private readonly List<LogEntry> _log = new();
+
+    private ElementReference _logPanelRef;
+    private int _lastLogCount;
+
+    private int DirtyCount => _playoffIds.Count;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_log.Count != _lastLogCount)
+        {
+            _lastLogCount = _log.Count;
+            await JS.InvokeVoidAsync("adminBlazor.scrollToBottom", _logPanelRef);
+        }
+    }
+
+    private void Append(string message, LogStatus status = LogStatus.Info) =>
+        _log.Add(new LogEntry(DateTime.Now.ToString("HH:mm:ss"), message, status));
+
+    private void ClearLog() => _log.Clear();
+
+    private static string StatusClass(LogStatus status) => status switch
+    {
+        LogStatus.Success => "log-success",
+        LogStatus.Error => "log-error",
+        LogStatus.Running => "log-running",
+        _ => "log-info",
+    };
+
+    private async Task StepAsync(string label, Func<Task<System.Text.Json.JsonElement>> call)
+    {
+        Append($"Starting {label}...", LogStatus.Running);
+        try
+        {
+            var result = await call();
+            var message = result.ValueKind == System.Text.Json.JsonValueKind.Object && result.TryGetProperty("message", out var m)
+                ? m.GetString()
+                : null;
+            Append($"\u2713 {message ?? $"{label} complete"}", LogStatus.Success);
+        }
+        catch (AdminApiException ex)
+        {
+            Append($"\u2717 {label} failed \u2014 {ex.Message}", LogStatus.Error);
+            throw;
+        }
+    }
+
+    private async Task LoadPostseasonAsync()
+    {
+        _running = true;
+        _log.Clear();
+        _games = new();
+        _gamesByWeek = new();
+        _playoffIds.Clear();
+        _collapsedWeeks.Clear();
+        Append($"\u2500\u2500 Load Postseason  Year={_year} \u2500\u2500");
+
+        try
+        {
+            await StepAsync("Load Postseason Games", () => Api.LoadPostseasonGamesAsync(_year));
+            await StepAsync("Assign Postseason Weeks", () => Api.AssignPostseasonWeeksAsync(_year));
+            Append("\u2500\u2500 Complete \u2014 loading game list \u2500\u2500", LogStatus.Success);
+            await FetchGamesAsync();
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+            _running = false;
+        }
+    }
+
+    private async Task FetchGamesAsync()
+    {
+        try
+        {
+            _games = await Api.GetPostseasonGamesAsync(_year);
+            _playoffIds.Clear();
+            foreach (var g in _games.Where(g => g.SeasonType == "playoff"))
+                _playoffIds.Add(g.Id);
+            _gamesByWeek = BuildWeekGroups(_games);
+        }
+        catch
+        {
+            Append("\u2717 Failed to load game list", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private static List<WeekGroup> BuildWeekGroups(List<PostseasonGameDto> games) =>
+        games.GroupBy(g => g.Week)
+             .OrderBy(g => g.Key)
+             .Select(g => new WeekGroup
+             {
+                 Week = g.Key,
+                 Games = g.ToList(),
+                 BowlCount = g.Count(x => x.SeasonType == "postseason"),
+                 PlayoffCount = g.Count(x => x.SeasonType == "playoff"),
+             })
+             .ToList();
+
+    private bool IsChecked(int gameId) => _playoffIds.Contains(gameId);
+
+    private void Toggle(int gameId, bool isChecked)
+    {
+        if (isChecked) _playoffIds.Add(gameId);
+        else _playoffIds.Remove(gameId);
+        RefreshCounts();
+    }
+
+    private bool IsWeekCollapsed(int week) => _collapsedWeeks.Contains(week);
+
+    private void ToggleWeek(int week)
+    {
+        if (_collapsedWeeks.Contains(week)) _collapsedWeeks.Remove(week);
+        else _collapsedWeeks.Add(week);
+    }
+
+    // Recompute counts after a checkbox toggle without re-fetching - mirrors
+    // refreshCounts() in the Angular original exactly (including the fact that
+    // "bowl" here just means "currently unchecked", not literally seasonType).
+    private void RefreshCounts()
+    {
+        foreach (var group in _gamesByWeek)
+        {
+            group.BowlCount = group.Games.Count(g => !IsChecked(g.Id));
+            group.PlayoffCount = group.Games.Count(g => IsChecked(g.Id));
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        var ids = _playoffIds.ToList();
+        try
+        {
+            await Api.TagAsPlayoffAsync(ids);
+            Snackbar.Add($"{ids.Count} game(s) tagged as playoff.", Severity.Success);
+            _saving = false;
+            await FetchGamesAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Save failed \u2014 check the API logs.", Severity.Error);
+            _saving = false;
+        }
+    }
+}

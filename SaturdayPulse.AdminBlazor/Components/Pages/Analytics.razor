@@ -1,0 +1,317 @@
+@page "/analytics"
+@inject AdminApiService Api
+
+<div class="page-layout">
+    <div class="sections">
+        <MudText Typo="Typo.h5" Class="mb-2">Analytics</MudText>
+
+        <!-- ── Projection Accuracy ─────────────────────────────── -->
+        <div class="section">
+            <div class="section-row">
+                <span class="section-label">Projection Accuracy</span>
+                <select class="param-select" @bind="_projStartYear">
+                    <option value="">Year</option>
+                    @foreach (var y in _years) { <option value="@y">@y</option> }
+                </select>
+                <span class="range-sep">—</span>
+                <select class="param-select" @bind="_projEndYear">
+                    <option value="">Year</option>
+                    @foreach (var y in _years) { <option value="@y">@y</option> }
+                </select>
+                <MudButton Variant="Variant.Outlined" Class="load-btn" Disabled="_projLoading" OnClick="LoadProjectionAccuracyAsync"
+                           StartIcon="@(_projLoading ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
+                    Load
+                </MudButton>
+            </div>
+
+            @if (_projLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="progress" />
+            }
+
+            @if (_projData is { } proj)
+            {
+                <div class="result-card">
+                    <div class="result-group">
+                        <div class="result-row"><span class="result-label">Year Range</span><span class="result-value">@proj.StartYear – @proj.EndYear</span></div>
+                        <div class="result-row"><span class="result-label">Total Games</span><span class="result-value">@proj.TotalGames.ToString("N0")</span></div>
+                    </div>
+
+                    <MudDivider />
+
+                    <div class="result-group">
+                        <div class="result-row"><span class="result-label">MAE (snapshot)</span><span class="result-value accent">@proj.Mae.ToString("0.00")</span></div>
+                        <div class="result-row"><span class="result-label">MAE (total)</span><span class="result-value accent">@proj.TotalMae.ToString("0.00")</span></div>
+                        <div class="result-row"><span class="result-label">Winner Accuracy</span><span class="result-value accent">@proj.WinnerAccuracyPct%</span></div>
+                        <div class="result-row">
+                            <span class="result-label">Spread Bias</span>
+                            <span class="result-value @(proj.SpreadBias > 0 ? "positive" : proj.SpreadBias < 0 ? "negative" : "")">@proj.SpreadBias.ToString("0.00")</span>
+                        </div>
+                    </div>
+
+                    <MudDivider />
+
+                    <div class="result-group">
+                        <span class="result-sublabel">vs Vegas (closing line · @proj.VegasGames.ToString("N0") games)</span>
+                        <div class="result-row"><span class="result-label">Vegas MAE</span><span class="result-value">@FormatNullable(proj.VegasMae)</span></div>
+                        <div class="result-row"><span class="result-label">Vegas Winner Accuracy</span><span class="result-value">@(proj.VegasWinnerAccuracy is { } vwa ? $"{vwa}%" : "—")</span></div>
+                        <div class="result-row">
+                            <span class="result-label">Our MAE vs Vegas MAE</span>
+                            @{ var diff = proj.VegasMae.HasValue ? proj.Mae - proj.VegasMae.Value : (double?)null; }
+                            <span class="result-value @(diff is > 0 ? "negative" : diff is <= 0 ? "positive" : "")">@FormatNullable(diff)</span>
+                        </div>
+                    </div>
+
+                    <MudDivider />
+
+                    <div class="result-group">
+                        <span class="result-sublabel">vs Vegas (opening line · @proj.VegasOpenGames.ToString("N0") games)</span>
+                        <div class="result-row"><span class="result-label">Vegas Open MAE</span><span class="result-value">@FormatNullable(proj.VegasOpenMae)</span></div>
+                        <div class="result-row"><span class="result-label">Vegas Open Winner Accuracy</span><span class="result-value">@(proj.VegasOpenWinnerAccuracy is { } vowa ? $"{vowa}%" : "—")</span></div>
+                    </div>
+
+                    <MudDivider />
+
+                    <CollapsibleSection Title="By Phase">
+                        <table class="data-table">
+                            <thead><tr><th>Phase</th><th>Games</th><th>MAE</th><th>Winner%</th><th>Vegas MAE</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in proj.ByPhase)
+                                {
+                                    <tr>
+                                        <td>@row.Phase</td>
+                                        <td class="num">@row.Games.ToString("N0")</td>
+                                        <td class="num accent">@row.Mae.ToString("0.00")</td>
+                                        <td class="num @WinnerClass(row.WinnerAccuracy)">@row.WinnerAccuracy%</td>
+                                        <td class="num">@(row.VegasMae is { } vm ? vm.ToString("0.00") : "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </CollapsibleSection>
+
+                    <MudDivider />
+
+                    <CollapsibleSection Title="By Conference Tier">
+                        <table class="data-table">
+                            <thead><tr><th>Tier</th><th>Games</th><th>MAE</th><th>Winner%</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in proj.ByConference)
+                                {
+                                    <tr>
+                                        <td>@row.Conference</td>
+                                        <td class="num">@row.Games.ToString("N0")</td>
+                                        <td class="num accent">@row.Mae.ToString("0.00")</td>
+                                        <td class="num @(row.WinnerAccuracy >= 65 ? "good" : "")">@row.WinnerAccuracy%</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </CollapsibleSection>
+
+                    <MudDivider />
+
+                    <CollapsibleSection Title="By Year">
+                        <table class="data-table">
+                            <thead><tr><th>Year</th><th>Games</th><th>MAE</th><th>Winner%</th><th>Bias</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in proj.ByYear)
+                                {
+                                    <tr>
+                                        <td>@row.Year</td>
+                                        <td class="num">@row.Games.ToString("N0")</td>
+                                        <td class="num accent">@row.Mae.ToString("0.00")</td>
+                                        <td class="num @(row.WinnerAccuracy >= 65 ? "good" : "")">@row.WinnerAccuracy%</td>
+                                        <td class="num @(row.SpreadBias < 0 ? "negative" : row.SpreadBias > 0 ? "positive" : "")">@row.SpreadBias.ToString("0.00")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </CollapsibleSection>
+
+                    <MudDivider />
+
+                    <CollapsibleSection Title="By Snapshot Week">
+                        <table class="data-table">
+                            <thead><tr><th>Week</th><th>Games</th><th>MAE</th><th>Winner%</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in proj.ByWeek)
+                                {
+                                    <tr>
+                                        <td>@(row.SnapshotWeek == 0 ? "Pre-season" : $"Wk {row.SnapshotWeek}")</td>
+                                        <td class="num">@row.Games.ToString("N0")</td>
+                                        <td class="num accent">@row.Mae.ToString("0.00")</td>
+                                        <td class="num @WinnerClass(row.WinnerAccuracy)">@row.WinnerAccuracy%</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </CollapsibleSection>
+                </div>
+            }
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <!-- ── Portal Accuracy ─────────────────────────────────── -->
+        <div class="section">
+            <div class="section-row">
+                <span class="section-label">Portal Accuracy</span>
+                <select class="param-select" @bind="_portalStartYear">
+                    <option value="">Year</option>
+                    @foreach (var y in _years) { <option value="@y">@y</option> }
+                </select>
+                <span class="range-sep">—</span>
+                <select class="param-select" @bind="_portalEndYear">
+                    <option value="">Year</option>
+                    @foreach (var y in _years) { <option value="@y">@y</option> }
+                </select>
+                <MudButton Variant="Variant.Outlined" Class="load-btn" Disabled="_portalLoading" OnClick="LoadPortalAccuracyAsync"
+                           StartIcon="@(_portalLoading ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
+                    Load
+                </MudButton>
+            </div>
+
+            @if (_portalLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="progress" />
+            }
+
+            @if (_portalData is { } portal)
+            {
+                <div class="result-card">
+                    <div class="result-group">
+                        <div class="result-row"><span class="result-label">Year Range</span><span class="result-value">@portal.StartYear – @portal.EndYear</span></div>
+                        <div class="result-row"><span class="result-label">Total Games</span><span class="result-value">@portal.TotalGames.ToString("N0")</span></div>
+                    </div>
+
+                    <MudDivider />
+
+                    <div class="result-group">
+                        <span class="result-sublabel">Model Improvement Over Season</span>
+                        <div class="result-row"><span class="result-label">Portal Winner MAE Gap</span><span class="result-value accent">@FormatNullable(portal.WinnerMaeGap)</span></div>
+                        <div class="result-row"><span class="result-label">Portal Loser MAE Gap</span><span class="result-value accent">@FormatNullable(portal.LoserMaeGap)</span></div>
+                        <div class="result-row"><span class="result-label">Winner Early MAE</span><span class="result-value">@FormatNullable(portal.WinnerEarlyMae)</span></div>
+                        <div class="result-row"><span class="result-label">Winner Late MAE</span><span class="result-value">@FormatNullable(portal.WinnerLateMae)</span></div>
+                        <div class="result-row"><span class="result-label">Loser Early MAE</span><span class="result-value">@FormatNullable(portal.LoserEarlyMae)</span></div>
+                        <div class="result-row"><span class="result-label">Loser Late MAE</span><span class="result-value">@FormatNullable(portal.LoserLateMae)</span></div>
+                    </div>
+
+                    <MudDivider />
+
+                    <CollapsibleSection Title="By Group × Season Period">
+                        <table class="data-table">
+                            <thead><tr><th>Group</th><th>Period</th><th>Games</th><th>MAE</th><th>Winner%</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in portal.ByPortalGroup)
+                                {
+                                    <tr>
+                                        <td class="@(row.PortalGroup == "Portal Winner" ? "positive" : row.PortalGroup == "Portal Loser" ? "negative" : "")">@row.PortalGroup</td>
+                                        <td>@row.Period</td>
+                                        <td class="num">@row.Games.ToString("N0")</td>
+                                        <td class="num accent">@row.Mae.ToString("0.00")</td>
+                                        <td class="num @(row.WinnerAccuracy >= 65 ? "good" : "")">@row.WinnerAccuracy%</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </CollapsibleSection>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Right: Glossary -->
+    <div class="glossary-sidebar">
+        <div class="glossary-header">Glossary</div>
+
+        <div class="glossary-section">
+            <div class="glossary-title">Projection Metrics</div>
+            <GlossaryEntry Term="MAE" Definition="Mean Absolute Error — average points difference between projected and actual score. Lower is better. MAE of 15 means projections are off by ~15 points on average." />
+            <GlossaryEntry Term="MAE (snapshot)" Definition="MAE calculated using the projection that existed at each week's snapshot — reflects how good the model was at the time of the game." />
+            <GlossaryEntry Term="MAE (total)" Definition="MAE using the final end-of-season projection for all games. Generally lower since it uses more complete data." />
+            <GlossaryEntry Term="Winner Accuracy" Definition="Percentage of games where the model correctly predicted the winner. 65%+ is strong for college football. Drops significantly for postseason games." />
+            <GlossaryEntry Term="Spread Bias" Definition="Systematic lean in projections. Negative = model projects scores too low on average. Ideally close to 0. Our consistent negative bias suggests the model underestimates scoring." />
+            <GlossaryEntry Term="Vegas MAE" Definition="Same metric but using the Vegas closing line. Used to benchmark our model — we're currently running about 3 points behind Vegas on MAE." />
+            <GlossaryEntry Term="Vegas Open MAE" Definition="MAE using the opening line rather than the closing line. Useful to see how much the market moves between open and close." />
+        </div>
+
+        <MudDivider Class="my-2" />
+
+        <div class="glossary-section">
+            <div class="glossary-title">Rating Metrics</div>
+            <GlossaryEntry Term="Power Rating" Definition="Composite score representing a team's overall strength relative to all FBS teams for a given week. Higher is better." />
+            <GlossaryEntry Term="SOS" Definition="Strength of Schedule — weighted average of opponents' power ratings. Higher means a tougher schedule." />
+            <GlossaryEntry Term="Z-Score" Definition="How many standard deviations a team's performance is from the mean. Used to normalize comparisons across eras." />
+            <GlossaryEntry Term="Seed" Definition="Long-term baseline rating built from historical performance going back multiple seasons. Slow to change — represents a program's sustained quality." />
+            <GlossaryEntry Term="Trend" Definition="Short-term momentum indicator based on recent weeks. Rises and falls faster than Seed — reflects hot or cold streaks." />
+            <GlossaryEntry Term="Pedigree" Definition="Weighted blend of Seed and Trend — the primary rating used in game projections. Balances long-term program quality with recent form." />
+        </div>
+
+        <MudDivider Class="my-2" />
+
+        <div class="glossary-section">
+            <div class="glossary-title">Portal Metrics</div>
+            <GlossaryEntry Term="Portal Winner / Loser" Definition="Teams grouped by whether they net-gained (Winner) or net-lost (Loser) talent through the transfer portal in a given offseason." />
+            <GlossaryEntry Term="MAE Gap" Definition="Difference between Early-season MAE and Late-season MAE for a group. A larger gap means the model takes longer to calibrate to portal-affected teams." />
+            <GlossaryEntry Term="Early / Mid / Late Period" Definition="Season split by snapshot week: Early = weeks 0–3, Mid = weeks 4–8, Late = weeks 9+. MAE typically drops from Early to Late as the model learns each team's true strength." />
+            <GlossaryEntry Term="PortalDelta" Definition="Net change in roster quality from transfer portal activity. Positive = net gain, negative = net loss." />
+            <GlossaryEntry Term="RosterStrength" Definition="Composite measure of incoming transfer talent relative to what was lost. Used to adjust pre-season power ratings." />
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly int _currentYear = DateTime.Now.Year;
+    private List<int> _years = new();
+
+    private int? _projStartYear = 2015;
+    private int? _projEndYear;
+    private ProjectionAccuracyResultDto? _projData;
+    private bool _projLoading;
+
+    private int? _portalStartYear = 2021;
+    private int? _portalEndYear;
+    private PortalAccuracyResultDto? _portalData;
+    private bool _portalLoading;
+
+    protected override void OnInitialized()
+    {
+        _years = Enumerable.Range(1965, _currentYear - 1965 + 1).Reverse().ToList();
+        _projEndYear = _currentYear;
+        _portalEndYear = _currentYear;
+    }
+
+    private async Task LoadProjectionAccuracyAsync()
+    {
+        _projLoading = true;
+        _projData = null;
+        try
+        {
+            _projData = await Api.GetProjectionAccuracyAsync(_projStartYear, _projEndYear);
+        }
+        finally
+        {
+            _projLoading = false;
+        }
+    }
+
+    private async Task LoadPortalAccuracyAsync()
+    {
+        _portalLoading = true;
+        _portalData = null;
+        try
+        {
+            _portalData = await Api.GetPortalAccuracyAsync(_portalStartYear, _portalEndYear);
+        }
+        finally
+        {
+            _portalLoading = false;
+        }
+    }
+
+    private static string FormatNullable(double? value) => value is { } v ? v.ToString("0.00") : "—";
+
+    private static string WinnerClass(double winnerAccuracy) =>
+        winnerAccuracy >= 65 ? "good" : winnerAccuracy < 50 ? "warn" : "";
+}

@@ -13,6 +13,7 @@ namespace SaturdayPulse.ViewModels
         private readonly GameDataCacheService         _cache;
         private readonly SharedNavigationStateService _navState;
         private readonly PersonalGameService          _personalGameService;
+        private readonly EntitlementService           _entitlementService;
 
         private ObservableRangeCollection<GameResult> _games = new();
         private bool   _isBusy;
@@ -25,12 +26,14 @@ namespace SaturdayPulse.ViewModels
             GameDataCacheService cache,
             FollowService followService,
             SharedNavigationStateService navState,
-            PersonalGameService personalGameService)
+            PersonalGameService personalGameService,
+            EntitlementService entitlementService)
             : base(followService)
         {
             _cache               = cache;
             _navState            = navState;
             _personalGameService = personalGameService;
+            _entitlementService  = entitlementService;
 
             // No outer Task.Run — LoadDataAsync runs on the main thread; the cache
             // fetch inside it is offloaded via Task.Run and the continuation
@@ -77,8 +80,29 @@ namespace SaturdayPulse.ViewModels
                 game.IsDetailsExpanded = !game.IsDetailsExpanded;
             });
 
+            // Gated Details paywall message (2026-07-25) — same shared
+            // login-check as MyTeamsViewModel/SettingsViewModel. The Details
+            // section itself stays open for everyone (per design); only the
+            // Vegas/projections portion inside it is replaced with this
+            // paywall message for free users.
+            SeasonPassCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var result = await _entitlementService.EnsureLoggedInForPurchaseAsync();
+                if (!result.CanProceed) return;
+
+                await Shell.Current.DisplayAlert(
+                    "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
+            });
+
             _navState.PropertyChanged += OnNavStateChanged;
             _cache.CacheUpdated       += OnCacheUpdated;
+            _entitlementService.EntitlementChanged += OnEntitlementChanged;
+        }
+
+        private void OnEntitlementChanged()
+        {
+            OnPropertyChanged(nameof(HasSeasonPass));
+            OnPropertyChanged(nameof(IsNotSeasonPass));
         }
 
         // ── Bindable collections ──────────────────────────────────────────
@@ -105,6 +129,16 @@ namespace SaturdayPulse.ViewModels
         public bool   IsLoading => _isBusy;
         public bool   HasLoaded { get; set; }
 
+        // ── Season Pass gating (2026-07-25) ─────────────────────────────
+        // Sourced from the shared EntitlementService. Schedule has no
+        // ranking toggle bar (that's MyTeams/Rankings' concern) — this
+        // only gates the Vegas/projections portion of the Details paywall
+        // message in SchedulePage.xaml.
+        public bool HasSeasonPass => _entitlementService.HasSeasonPass;
+
+        /// <summary>Inverse of HasSeasonPass — no inverse-bool converter needed in XAML.</summary>
+        public bool IsNotSeasonPass => !HasSeasonPass;
+
         public string StatusMessage
         {
             get => _statusMessage;
@@ -130,6 +164,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand NextWeekCommand           { get; }
         public ICommand TogglePersonalGameCommand { get; }
         public ICommand ToggleDetailsCommand      { get; }
+        public ICommand SeasonPassCommand         { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 

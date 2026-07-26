@@ -1,0 +1,196 @@
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.WebUtilities;
+using SaturdayPulse.AdminBlazor.Services.Models;
+
+namespace SaturdayPulse.AdminBlazor.Services;
+
+/// <summary>
+/// Direct C# translation of admin-api.service.ts. Every method maps 1:1 to the
+/// Angular original - same endpoint, same params, same optional-param behavior
+/// (omit the query param entirely when not supplied, matching the TS "if (x) params.x = x" pattern).
+///
+/// Methods whose Angular return type is `Observable&lt;any&gt;` return JsonElement here.
+/// As each admin page gets built out, its specific calls can be given a real DTO/return type.
+/// </summary>
+public class AdminApiService(HttpClient http)
+{
+    // ── Diagnostics ────────────────────────────────────────────────
+    public async Task<DiagnosticDto?> GetDiagnosticAsync(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<DiagnosticDto>("productiongamedata/diagnostic", JsonOpts, ct);
+
+    // ── Weekly Ops ─────────────────────────────────────────────────
+    public Task<JsonElement> LoadGamesAsync(int year, int week, CancellationToken ct = default) =>
+        PostAsync("developer/loadGames", Query(("year", year), ("week", week)), ct);
+
+    public Task<JsonElement> LoadLinesAsync(int year, int week, CancellationToken ct = default) =>
+        PostAsync("developer/loadLines", Query(("year", year), ("week", week)), ct);
+
+    public Task<JsonElement> UpdateTeamRecordsAsync(int? year = null, CancellationToken ct = default) =>
+        PostAsync("developer/updateTeamRecords", Query(("year", year)), ct);
+
+    public Task<JsonElement> UpdateWeeklyMetricsAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
+        PostAsync("developer/updateWeeklyMetrics", Query(("year", year), ("week", week)), ct);
+
+    public Task<JsonElement> ComputeWeeklyAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
+        PostAsync("developer/computeweekly", Query(("year", year), ("week", week)), ct);
+
+    public Task<JsonElement> CalculateRollingAveragesAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
+        PostAsync("developer/calculateRollingAverages", Query(("year", year), ("week", week)), ct);
+
+    public Task<JsonElement> AssignPostseasonWeeksAsync(int year, CancellationToken ct = default) =>
+        PostAsync("developer/assignPostseasonWeeks", Query(("year", year)), ct);
+
+    // ── Postseason Tagging ─────────────────────────────────────────
+    public Task<JsonElement> LoadPostseasonGamesAsync(int year, CancellationToken ct = default) =>
+        PostAsync("developer/loadGames", Query(("year", year), ("seasonType", "postseason")), ct);
+
+    public async Task<List<PostseasonGameDto>> GetPostseasonGamesAsync(int year, CancellationToken ct = default)
+    {
+        var url = QueryHelpers.AddQueryString("productiongamedata/postseason/v2", Query(("year", year)));
+        var result = await http.GetFromJsonAsync<PostseasonGamesResponse>(url, JsonOpts, ct);
+        return result?.Games ?? new List<PostseasonGameDto>();
+    }
+
+    public Task<JsonElement> TagAsPlayoffAsync(IReadOnlyList<int> gameIds, CancellationToken ct = default) =>
+        PostBodyAsync("developer/tagAsPlayoff", new { gameIds }, ct);
+
+    public Task<JsonElement> UntagAsPlayoffAsync(IReadOnlyList<int> gameIds, CancellationToken ct = default) =>
+        PostBodyAsync("developer/untagAsPlayoff", new { gameIds }, ct);
+
+    // ── Season Setup ───────────────────────────────────────────────
+    public Task<JsonElement> InitializeSeasonAsync(int year, CancellationToken ct = default) =>
+        PostAsync("developer/initializeSeason", Query(("year", year)), ct);
+
+    public Task<JsonElement> LoadConferencesAsync(CancellationToken ct = default) =>
+        PostAsync("developer/loadConferences", null, ct);
+
+    public Task<JsonElement> LoadTeamsAsync(int? year = null, CancellationToken ct = default) =>
+        PostAsync("developer/loadTeams", Query(("year", year)), ct);
+
+    public Task<JsonElement> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken ct = default) =>
+        PostAsync("developer/buildTeamsConferenceHistory", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> LoadPortalAsync(int season, CancellationToken ct = default) =>
+        PostAsync("developer/loadPortal", Query(("season", season)), ct);
+
+    public Task<JsonElement> ComputePortalMetricsAsync(int season, CancellationToken ct = default) =>
+        PostAsync("developer/computePortalMetrics", Query(("season", season)), ct);
+
+    // ── Metrics Rebuild ────────────────────────────────────────────
+    public Task<JsonElement> BackfillAllMetricsAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/backfillAllMetrics", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> BackfillRollingAveragesAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/backfillRollingAverages", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> BackfillWeeklyRankingsAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/backfillWeeklyRankings", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> BackfillProjectionsAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/backfillProjections", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> BuildAvgScoreDifferentialsAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/buildAvgScoreDifferentials", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> RecalculateScoreDeltasAsync(CancellationToken ct = default) =>
+        PostAsync("developer/recalculateScoreDeltas", null, ct);
+
+    public Task<JsonElement> CalculateMatchupHistoriesAsync(CancellationToken ct = default) =>
+        PostAsync("developer/calculateMatchupHistories", null, ct);
+
+    public Task<JsonElement> LoadTeamsBulkAsync(int startYear, CancellationToken ct = default) =>
+        PostAsync("developer/loadTeamsBulk", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> LoadGamesBulkAsync(int startYear, CancellationToken ct = default) =>
+        PostAsync("developer/loadGamesBulk", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> LoadLinesBulkAsync(int startYear, CancellationToken ct = default) =>
+        PostAsync("developer/loadLinesBulk", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> SetSOSAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
+        PostAsync("developer/setSOS", Query(("year", year), ("week", week)), ct);
+
+    public Task<JsonElement> CalculatePowerRatingsAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/calculatePowerRatings", Query(("startYear", startYear)), ct);
+
+    public Task<JsonElement> CalculateRankingsAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostAsync("developer/calculateRankings", Query(("startYear", startYear)), ct);
+
+    // ── Analytics ──────────────────────────────────────────────────
+    public async Task<ProjectionAccuracyResultDto?> GetProjectionAccuracyAsync(int? startYear = null, int? endYear = null, CancellationToken ct = default)
+    {
+        var url = QueryHelpers.AddQueryString("developer/projectionAccuracy", Query(("startYear", startYear), ("endYear", endYear)));
+        return await http.GetFromJsonAsync<ProjectionAccuracyResultDto>(url, JsonOpts, ct);
+    }
+
+    public async Task<JsonElement> GetAnalyticsAsync(int? startYear = null, int? endYear = null, CancellationToken ct = default)
+    {
+        var url = QueryHelpers.AddQueryString("developer/analytics", Query(("startYear", startYear), ("endYear", endYear)));
+        return await http.GetFromJsonAsync<JsonElement>(url, JsonOpts, ct);
+    }
+
+    public async Task<PortalAccuracyResultDto?> GetPortalAccuracyAsync(int? startYear = null, int? endYear = null, CancellationToken ct = default)
+    {
+        var url = QueryHelpers.AddQueryString("developer/portalAccuracy", Query(("startYear", startYear), ("endYear", endYear)));
+        return await http.GetFromJsonAsync<PortalAccuracyResultDto>(url, JsonOpts, ct);
+    }
+
+    // ── Internals ────────────────────────────────────────────────────
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Builds a query-string dictionary, silently omitting any (key, null) pair -
+    /// mirrors the TS pattern of only setting params.x when x is truthy/provided.
+    /// </summary>
+    private static Dictionary<string, string?>? Query(params (string Key, object? Value)[] pairs)
+    {
+        var dict = pairs
+            .Where(p => p.Value is not null)
+            .ToDictionary(p => p.Key, p => p.Value?.ToString());
+        return dict.Count == 0 ? null : dict;
+    }
+
+    private async Task<JsonElement> PostAsync(string path, Dictionary<string, string?>? query, CancellationToken ct)
+    {
+        var url = query is null ? path : QueryHelpers.AddQueryString(path, query);
+        var response = await http.PostAsync(url, content: null, ct);
+        return await ReadOrThrowAsync(response, ct);
+    }
+
+    private async Task<JsonElement> PostBodyAsync<TBody>(string path, TBody body, CancellationToken ct)
+    {
+        var response = await http.PostAsJsonAsync(path, body, JsonOpts, ct);
+        return await ReadOrThrowAsync(response, ct);
+    }
+
+    /// <summary>
+    /// Reads the response as JsonElement on success. On failure, tries to pull a
+    /// "message" field out of the error body before throwing, so callers can show
+    /// something more useful than a bare status code - same intent as the Angular
+    /// step-runner's `err?.error?.message ?? 'check API logs'`.
+    /// </summary>
+    private static async Task<JsonElement> ReadOrThrowAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        var body = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = "check API logs";
+            try
+            {
+                var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
+                    message = m.GetString() ?? message;
+            }
+            catch (JsonException) { /* body wasn't JSON - fall back to default message */ }
+
+            throw new AdminApiException(message);
+        }
+
+        return string.IsNullOrEmpty(body)
+            ? default
+            : JsonSerializer.Deserialize<JsonElement>(body, JsonOpts);
+    }
+}

@@ -1,0 +1,84 @@
+@page "/"
+@inject AdminApiService Api
+@inject ILogger<Dashboard> Logger
+
+<div class="d-flex align-center justify-space-between mb-6">
+    <MudText Typo="Typo.h5">Dashboard</MudText>
+    <MudButton Variant="Variant.Outlined"
+               StartIcon="@Icons.Material.Filled.Refresh"
+               OnClick="LoadDiagnosticAsync">
+        Refresh
+    </MudButton>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-12">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </div>
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+
+@if (_diagnostic is not null && !_loading)
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <StatCard Icon="@Icons.Material.Filled.Storage" Title="Database" Value="@_diagnostic.Database" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <StatCard Icon="@Icons.Material.Filled.Groups" Title="Total Teams" Value="@_diagnostic.TotalTeams.ToString("N0")" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <StatCard Icon="@Icons.Material.Filled.SportsFootball" Title="Total Games" Value="@_diagnostic.TotalGames.ToString("N0")" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <StatCard Icon="@Icons.Material.Filled.Leaderboard" Title="Total Records" Value="@_diagnostic.TotalRecords.ToString("N0")" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <StatCard Icon="@Icons.Material.Filled.Bolt" Title="With Power Rating" Value="@_diagnostic.RecordsWithPowerRating.ToString("N0")" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <StatCard Icon="@Icons.Material.Filled.CalendarMonth" Title="Years with Data" Value="@YearsRangeText" />
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private DiagnosticDto? _diagnostic;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDiagnosticAsync();
+    }
+
+    private async Task LoadDiagnosticAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _diagnostic = await Api.GetDiagnosticAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load diagnostic data from {Endpoint}", "productiongamedata/diagnostic");
+            _error = $"Failed to load diagnostic data: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // Mirrors: `{{ diagnostic.yearsWithData[0] }} – {{ diagnostic.yearsWithData[last] }}`
+    private string YearsRangeText =>
+        _diagnostic is { YearsWithData.Count: > 0 }
+            ? $"{_diagnostic.YearsWithData[0]} \u2013 {_diagnostic.YearsWithData[^1]}"
+            : string.Empty;
+}

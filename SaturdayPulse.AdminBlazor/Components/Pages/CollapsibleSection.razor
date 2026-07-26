@@ -1,0 +1,20 @@
+<div class="collapsible-header" @onclick="Toggle">
+    <MudIcon Icon="@(_collapsed ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ExpandMore)"
+             Size="Size.Small" Class="chevron" />
+    <MudText Typo="Typo.caption" Class="result-sublabel">@Title</MudText>
+</div>
+@if (!_collapsed)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // All sections start collapsed, matching the Angular original's
+    // `collapsedSections = new Set([...all keys...])`.
+    private bool _collapsed = true;
+
+    private void Toggle() => _collapsed = !_collapsed;
+}

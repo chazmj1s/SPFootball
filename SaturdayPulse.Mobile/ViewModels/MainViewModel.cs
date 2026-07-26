@@ -30,6 +30,7 @@ namespace SaturdayPulse.ViewModels
         private readonly GameDataApiService           _apiService;
         private readonly GameDataCacheService         _cache;
         private readonly MyTeamsViewModel              _myTeamsViewModel;
+        private readonly EntitlementService            _entitlementService;
         private int  _selectedIndex = 0;
         private bool _yearChangeInFlight;   // re-entrancy guard (main-thread only)
         private bool _initialized;
@@ -53,12 +54,14 @@ namespace SaturdayPulse.ViewModels
             SharedNavigationStateService navState,
             GameDataApiService apiService,
             GameDataCacheService cache,
-            MyTeamsViewModel myTeamsViewModel)
+            MyTeamsViewModel myTeamsViewModel,
+            EntitlementService entitlementService)
         {
             _navState         = navState;
             _apiService       = apiService;
             _cache            = cache;
             _myTeamsViewModel = myTeamsViewModel;
+            _entitlementService = entitlementService;
 
             SelectTabCommand = new Microsoft.Maui.Controls.Command<int>(idx =>
             {
@@ -97,10 +100,20 @@ namespace SaturdayPulse.ViewModels
 
             SelectYearCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var years = Enumerable.Range(1965, DateTime.Now.Year - 1965 + 1)
-                    .Select(y => y.ToString())
-                    .Reverse()
-                    .ToArray();
+                var currentYear = DateTime.Now.Year;
+
+                // Year filter gating (2026-07-26): free users pick between
+                // the current year and last year — last year's Score/
+                // Spread/O-U projections are unlocked too (see
+                // ProjectionGateConverter), everything else stays behind
+                // the paywall. Entitled users still see the full 1965-
+                // present list.
+                var years = _entitlementService.HasSeasonPass
+                    ? Enumerable.Range(1965, currentYear - 1965 + 1)
+                        .Select(y => y.ToString())
+                        .Reverse()
+                        .ToArray()
+                    : new[] { currentYear.ToString(), (currentYear - 1).ToString() };
 
                 var result = await Shell.Current.DisplayActionSheet(
                     "Select Year", "Cancel", null, years);
@@ -175,6 +188,25 @@ namespace SaturdayPulse.ViewModels
                         break;
                 }
             };
+
+            // Year filter gating (2026-07-26): if a Season Pass lapses
+            // (expiry, admin dev-toggle flip) while looking at a year
+            // outside the free window (current year or last year), snap
+            // back to the current year — SelectYearCommand above only
+            // prevents a free user from picking a new out-of-window year,
+            // it doesn't by itself undo one they already had access to.
+            _entitlementService.EntitlementChanged += OnEntitlementChanged;
+        }
+
+        private async void OnEntitlementChanged()
+        {
+            if (_entitlementService.HasSeasonPass) return;
+
+            var currentYear = DateTime.Now.Year;
+            if (_navState.SelectedYear == currentYear || _navState.SelectedYear == currentYear - 1)
+                return;
+
+            await ApplyYearChangeAsync(currentYear);
         }
 
         // ── Startup ───────────────────────────────────────────────────────
