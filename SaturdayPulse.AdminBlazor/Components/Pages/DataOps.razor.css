@@ -1,0 +1,25 @@
+.page-layout {
+    display: flex;
+    gap: 24px;
+}
+
+.sections {
+    flex: 1;
+    min-width: 0;
+}
+
+.section-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 8px 0 4px;
+}
+
+.param-field {
+    max-width: 140px;
+}
+
+.param-field.narrow {
+    max-width: 100px;
+}

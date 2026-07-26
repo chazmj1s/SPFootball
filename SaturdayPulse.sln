@@ -22,6 +22,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentat
 		Documentation\User_Guide.md = Documentation\User_Guide.md
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SaturdayPulse.AdminBlazor", "SaturdayPulse.AdminBlazor\SaturdayPulse.AdminBlazor.csproj", "{A582E84D-78E6-FD8E-6C4D-C3541091657F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,6 +60,18 @@ Global
 		{ABFC2103-B954-4616-9CBE-025EFA8B8E00}.Release|x64.Build.0 = Release|Any CPU
 		{ABFC2103-B954-4616-9CBE-025EFA8B8E00}.Release|x86.ActiveCfg = Release|Any CPU
 		{ABFC2103-B954-4616-9CBE-025EFA8B8E00}.Release|x86.Build.0 = Release|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Debug|x64.Build.0 = Debug|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Debug|x86.Build.0 = Debug|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Release|x64.ActiveCfg = Release|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Release|x64.Build.0 = Release|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Release|x86.ActiveCfg = Release|Any CPU
+		{A582E84D-78E6-FD8E-6C4D-C3541091657F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

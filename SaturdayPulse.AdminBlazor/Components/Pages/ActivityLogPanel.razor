@@ -1,0 +1,59 @@
+@inject IJSRuntime JS
+
+<div class="log-sidebar">
+    <div class="log-header">
+        <MudText Typo="Typo.body2">Activity Log</MudText>
+        @if (Entries.Count > 0 && !Running)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                           Size="Size.Small"
+                           Title="Clear log"
+                           OnClick="@(() => OnClear.InvokeAsync())" />
+        }
+    </div>
+
+    @if (Running)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mb-2" />
+    }
+
+    <div class="console-panel" @ref="_panelRef">
+        @if (Entries.Count == 0)
+        {
+            <span class="log-empty">No activity yet.</span>
+        }
+        @foreach (var entry in Entries)
+        {
+            <div class="log-entry @StatusClass(entry.Status)">
+                <span class="log-time">@entry.Time</span>
+                <span class="log-message">@entry.Message</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<LogEntry> Entries { get; set; } = Array.Empty<LogEntry>();
+    [Parameter] public bool Running { get; set; }
+    [Parameter] public EventCallback OnClear { get; set; }
+
+    private ElementReference _panelRef;
+    private int _lastRenderedCount;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Entries.Count != _lastRenderedCount)
+        {
+            _lastRenderedCount = Entries.Count;
+            await JS.InvokeVoidAsync("adminBlazor.scrollToBottom", _panelRef);
+        }
+    }
+
+    private static string StatusClass(LogStatus status) => status switch
+    {
+        LogStatus.Success => "log-success",
+        LogStatus.Error => "log-error",
+        LogStatus.Running => "log-running",
+        _ => "log-info",
+    };
+}

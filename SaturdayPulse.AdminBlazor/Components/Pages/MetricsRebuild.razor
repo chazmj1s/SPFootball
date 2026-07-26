@@ -1,0 +1,356 @@
+@page "/metrics-rebuild"
+@inject AdminApiService Api
+
+<div class="page-layout">
+    <div class="sections">
+        <MudText Typo="Typo.h5" Class="mb-2">Metrics Rebuild</MudText>
+
+        <div class="run-row">
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="_running" OnClick="SelectAll">Select All</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="_running" OnClick="ClearAllOps">Clear</MudButton>
+            <div style="flex:1"></div>
+            @if (!string.IsNullOrEmpty(EstimateLabel))
+            {
+                <span class="estimate-label">Est. @EstimateLabel</span>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@(_running || SelectedOps.Count == 0)"
+                       OnClick="RunSelectedAsync"
+                       StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
+                Run Selected (@SelectedOps.Count)
+            </MudButton>
+        </div>
+
+        @foreach (var tier in _tiers)
+        {
+            <div class="tier">
+                <div class="tier-header" @onclick="() => ToggleTier(tier)">
+                    <MudIcon Icon="@(tier.Collapsed ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ExpandMore)" Class="chevron" />
+
+                    <span @onclick:stopPropagation="true">
+                        <MudCheckBox T="bool?" Value="TierCheckValue(tier)" Disabled="_running" Dense="true"
+                                     ValueChanged="@((bool? v) => OnTierToggle(tier, v ?? false))" />
+                    </span>
+
+                    <span class="tier-label">@tier.Label</span>
+
+                    <select class="param-select wide" @onclick:stopPropagation="true" disabled="@_running"
+                            value="@(tier.TierYear?.ToString() ?? "")"
+                            @onchange="@(e => OnTierYearChangeFromEvent(tier, e))">
+                        <option value="">Year</option>
+                        @foreach (var y in _years) { <option value="@y">@y</option> }
+                    </select>
+
+                    @if (TierSelectedCount(tier) > 0)
+                    {
+                        <span class="tier-count">@TierSelectedCount(tier) selected</span>
+                    }
+                </div>
+
+                @if (!tier.Collapsed)
+                {
+                    <div class="op-list">
+                        @foreach (var op in tier.Ops)
+                        {
+                            <div class="op-row @(op.AutoSelected ? "auto-selected" : "")">
+                                <MudCheckBox T="bool" Value="op.Selected" Disabled="_running" Dense="true"
+                                             ValueChanged="@((bool v) => OnToggle(op, v))" />
+
+                                <span class="op-label">@op.Label</span>
+
+                                @if (op.ParamTypes.Contains(OpParamType.Year))
+                                {
+                                    <select class="param-select wide" disabled="@_running"
+                                            value="@(op.Params.Year?.ToString() ?? "")"
+                                            @onchange="@(e => OnChildYearChangeFromEvent(tier, op, e))">
+                                        @if (!op.YearRequired)
+                                        {
+                                            <option value="">Year</option>
+                                        }
+                                        @foreach (var y in _years) { <option value="@y">@y</option> }
+                                    </select>
+                                }
+
+                                @if (op.ParamTypes.Contains(OpParamType.Week))
+                                {
+                                    <select class="param-select narrow" disabled="@(_running || tier.TierYear.HasValue)"
+                                            value="@(op.Params.Week?.ToString() ?? "")"
+                                            @onchange="@(e => OnChildWeekChangeFromEvent(op, e))">
+                                        <option value="">Week</option>
+                                        @foreach (var w in _weeks) { <option value="@w">Wk @w</option> }
+                                    </select>
+                                }
+
+                                <span class="op-estimate">~@(op.EstimateMinutes < 1 ? "<1" : op.EstimateMinutes.ToString("0.#")) min</span>
+
+                                @if (op.AutoSelected)
+                                {
+                                    <MudTooltip Text="Auto-selected: required dependency">
+                                        <span class="auto-tag">auto</span>
+                                    </MudTooltip>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                <MudDivider Class="my-1" />
+            </div>
+        }
+    </div>
+
+    <ActivityLogPanel Entries="_log" Running="_running" OnClear="ClearLog" />
+</div>
+
+@code {
+    private readonly int _currentYear = DateTime.Now.Year;
+    private List<int> _years = new();
+    private readonly List<int> _weeks = Enumerable.Range(1, 20).ToList();
+
+    private bool _running;
+    private readonly List<LogEntry> _log = new();
+    private List<Tier> _tiers = new();
+
+    protected override void OnInitialized()
+    {
+        _years = Enumerable.Range(1965, _currentYear - 1965 + 1).Reverse().ToList();
+        InitTiers();
+    }
+
+    private static Operation MakeOp(
+        string key, string label, double estimateMinutes,
+        List<string> dependencies, List<OpParamType> paramTypes,
+        bool yearRequired, bool weekRequired,
+        int? defaultYear, int? defaultWeek,
+        Func<OpParams, Task<System.Text.Json.JsonElement>> call) => new()
+    {
+        Key = key,
+        Label = label,
+        EstimateMinutes = estimateMinutes,
+        Dependencies = dependencies,
+        ParamTypes = paramTypes,
+        YearRequired = yearRequired,
+        WeekRequired = weekRequired,
+        Params = new OpParams { Year = defaultYear, Week = defaultWeek },
+        Call = call,
+    };
+
+    private void InitTiers()
+    {
+        var y = _currentYear;
+
+        _tiers = new List<Tier>
+        {
+            new()
+            {
+                Key = "data", Label = "Tier 1 \u2014 Data Load",
+                Ops = new List<Operation>
+                {
+                    MakeOp("conferences", "Load Conferences", 0.1, new(), new(), false, false, null, null,
+                        _ => Api.LoadConferencesAsync()),
+                    MakeOp("teams", "Load Teams (Bulk)", 0.1, new(), new() { OpParamType.Year }, true, false, y, null,
+                        p => Api.LoadTeamsBulkAsync(p.Year!.Value)),
+                    MakeOp("games", "Load Games (Bulk)", 3, new(), new() { OpParamType.Year }, true, false, y, null,
+                        p => Api.LoadGamesBulkAsync(p.Year!.Value)),
+                    MakeOp("lines", "Load Lines (Bulk)", 3, new(), new() { OpParamType.Year }, true, false, y, null,
+                        p => Api.LoadLinesBulkAsync(p.Year!.Value)),
+                },
+            },
+            new()
+            {
+                Key = "metrics", Label = "Tier 2 \u2014 Derived Records",
+                Ops = new List<Operation>
+                {
+                    MakeOp("records", "Team Records", 2, new(), new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.UpdateTeamRecordsAsync(p.Year)),
+                    MakeOp("sos", "SOS", 5, new() { "records" }, new() { OpParamType.Year, OpParamType.Week }, false, false, y, null,
+                        p => Api.SetSOSAsync(p.Year, p.Week)),
+                    MakeOp("powerratings", "Power Ratings", 5, new() { "sos" }, new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.CalculatePowerRatingsAsync(p.Year)),
+                    MakeOp("rankings", "Rankings", 10, new() { "powerratings" }, new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.CalculateRankingsAsync(p.Year)),
+                    MakeOp("weeklyrankings", "Weekly Rankings", 40, new() { "rankings" }, new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.BackfillWeeklyRankingsAsync(p.Year)),
+                },
+            },
+            new()
+            {
+                Key = "analytics", Label = "Tier 3 \u2014 Analytics",
+                Ops = new List<Operation>
+                {
+                    MakeOp("rolling", "Rolling Averages", 8, new() { "weeklyrankings" }, new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.BackfillRollingAveragesAsync(p.Year)),
+                    MakeOp("projections", "Projections", 40, new() { "weeklyrankings" }, new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.BackfillProjectionsAsync(p.Year)),
+                    MakeOp("scorediffs", "Score Differentials", 3, new(), new() { OpParamType.Year }, false, false, y, null,
+                        p => Api.BuildAvgScoreDifferentialsAsync(p.Year)),
+                    MakeOp("matchups", "Matchup Histories", 2, new(), new(), false, false, null, null,
+                        _ => Api.CalculateMatchupHistoriesAsync()),
+                },
+            },
+        };
+    }
+
+    // ── Tier year cascade ────────────────────────────────────────────
+    private void OnTierYearChange(Tier tier, int? year)
+    {
+        tier.TierYear = year;
+        if (year.HasValue)
+        {
+            foreach (var op in tier.Ops)
+            {
+                if (op.ParamTypes.Contains(OpParamType.Year)) op.Params.Year = year;
+                if (op.Key == "sos") op.Params.Week = null;
+            }
+        }
+    }
+
+    private void OnTierYearChangeFromEvent(Tier tier, ChangeEventArgs e) =>
+        OnTierYearChange(tier, ParseNullableInt(e.Value?.ToString()));
+
+    private void OnChildYearChange(Tier tier, Operation op, int? year)
+    {
+        op.Params.Year = year;
+        var allMatch = tier.Ops.Where(o => o.ParamTypes.Contains(OpParamType.Year)).All(o => o.Params.Year == tier.TierYear);
+        if (!allMatch) tier.TierYear = null;
+    }
+
+    private void OnChildYearChangeFromEvent(Tier tier, Operation op, ChangeEventArgs e) =>
+        OnChildYearChange(tier, op, ParseNullableInt(e.Value?.ToString()));
+
+    private void OnChildWeekChangeFromEvent(Operation op, ChangeEventArgs e) =>
+        op.Params.Week = ParseNullableInt(e.Value?.ToString());
+
+    private static int? ParseNullableInt(string? s) => string.IsNullOrEmpty(s) ? null : int.Parse(s);
+
+    // ── Checkbox / dependency logic ───────────────────────────────────
+    private IEnumerable<Operation> AllOps() => _tiers.SelectMany(t => t.Ops);
+
+    private Operation? FindOp(string key) => AllOps().FirstOrDefault(o => o.Key == key);
+
+    private void ResolveDependencies(Operation op, bool checking)
+    {
+        if (checking)
+        {
+            foreach (var depKey in op.Dependencies)
+            {
+                var dep = FindOp(depKey);
+                if (dep is not null && !dep.Selected)
+                {
+                    dep.Selected = true;
+                    dep.AutoSelected = true;
+                    ResolveDependencies(dep, true);
+                }
+            }
+        }
+        else
+        {
+            op.AutoSelected = false;
+            foreach (var o in AllOps())
+            {
+                if (o.AutoSelected)
+                {
+                    var stillNeeded = AllOps().Any(x => x.Selected && x.Dependencies.Contains(o.Key));
+                    if (!stillNeeded) { o.Selected = false; o.AutoSelected = false; }
+                }
+            }
+        }
+    }
+
+    private void OnToggle(Operation op, bool isChecked)
+    {
+        op.Selected = isChecked;
+        if (!isChecked) op.AutoSelected = false;
+        ResolveDependencies(op, isChecked);
+    }
+
+    private bool IsTierIndeterminate(Tier tier)
+    {
+        var sel = tier.Ops.Count(o => o.Selected);
+        return sel > 0 && sel < tier.Ops.Count;
+    }
+
+    private bool IsTierChecked(Tier tier) => tier.Ops.All(o => o.Selected);
+
+    private bool? TierCheckValue(Tier tier) => IsTierIndeterminate(tier) ? null : IsTierChecked(tier);
+
+    private void OnTierToggle(Tier tier, bool isChecked)
+    {
+        foreach (var op in tier.Ops) { op.Selected = isChecked; op.AutoSelected = false; }
+        if (isChecked) foreach (var op in tier.Ops) ResolveDependencies(op, true);
+    }
+
+    private void SelectAll() { foreach (var t in _tiers) OnTierToggle(t, true); }
+
+    private void ClearAllOps() { foreach (var t in _tiers) foreach (var o in t.Ops) { o.Selected = false; o.AutoSelected = false; } }
+
+    private void ToggleTier(Tier tier) => tier.Collapsed = !tier.Collapsed;
+
+    private int TierSelectedCount(Tier tier) => tier.Ops.Count(o => o.Selected);
+
+    private List<Operation> SelectedOps => AllOps().Where(o => o.Selected).ToList();
+
+    private double TotalEstimateMinutes => SelectedOps.Sum(o => o.EstimateMinutes);
+
+    private string EstimateLabel
+    {
+        get
+        {
+            var m = TotalEstimateMinutes;
+            if (m == 0) return "";
+            if (m < 60) return $"~{Math.Round(m)} min";
+            var h = (int)(m / 60);
+            var rem = (int)Math.Round(m % 60);
+            return rem > 0 ? $"~{h}h {rem}m" : $"~{h}h";
+        }
+    }
+
+    // ── Log + runner ───────────────────────────────────────────────────
+    private void Append(string message, LogStatus status = LogStatus.Info) =>
+        _log.Add(new LogEntry(DateTime.Now.ToString("HH:mm:ss"), message, status));
+
+    private void ClearLog() => _log.Clear();
+
+    private async Task StepAsync(Operation op)
+    {
+        var start = DateTime.Now;
+        var paramParts = new List<string>();
+        if (op.Params.Year is not null) paramParts.Add($"year={op.Params.Year}");
+        if (op.Params.Week is not null && op.ParamTypes.Contains(OpParamType.Week)) paramParts.Add($"week={op.Params.Week}");
+        var paramStr = string.Join(' ', paramParts);
+
+        Append($"Starting {op.Label}{(paramStr.Length > 0 ? $" ({paramStr})" : "")}...", LogStatus.Running);
+        try
+        {
+            var result = await op.Call(op.Params);
+            var elapsed = (DateTime.Now - start).TotalMinutes.ToString("0.0");
+            var message = result.ValueKind == System.Text.Json.JsonValueKind.Object && result.TryGetProperty("message", out var m)
+                ? m.GetString()
+                : null;
+            Append($"\u2713 {message ?? $"{op.Label} complete"} ({elapsed}m)", LogStatus.Success);
+        }
+        catch (AdminApiException ex)
+        {
+            Append($"\u2717 {op.Label} failed \u2014 {ex.Message}", LogStatus.Error);
+            throw;
+        }
+    }
+
+    private async Task RunSelectedAsync()
+    {
+        if (SelectedOps.Count == 0) return;
+        _running = true;
+        Append($"\u2500\u2500 Rebuild  {EstimateLabel} \u2500\u2500");
+        try
+        {
+            foreach (var op in SelectedOps) await StepAsync(op);
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+}

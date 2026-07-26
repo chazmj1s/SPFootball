@@ -1,0 +1,39 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="ml-2">Saturday Pulse Admin</MudText>
+        <MudSpacer />
+        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">LOCAL</MudChip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always">
+        <MudDrawerHeader Class="pb-0">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">Saturday Pulse</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Admin Console</MudText>
+            </MudStack>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    // Starts open on desktop; MudDrawer's Responsive variant collapses it automatically
+    // on narrow (phone) viewports, matching the "usable from my phone" requirement.
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+}

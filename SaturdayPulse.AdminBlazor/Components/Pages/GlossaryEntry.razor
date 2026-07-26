@@ -1,0 +1,9 @@
+<div class="glossary-entry">
+    <span class="term">@Term</span>
+    <span class="definition">@Definition</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Term { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Definition { get; set; } = string.Empty;
+}

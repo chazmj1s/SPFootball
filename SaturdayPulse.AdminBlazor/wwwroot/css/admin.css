@@ -1,0 +1,459 @@
+/* ── Two-column page layout (data-ops, postseason, metrics-rebuild, analytics) ── */
+.page-layout {
+    display: flex;
+    gap: 24px;
+}
+
+.sections {
+    flex: 1;
+    min-width: 0;
+}
+
+.section {
+    padding: 10px 0;
+}
+
+.section-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 8px 0 4px;
+}
+
+.section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mud-palette-text-secondary);
+    min-width: 148px;
+}
+
+.range-sep {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.8rem;
+}
+
+.progress {
+    margin-bottom: 8px;
+}
+
+.param-field {
+    max-width: 140px;
+}
+
+.param-field.narrow {
+    max-width: 100px;
+}
+
+.param-select {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    color: var(--mud-palette-primary);
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 2px 4px;
+}
+
+.param-select.narrow {
+    width: 70px;
+}
+
+.param-select.wide {
+    width: 90px;
+}
+
+/* ── Activity log panel (data-ops, postseason, metrics-rebuild) ─────────────── */
+.log-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--mud-palette-lines-default);
+    padding-left: 16px;
+}
+
+.log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.console-panel {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--mud-palette-background-grey);
+    border-radius: 4px;
+    padding: 8px;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.78rem;
+    min-height: 200px;
+    max-height: calc(100vh - 220px);
+}
+
+.log-empty {
+    color: var(--mud-palette-text-secondary);
+}
+
+.log-entry {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.log-time {
+    color: var(--mud-palette-text-secondary);
+    flex-shrink: 0;
+}
+
+.log-info .log-message { color: var(--mud-palette-text-primary); }
+.log-success .log-message { color: var(--mud-palette-success); }
+.log-error .log-message { color: var(--mud-palette-error); }
+.log-running .log-message { color: var(--mud-palette-info); }
+
+/* ── Result cards / data tables (analytics) ─────────────────────────────────── */
+.result-card {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.result-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.result-sublabel {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 3px;
+    display: block;
+}
+
+.result-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-height: 19px;
+}
+
+.result-label {
+    font-size: 0.78rem;
+    color: var(--mud-palette-text-secondary);
+    flex: 1;
+}
+
+.result-value {
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+.result-value.accent,
+.num.accent {
+    color: var(--mud-palette-primary);
+}
+
+.result-value.positive,
+.num.positive,
+td.positive {
+    color: var(--mud-palette-success);
+}
+
+.result-value.negative,
+.num.negative,
+td.negative {
+    color: var(--mud-palette-error);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.76rem;
+    margin: 4px 0 8px;
+}
+
+.data-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--mud-palette-text-secondary);
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.data-table td {
+    padding: 3px 8px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.data-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table td.good {
+    color: var(--mud-palette-success);
+}
+
+.data-table td.warn {
+    color: var(--mud-palette-warning);
+}
+
+/* ── Collapsible section header (analytics, shared component) ──────────────── */
+.collapsible-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+}
+
+.chevron {
+    color: var(--mud-palette-text-secondary);
+}
+
+/* ── Glossary sidebar (analytics) ───────────────────────────────────────────── */
+.glossary-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--mud-palette-lines-default);
+    padding-left: 20px;
+    overflow-y: auto;
+}
+
+.glossary-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 10px;
+}
+
+.glossary-section {
+    padding: 6px 0;
+}
+
+.glossary-title {
+    font-size: 0.67rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 6px;
+}
+
+.glossary-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-bottom: 7px;
+}
+
+.glossary-entry .term {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--mud-palette-primary);
+}
+
+.glossary-entry .definition {
+    font-size: 0.72rem;
+    color: var(--mud-palette-text-secondary);
+    line-height: 1.4;
+}
+
+/* ── Postseason page ─────────────────────────────────────────────────────────── */
+.controls-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.year-field {
+    max-width: 140px;
+}
+
+.week-group {
+    margin-bottom: 4px;
+}
+
+.week-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 0;
+    font-weight: 600;
+}
+
+.week-title {
+    font-size: 0.85rem;
+}
+
+.week-counts {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--mud-palette-text-secondary);
+}
+
+.count-bowl { color: var(--mud-palette-text-secondary); }
+.count-playoff { color: var(--mud-palette-warning); }
+
+.game-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 24px;
+}
+
+.game-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+.game-row.tagged {
+    background: var(--mud-palette-warning-hover);
+}
+
+.matchup {
+    flex: 1;
+    font-size: 0.82rem;
+}
+
+.game-date {
+    font-size: 0.74rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.season-type {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+.season-type.type-playoff {
+    background: var(--mud-palette-warning);
+    color: var(--mud-palette-warning-text);
+}
+
+.season-type.type-postseason {
+    background: var(--mud-palette-lines-default);
+}
+
+.instructions {
+    font-size: 0.8rem;
+    color: var(--mud-palette-text-secondary);
+    margin: 8px 0;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 48px;
+    color: var(--mud-palette-text-secondary);
+}
+
+/* ── Metrics Rebuild page ────────────────────────────────────────────────────── */
+.run-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.estimate-label {
+    font-size: 0.8rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.tier {
+    margin-bottom: 0;
+}
+
+.tier-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+    min-height: 32px;
+}
+
+.tier-label {
+    font-weight: 600;
+    font-size: 0.82rem;
+    flex: 1;
+}
+
+.tier-count {
+    font-size: 0.7rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.op-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-left: 26px;
+}
+
+.op-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 6px;
+    min-height: 30px;
+    border-radius: 4px;
+}
+
+.op-row.auto-selected {
+    background: var(--mud-palette-info-hover);
+}
+
+.op-label {
+    flex: 1;
+    font-size: 0.8rem;
+}
+
+.op-estimate {
+    font-size: 0.7rem;
+    color: var(--mud-palette-text-secondary);
+    min-width: 44px;
+    text-align: right;
+}
+
+.auto-tag {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    color: var(--mud-palette-info);
+    border: 1px solid var(--mud-palette-info);
+    border-radius: 3px;
+    padding: 0 4px;
+}
