@@ -42,6 +42,7 @@ namespace SaturdayPulse.ViewModels
         private readonly TeamCacheService              _teamCache;
         private readonly PersonalGameService           _personalGameService;
         private readonly SharedNavigationStateService  _navState;
+        private readonly EntitlementService            _entitlementService;
 
         private ObservableRangeCollection<MyTeamsGameRow> _selectedTeamGames = new();
         private int             _selectedTeamId;
@@ -57,7 +58,8 @@ namespace SaturdayPulse.ViewModels
             TeamCacheService teamCache,
             FollowService followService,
             PersonalGameService personalGameService,
-            SharedNavigationStateService navState)
+            SharedNavigationStateService navState,
+            EntitlementService entitlementService)
             : base(followService)
         {
             _apiService          = apiService;
@@ -66,6 +68,7 @@ namespace SaturdayPulse.ViewModels
             _teamCache           = teamCache;
             _personalGameService = personalGameService;
             _navState            = navState;
+            _entitlementService  = entitlementService;
 
             SelectTeamCommand = new Command<int>(teamId =>
             {
@@ -89,7 +92,7 @@ namespace SaturdayPulse.ViewModels
             // same lazy-fetch-once-then-toggle shape, same TeamRanking fields.
             ToggleTrendExpandCommand = new Command<TeamRanking>(async t =>
             {
-                if (t == null) return;
+                if (t == null || !HasSeasonPass) return;
 
                 if (!t.IsTrendExpanded && t.TrendHistory == null)
                 {
@@ -112,7 +115,7 @@ namespace SaturdayPulse.ViewModels
 
             ToggleArcExpandCommand = new Command<TeamRanking>(async t =>
             {
-                if (t == null) return;
+                if (t == null || !HasSeasonPass) return;
 
                 if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
                 {
@@ -128,8 +131,23 @@ namespace SaturdayPulse.ViewModels
 
             ToggleStatsExpandCommand = new Command<TeamRanking>(t =>
             {
-                if (t == null) return;
+                if (t == null || !HasSeasonPass) return;
                 t.IsStatsExpanded = !t.IsStatsExpanded;
+            });
+
+            // Gated Details paywall message (2026-07-25) — tapping the
+            // locked Vegas/projections message routes through the same
+            // login-check EntitlementService uses for Settings' Season Pass
+            // button. This ViewModel doesn't need to track its own
+            // IsLoggedIn/profile fields for this — EntitlementService
+            // already applied any fresh profile internally.
+            SeasonPassCommand = new Command(async () =>
+            {
+                var result = await _entitlementService.EnsureLoggedInForPurchaseAsync();
+                if (!result.CanProceed) return;
+
+                await Shell.Current.DisplayAlert(
+                    "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
             });
 
             // Mirrors ScheduleViewModel's TogglePersonalGameCommand exactly.
@@ -152,6 +170,18 @@ namespace SaturdayPulse.ViewModels
             _navState.PropertyChanged         += OnNavStateChanged;
             _gameCache.CacheUpdated           += OnSharedCacheUpdated;
             _rankingsCache.CacheUpdated       += OnSharedCacheUpdated;
+
+            // Keeps HasSeasonPass/IsNotSeasonPass (and everything bound to
+            // them in MyTeamsPage.xaml) live if entitlement changes while
+            // this tab is open — e.g. an admin flipping the dev toggle in
+            // Settings without leaving My Teams.
+            _entitlementService.EntitlementChanged += OnEntitlementChanged;
+        }
+
+        private void OnEntitlementChanged()
+        {
+            OnPropertyChanged(nameof(HasSeasonPass));
+            OnPropertyChanged(nameof(IsNotSeasonPass));
         }
 
         // ── Bindable collections ──────────────────────────────────────────
@@ -224,6 +254,19 @@ namespace SaturdayPulse.ViewModels
         /// </summary>
         public bool HasLoaded { get; set; }
 
+        // ── Season Pass gating (2026-07-25) ─────────────────────────────
+        // Sourced from the shared EntitlementService, not a local fetch —
+        // stays in sync with SettingsViewModel via EntitlementService's
+        // ApplyProfile/Clear, without this ViewModel depending on
+        // SettingsViewModel directly. Gates the Trend/Pedigree, Season Arc,
+        // and Offense/Defense toggle links (disabled/grayed, no popup) and
+        // the Vegas/projections portion of the Details paywall message.
+        public bool HasSeasonPass => _entitlementService.HasSeasonPass;
+
+        /// <summary>Inverse of HasSeasonPass — lets MyTeamsPage.xaml show the
+        /// locked paywall message without an inverse-bool converter.</summary>
+        public bool IsNotSeasonPass => !HasSeasonPass;
+
         // ── Commands ──────────────────────────────────────────────────────
 
         public ICommand SelectTeamCommand         { get; }
@@ -234,6 +277,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleStatsExpandCommand   { get; }
         public ICommand ToggleDetailsCommand       { get; }
         public ICommand TogglePersonalGameCommand  { get; }
+        public ICommand SeasonPassCommand          { get; }
         // ToggleFollowCommand is inherited from BaseViewModel — already
         // pattern-matches int (GameCardTemplate hearts) and TeamRanking
         // (TeamCardTemplate heart).

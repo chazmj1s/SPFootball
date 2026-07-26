@@ -15,6 +15,7 @@ namespace SaturdayPulse.ViewModels
         private readonly UserApiService                _userApi;
         private readonly AuthService                   _authService;
         private readonly FeedbackService                _feedbackService;
+        private readonly EntitlementService              _entitlementService;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -355,7 +356,8 @@ namespace SaturdayPulse.ViewModels
             TeamCacheService teamCache,
             UserApiService userApi,
             AuthService authService,
-            FeedbackService feedbackService)
+            FeedbackService feedbackService,
+            EntitlementService entitlementService)
             : base(followService)
         {
             _apiService          = apiService;
@@ -365,6 +367,7 @@ namespace SaturdayPulse.ViewModels
             _userApi             = userApi;
             _authService         = authService;
             _feedbackService     = feedbackService;
+            _entitlementService  = entitlementService;
 
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
@@ -562,31 +565,26 @@ namespace SaturdayPulse.ViewModels
                 MarketingSmsConsent = false;
                 HasSeasonPass = false;
                 IsAdmin = false;
+                _entitlementService.Clear();
             });
 
             // Placeholder — Stripe isn't wired up yet (separate feature).
-            // The only real behavior here is the login check: buying a
-            // Season Pass should be tied to a real identity, so if nobody's
-            // logged in this offers to log in first rather than letting the
-            // "purchase" proceed anonymously. Nothing else needs validating
-            // since there's no other purchase path yet. Shared by the
-            // Settings button AND the gated Details paywall message
-            // (2026-07-24) — one command means Stripe only needs to be
-            // wired up in one place once it exists.
+            // The login-check itself now lives in
+            // EntitlementService.EnsureLoggedInForPurchaseAsync (2026-07-25),
+            // shared with MyTeamsViewModel's gated Details paywall message —
+            // one method means Stripe only needs to be wired up in one place
+            // once it exists. This command just applies the freshly-fetched
+            // profile to its own local bound properties if a new login just
+            // happened (EntitlementService already has it either way).
             SeasonPassCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                if (!IsLoggedIn)
-                {
-                    var proceed = await Shell.Current.DisplayAlert(
-                        "Season Pass",
-                        "You'll need an account to purchase a Season Pass.",
-                        "Log In", "Cancel");
-                    if (!proceed) return;
+                var result = await _entitlementService.EnsureLoggedInForPurchaseAsync();
+                if (!result.CanProceed) return;
 
-                    // No account found here routes through the same
-                    // StatusMessage guidance as the Login button — person
-                    // can tap Create Account in Settings if that's the case.
-                    if (!await TryLoginAsync()) return;
+                if (result.FreshProfile != null)
+                {
+                    ApplyProfile(result.FreshProfile);
+                    IsLoggedIn = true;
                 }
 
                 await Shell.Current.DisplayAlert(
@@ -752,6 +750,12 @@ namespace SaturdayPulse.ViewModels
             MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
             HasSeasonPass = profile.IsEntitled;
             IsAdmin = profile.IsAdmin;
+
+            // Keep the shared EntitlementService in lockstep so
+            // PowerRankingsViewModel/ScheduleViewModel/MyTeamsViewModel/
+            // PostseasonViewModel/SandboxViewModel see the same state
+            // without depending on this ViewModel directly.
+            _entitlementService.ApplyProfile(profile);
         }
 
         // ── Load ──────────────────────────────────────────────────────────

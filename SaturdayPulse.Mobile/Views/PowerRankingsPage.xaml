@@ -118,9 +118,11 @@
             Padding="4,2,8,2"
             BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
-        <!-- LEFT: Trend / Pedigree -->
+        <!-- LEFT: Trend / Pedigree — disabled/grayed without Season Pass,
+             not tappable, no popup (design locked 2026-07-24). -->
         <Label Grid.Column="0"
                IsVisible="{Binding HasTrendData}"
+               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="Start"
                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
           <Label.FormattedText>
@@ -130,6 +132,13 @@
               <Span Text="{Binding TrendExpandIcon}" FontSize="8" />
             </FormattedString>
           </Label.FormattedText>
+          <Label.Triggers>
+            <DataTrigger TargetType="Label"
+                         Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
+                         Value="False">
+              <Setter Property="Opacity" Value="0.35" />
+            </DataTrigger>
+          </Label.Triggers>
           <Label.GestureRecognizers>
             <TapGestureRecognizer
                 Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleTrendExpandCommand}"
@@ -137,8 +146,9 @@
           </Label.GestureRecognizers>
         </Label>
 
-        <!-- CENTER: Season Arc -->
+        <!-- CENTER: Season Arc — disabled/grayed without Season Pass -->
         <Label Grid.Column="1"
+               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="Center"
                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
           <Label.FormattedText>
@@ -148,6 +158,13 @@
               <Span Text="{Binding ArcExpandIcon}" FontSize="8" />
             </FormattedString>
           </Label.FormattedText>
+          <Label.Triggers>
+            <DataTrigger TargetType="Label"
+                         Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
+                         Value="False">
+              <Setter Property="Opacity" Value="0.35" />
+            </DataTrigger>
+          </Label.Triggers>
           <Label.GestureRecognizers>
             <TapGestureRecognizer
                 Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleArcExpandCommand}"
@@ -155,9 +172,10 @@
           </Label.GestureRecognizers>
         </Label>
 
-        <!-- RIGHT: Offense / Defense -->
+        <!-- RIGHT: Offense / Defense — disabled/grayed without Season Pass -->
         <Label Grid.Column="2"
                IsVisible="{Binding HasOffenseDefenseData}"
+               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="End"
                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
           <Label.FormattedText>
@@ -167,6 +185,13 @@
               <Span Text="{Binding StatsExpandIcon}" FontSize="8" />
             </FormattedString>
           </Label.FormattedText>
+          <Label.Triggers>
+            <DataTrigger TargetType="Label"
+                         Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
+                         Value="False">
+              <Setter Property="Opacity" Value="0.35" />
+            </DataTrigger>
+          </Label.Triggers>
           <Label.GestureRecognizers>
             <TapGestureRecognizer
                 Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleStatsExpandCommand}"

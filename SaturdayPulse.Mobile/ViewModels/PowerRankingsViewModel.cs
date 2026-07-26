@@ -11,6 +11,7 @@ namespace SaturdayPulse.ViewModels
         private readonly GameDataApiService           _apiService;
         private readonly RankingsCacheService         _rankingsCache;
         private readonly SharedNavigationStateService _navState;
+        private readonly EntitlementService           _entitlementService;
         private List<TeamRanking> _allTeams = new();
         private ObservableCollection<TeamRanking> _filteredTeams = new();
         private bool          _isBusy;
@@ -26,12 +27,14 @@ namespace SaturdayPulse.ViewModels
             GameDataApiService apiService,
             RankingsCacheService rankingsCache,
             FollowService followService,
-            SharedNavigationStateService navState)
+            SharedNavigationStateService navState,
+            EntitlementService entitlementService)
             : base(followService)
         {
             _apiService    = apiService;
             _rankingsCache = rankingsCache;
             _navState      = navState;
+            _entitlementService = entitlementService;
 
             // No outer Task.Run — LoadDataAsync runs on the main thread; the HTTP
             // call inside it is offloaded via its own Task.Run, and the continuation
@@ -57,13 +60,13 @@ namespace SaturdayPulse.ViewModels
 
             ToggleStatsExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
             {
-                if (t == null) return;
+                if (t == null || !HasSeasonPass) return;
                 t.IsStatsExpanded = !t.IsStatsExpanded;
             });
 
             ToggleTrendExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
             {
-                if (t == null) return;
+                if (t == null || !HasSeasonPass) return;
 
                 if (!t.IsTrendExpanded && t.TrendHistory == null)
                 {
@@ -86,7 +89,7 @@ namespace SaturdayPulse.ViewModels
 
             ToggleArcExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
             {
-                if (t == null) return;
+                if (t == null || !HasSeasonPass) return;
 
                 if (!t.IsArcExpanded && t.SeasonArcWeeks == null)
                 {
@@ -119,6 +122,13 @@ namespace SaturdayPulse.ViewModels
             _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
             _rankingsCache.CacheUpdated += OnRankingsCacheUpdated;
+            _entitlementService.EntitlementChanged += OnEntitlementChanged;
+        }
+
+        private void OnEntitlementChanged()
+        {
+            OnPropertyChanged(nameof(HasSeasonPass));
+            OnPropertyChanged(nameof(IsNotSeasonPass));
         }
 
         // ── Bindable collections ──────────────────────────────────────────
@@ -162,6 +172,19 @@ namespace SaturdayPulse.ViewModels
         /// or behind another tab. The lazy SyncPage path loads it on first visit.
         /// </summary>
         public bool   IsActive      { get; set; }
+
+        // ── Season Pass gating (2026-07-25) ─────────────────────────────
+        // Sourced from the shared EntitlementService — same pattern as
+        // MyTeamsViewModel. Gates the Trend/Pedigree, Season Arc, and
+        // Offense/Defense toggle links (disabled/grayed, no popup).
+        // NOTE: ToggleScheduleExpandCommand below is left ungated — it
+        // isn't one of the three link types in the locked design table and
+        // doesn't appear wired to any element in the uploaded
+        // PowerRankingsPage.xaml. Flag if that changes.
+        public bool HasSeasonPass => _entitlementService.HasSeasonPass;
+
+        /// <summary>Inverse of HasSeasonPass — no inverse-bool converter needed in XAML.</summary>
+        public bool IsNotSeasonPass => !HasSeasonPass;
 
         public string ActiveSortLabel => _currentSort switch
         {
