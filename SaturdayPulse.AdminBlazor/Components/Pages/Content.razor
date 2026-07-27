@@ -1,0 +1,83 @@
+@page "/content"
+@inject AdminApiService Api
+@inject ISnackbar Snackbar
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <div class="d-flex align-center" style="gap: 12px;">
+        <MudText Typo="Typo.h5">Content</MudText>
+        @if (_document is not null)
+        {
+            <span class="content-version">v@(_document.Version)</span>
+        }
+    </div>
+    <div class="d-flex align-center" style="gap: 8px;">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" Disabled="IsBusy" OnClick="LoadAsync">
+            Reload
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Disabled="IsBusy" OnClick="SaveAsync">
+            Save
+        </MudButton>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (_document is { } doc)
+{
+    <ContentSectionEditor Label="About J1S Sports" Section="doc.About" />
+    <ContentSectionEditor Label="Privacy Policy" Section="doc.PrivacyPolicy" />
+    <ContentSectionEditor Label="Terms of Service" Section="doc.TermsOfService" />
+    <ContentSectionEditor Label="Season Pass" Section="doc.SeasonPass" />
+    <ContentSectionEditor Label="FAQ" Section="doc.Faq" />
+    <ContentSectionEditor Label="Announcements" Section="doc.Announcements" />
+    <ContentSectionEditor Label="Release Notes" Section="doc.ReleaseNotes" />
+}
+
+@code {
+    private ApplicationContentDocument? _document;
+    private bool _loading;
+    private bool _saving;
+    private bool IsBusy => _loading || _saving;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _document = await Api.GetContentAsync() ?? new ApplicationContentDocument();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load content \u2014 check the API logs.", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_document is null) return;
+
+        _saving = true;
+        try
+        {
+            _document = await Api.SaveContentAsync(_document) ?? _document;
+            Snackbar.Add("Content saved.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Save failed \u2014 check the API logs.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

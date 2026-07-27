@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SaturdayPulse.Core</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Deliberately no PackageReferences here. This project exists to be
+    referenced from Api (net9.0), AdminBlazor (net9.0), and Mobile
+    (net9.0-ios/net9.0-android/net9.0-windows) - a plain net9.0 class
+    library is a safe reference target for all of those TFMs. Keep it
+    that way: no EF Core, no ASP.NET, no MAUI-specific packages. If a
+    type needs one of those, it doesn't belong in this project.
+  -->
+
+</Project>

@@ -25,6 +25,10 @@ namespace SaturdayPulse.Services
         private static readonly Regex HandlePattern = new(@"^[A-Za-z0-9_]{3,20}$", RegexOptions.Compiled);
         private static readonly Regex E164Pattern = new(@"^\+[1-9]\d{6,14}$", RegexOptions.Compiled);
 
+        // Beta grants all expire on the same fixed date, per the 2026-07-25
+        // session decision (see project handoff notes). Not user/grant-specific.
+        public static readonly DateTime BetaExpiryDate = new(2027, 7, 31);
+
         /// <summary>
         /// Returns the current profile for this identity, or null if none
         /// exists. NEVER creates anything — this backs the Login action's
@@ -136,13 +140,157 @@ namespace SaturdayPulse.Services
             var contact = await _uow.UserContactInfo.GetByUserIdAsync(userId, token);
             var refreshedActive = await _uow.Entitlements.GetActiveCfbSeasonPassAsync(userId, token);
 
-            // ASSUMPTION: your current ToResponse signature matches what you
-            // pasted earlier — ToResponse(UserProfile, UserContactInfo, UserEntitlement?).
-            // If GetProfileAsync builds the response differently now, call
-            // whatever that current path is instead of ToResponse directly.
             return ToResponse(profile, contact!, refreshedActive);
         }
 
+        // ── Admin: Users page (list + grant/revoke beta access) ──────────────
+        // No Angular equivalent - new admin console capability. Lives here
+        // rather than in a separate service since it's the same UserProfile/
+        // Entitlements data this class already owns.
+
+        /// <summary>
+        /// Every user profile plus every entitlement they hold (any product,
+        /// any status) for the admin console's Users page. N+1 queries against
+        /// UserContactInfo/Entitlements per user - fine at current scale
+        /// (single admin, pre-beta); revisit with a batched query if the user
+        /// count grows large enough for it to matter.
+        /// </summary>
+        public async Task<List<AdminUserSummaryResponse>> GetAllUsersWithEntitlementsAsync(CancellationToken token = default)
+        {
+            var profiles = await _uow.UserProfiles.GetAllAsync(token);
+            var result = new List<AdminUserSummaryResponse>(profiles.Count);
+
+            foreach (var profile in profiles)
+            {
+                var contact = await _uow.UserContactInfo.GetByUserIdAsync(profile.UserId, token);
+                var entitlements = await _uow.Entitlements.GetByUserIdAsync(profile.UserId, token);
+
+                result.Add(new AdminUserSummaryResponse
+                {
+                    UserId = profile.UserId,
+                    Handle = profile.Handle,
+                    Email = contact?.Email,
+                    IsAdmin = profile.IsAdmin,
+                    Entitlements = entitlements.Select(e => new AdminEntitlementResponse
+                    {
+                        ProductKey = e.ProductKey,
+                        Source = e.Source,
+                        ExpiryDate = e.ExpiryDate,
+                        PassYear = e.PassYear,
+                        IsActive = e.ExpiryDate.HasValue && e.ExpiryDate.Value > DateTime.UtcNow
+                    }).ToList()
+                });
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Grants (or extends) beta access to the given product for a user.
+        /// Not hardcoded to CFB - takes productKey as a parameter, per
+        /// UserEntitlement's own class summary ("ProductKey stays on the schema
+        /// so a future league doesn't require a migration"). If the user
+        /// already has an active grant for this product, extends it to
+        /// BetaExpiryDate rather than stacking a second row.
+        /// </summary>
+        /// <summary>
+        /// Builds the season-specific ProductKey stored on real grants (e.g.
+        /// "cfb-season-pass-2026"), matching Apple/Google IAP's per-season SKU
+        /// convention. The admin dev-toggle sentinel deliberately does NOT use
+        /// this - it's not tied to a real season, so it keeps the bare key.
+        /// Queries that need "does this user have ANY active pass for this
+        /// product, any season" match on the base key as a prefix instead of
+        /// an exact match - see UserEntitlementRepository.GetActiveCfbSeasonPassAsync
+        /// and RevokeAccessAsync below.
+        /// </summary>
+        private static string SeasonedProductKey(string baseProductKey, int season) => $"{baseProductKey}-{season}";
+
+        public async Task GrantBetaAccessAsync(string userId, string productKey, CancellationToken token = default)
+        {
+            var profile = await _uow.UserProfiles.GetByUserIdAsync(userId, token);
+            if (profile == null)
+                throw new InvalidOperationException("No such user.");
+
+            // Beta covers the upcoming season implied by BetaExpiryDate (7/31/2027 -> season 2026).
+            var betaSeason = BetaExpiryDate.Year - 1;
+            var seasonedKey = SeasonedProductKey(productKey, betaSeason);
+
+            var existing = await _uow.Entitlements.GetByUserIdAsync(userId, token);
+            var active = existing.FirstOrDefault(e =>
+                e.ProductKey == seasonedKey && e.ExpiryDate.HasValue && e.ExpiryDate.Value > DateTime.UtcNow);
+
+            if (active != null)
+            {
+                active.ExpiryDate = BetaExpiryDate;
+            }
+            else
+            {
+                await _uow.Entitlements.AddAsync(new UserEntitlement
+                {
+                    UserId = userId,
+                    ProductKey = seasonedKey,
+                    ExpiryDate = BetaExpiryDate,
+                    PassYear = betaSeason,
+                    Source = "beta"
+                }, token);
+            }
+
+            await _uow.SaveChangesAsync(token);
+        }
+
+        /// <summary>
+        /// Grants a season pass for a specific season year - an ad hoc admin
+        /// tool for special cases (comps, press access, etc.), distinct from
+        /// GrantBetaAccessAsync. Unlike that method, this always inserts a new
+        /// row rather than extending an existing active one - the whole point
+        /// is to let a user accumulate distinct, dated season grants that show
+        /// up as separate history entries, not a single rolling expiry.
+        /// ExpiryDate = July 31 of the year after the given season, matching
+        /// the same convention used for beta grants (a season pass covers the
+        /// season plus a buffer into the following offseason).
+        /// </summary>
+        public async Task GrantSeasonPassAsync(string userId, string productKey, int season, CancellationToken token = default)
+        {
+            var profile = await _uow.UserProfiles.GetByUserIdAsync(userId, token);
+            if (profile == null)
+                throw new InvalidOperationException("No such user.");
+
+            await _uow.Entitlements.AddAsync(new UserEntitlement
+            {
+                UserId = userId,
+                ProductKey = SeasonedProductKey(productKey, season),
+                ExpiryDate = new DateTime(season + 1, 7, 31),
+                PassYear = season,
+                Source = "manual-grant"
+            }, token);
+
+            await _uow.SaveChangesAsync(token);
+        }
+
+        /// <summary>
+        /// Revokes (expires) every currently active entitlement matching this
+        /// product, by prefix - not just one. Sets ExpiryDate to now rather
+        /// than deleting rows - same "keep grant/revoke history" convention as
+        /// SetDevEntitlementAsync's toggle-off path. Prefix match (not exact)
+        /// because a user can now have multiple active seasoned grants at once
+        /// (e.g. both a 2025 and 2026 pass overlapping); "revoke" means "this
+        /// user should no longer have access," which should clear all of them,
+        /// not silently leave a second one active.
+        /// </summary>
+        public async Task RevokeAccessAsync(string userId, string productKey, CancellationToken token = default)
+        {
+            var existing = await _uow.Entitlements.GetByUserIdAsync(userId, token);
+            var activeMatches = existing.Where(e =>
+                e.ProductKey.StartsWith(productKey) && e.ExpiryDate.HasValue && e.ExpiryDate.Value > DateTime.UtcNow).ToList();
+
+            if (activeMatches.Count == 0) return;
+
+            var now = DateTime.UtcNow;
+            foreach (var entitlement in activeMatches)
+                entitlement.ExpiryDate = now;
+
+            await _uow.SaveChangesAsync(token);
+        }
 
         public async Task UpdateHandleAsync(string userId, string newHandle, CancellationToken token = default)
         {

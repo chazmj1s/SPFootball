@@ -10,5 +10,10 @@ namespace SaturdayPulse.Repositories.Interfaces
         Task CreateAsync(UserProfile profile, CancellationToken token = default);
         Task UpdateHandleAsync(string userId, string newHandle, CancellationToken token = default);
         Task UpdatePrimaryTeamAsync(string userId, int? teamId, CancellationToken token = default);
+
+        /// <summary>All user profiles, ordered by Handle. Backs the admin console's
+        /// Users page - fine as an unpaginated full-table read at current scale
+        /// (pre-beta, single admin); revisit if the user count grows large.</summary>
+        Task<List<UserProfile>> GetAllAsync(CancellationToken token = default);
     }
 }

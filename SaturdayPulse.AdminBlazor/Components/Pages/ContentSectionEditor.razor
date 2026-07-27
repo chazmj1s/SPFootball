@@ -1,0 +1,14 @@
+<MudText Typo="Typo.subtitle1" Class="mb-2">@Label</MudText>
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    <MudTextField @bind-Value="Section.Title" Label="Title" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField @bind-Value="Section.Content" Label="Content (Markdown/HTML)" Variant="Variant.Outlined"
+                  Lines="10" AutoGrow="true" />
+</MudPaper>
+
+@code {
+    // "Label" (not "Title") to avoid colliding with Section.Title, which is the
+    // actual editable field - this is just the static section heading (e.g.
+    // "Privacy Policy") shown above the editor box.
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public ContentSection Section { get; set; } = new();
+}

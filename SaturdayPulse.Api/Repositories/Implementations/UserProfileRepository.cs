@@ -59,5 +59,8 @@ namespace SaturdayPulse.Repositories.Implementations
             profile.UpdatedAt = DateTime.UtcNow;
             profile.IsSynced = false;
         }
+
+        public Task<List<UserProfile>> GetAllAsync(CancellationToken token = default)
+            => _context.UserProfiles.OrderBy(u => u.Handle).ToListAsync(token);
     }
 }

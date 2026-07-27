@@ -38,6 +38,11 @@ namespace SaturdayPulse.Data
         // Scoped to CFB only for now (see UserEntitlement.cs class summary).
         public DbSet<UserEntitlement> UserEntitlements { get; set; } = null!;
 
+        // Content management — added for the admin console's Content page.
+        // Single-row table; no OnModelCreating config needed (no indexes,
+        // no unique constraints — see ApplicationContent.cs class summary).
+        public DbSet<ApplicationContent> ApplicationContent { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

@@ -13,4 +13,11 @@
     <PackageReference Include="MudBlazor" Version="7.15.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Shared Content contracts (ApplicationContentDocument/ContentSection) -
+         same source of truth Api and Mobile use. Assumes SaturdayPulse.Core
+         sits as a sibling folder next to this project. -->
+    <ProjectReference Include="..\SaturdayPulse.Core\SaturdayPulse.Core.csproj" />
+  </ItemGroup>
+
 </Project>

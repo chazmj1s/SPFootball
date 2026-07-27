@@ -47,4 +47,8 @@
         <Folder Include="SQL\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\SaturdayPulse.Core\SaturdayPulse.Core.csproj" />
+    </ItemGroup>
+
 </Project>

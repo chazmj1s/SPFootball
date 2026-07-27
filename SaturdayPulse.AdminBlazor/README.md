@@ -8,18 +8,22 @@ parity here.
 
 1. Copy this whole `SaturdayPulse.AdminBlazor/` folder into your solution
    folder, next to `SaturdayPulse.Api` and `SaturdayPulse.Mobile`.
-2. Add it to the `.sln` (Visual Studio: right-click solution → Add →
-   Existing Project → select `SaturdayPulse.AdminBlazor.csproj`).
-3. Restore NuGet packages (pulls in MudBlazor, pinned to 7.15.0 — let
+2. Also copy `SaturdayPulse.Core/` in as a sibling folder at the same level
+   (new shared-contracts project — `ApplicationContentDocument`/
+   `ContentSection` now live there, referenced via `<ProjectReference>`
+   instead of a local copy).
+3. Add both to the `.sln` (Visual Studio: right-click solution → Add →
+   Existing Project → select each `.csproj`).
+4. Restore NuGet packages (pulls in MudBlazor, pinned to 7.15.0 — let
    NuGet bump it to the current 7.x/8.x release if you want).
-4. `appsettings.Development.json` points at `https://localhost:7010/api`
+5. `appsettings.Development.json` points at `https://localhost:7010/api`
    to match `SaturdayPulse.Api`'s HTTPS launch profile. `appsettings.json`
    has a placeholder for the Azure URL — fill that in before your first
    publish.
-5. Two backend endpoints the Postseason page needs (`POST
+6. Two backend endpoints the Postseason page needs (`POST
    developer/tagAsPlayoff` / `untagAsPlayoff`) — confirmed already
    present in `DeveloperController.cs`, nothing to add.
-6. F5 / `dotnet run` — opens to the Dashboard.
+7. F5 / `dotnet run` — opens to the Dashboard.
 
 ## Status: full parity, all 5 pages built
 

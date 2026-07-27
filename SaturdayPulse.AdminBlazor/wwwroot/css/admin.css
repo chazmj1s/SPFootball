@@ -449,6 +449,16 @@ td.negative {
     text-align: right;
 }
 
+.content-version {
+    font-size: 0.72rem;
+    color: var(--mud-palette-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.season-field {
+    max-width: 90px;
+}
+
 .auto-tag {
     font-size: 0.62rem;
     text-transform: uppercase;
