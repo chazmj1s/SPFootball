@@ -62,5 +62,14 @@ namespace SaturdayPulse.Repositories.Implementations
 
         public Task<List<UserProfile>> GetAllAsync(CancellationToken token = default)
             => _context.UserProfiles.OrderBy(u => u.Handle).ToListAsync(token);
+
+        public async Task DeleteAsync(string userId, CancellationToken token = default)
+        {
+            var profile = await _context.UserProfiles
+                .FirstOrDefaultAsync(u => u.UserId == userId, token);
+
+            if (profile != null)
+                _context.UserProfiles.Remove(profile);
+        }
     }
 }

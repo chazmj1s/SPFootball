@@ -16,6 +16,15 @@ namespace SaturdayPulse.Core.Content
     public class ApplicationContentDocument
     {
         public int Version { get; set; }
+
+        /// <summary>
+        /// Destination address for the Support panel's "Email the Dev Team"
+        /// link. Lives here (not hardcoded in Mobile) specifically so it can
+        /// be changed from the admin console if this address ever needs to
+        /// rotate, with no app release required.
+        /// </summary>
+        public string SupportEmail { get; set; } = string.Empty;
+
         public ContentSection About { get; set; } = new();
         public ContentSection PrivacyPolicy { get; set; } = new();
         public ContentSection TermsOfService { get; set; } = new();

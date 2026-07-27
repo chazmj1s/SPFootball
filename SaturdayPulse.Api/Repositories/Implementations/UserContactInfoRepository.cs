@@ -73,5 +73,27 @@ namespace SaturdayPulse.Repositories.Implementations
             contact.UpdatedAt = DateTime.UtcNow;
             contact.IsSynced = false;
         }
+
+        public async Task UpdateEmailConsentAsync(string userId, bool consent, CancellationToken token = default)
+        {
+            var contact = await _context.UserContactInfos
+                .FirstOrDefaultAsync(c => c.UserId == userId, token);
+
+            if (contact == null) return;
+
+            contact.MarketingEmailConsent = consent;
+            contact.MarketingEmailConsentAt = consent ? DateTime.UtcNow : contact.MarketingEmailConsentAt;
+            contact.UpdatedAt = DateTime.UtcNow;
+            contact.IsSynced = false;
+        }
+
+        public async Task DeleteAsync(string userId, CancellationToken token = default)
+        {
+            var contact = await _context.UserContactInfos
+                .FirstOrDefaultAsync(c => c.UserId == userId, token);
+
+            if (contact != null)
+                _context.UserContactInfos.Remove(contact);
+        }
     }
 }

@@ -8,5 +8,8 @@ namespace SaturdayPulse.Repositories.Interfaces
         Task<bool> IsFollowedAsync(string userId, int team1Id, int team2Id, CancellationToken token = default);
         Task FollowAsync(string userId, int team1Id, int team2Id, CancellationToken token = default);
         Task UnfollowAsync(string userId, int team1Id, int team2Id, CancellationToken token = default);
+
+        /// <summary>Part of Delete Account - removes every row for this user.</summary>
+        Task DeleteAllForUserAsync(string userId, CancellationToken token = default);
     }
 }

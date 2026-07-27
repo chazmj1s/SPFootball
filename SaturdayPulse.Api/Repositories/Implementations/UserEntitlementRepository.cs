@@ -41,5 +41,11 @@ namespace SaturdayPulse.Repositories.Implementations
             entitlement.CreatedAt = DateTime.UtcNow;
             await _context.UserEntitlements.AddAsync(entitlement, token);
         }
+
+        public async Task DeleteAllForUserAsync(string userId, CancellationToken token = default)
+        {
+            var rows = await _context.UserEntitlements.Where(e => e.UserId == userId).ToListAsync(token);
+            _context.UserEntitlements.RemoveRange(rows);
+        }
     }
 }

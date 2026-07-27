@@ -34,6 +34,9 @@ namespace SaturdayPulse.Contracts
         // ── Content management ─────────────────────────────────────────────────
         IApplicationContentRepository ApplicationContent { get; }
 
+        // ── Account audit trail ────────────────────────────────────────────────
+        IAccountAuditLogRepository AccountAuditLogs { get; }
+
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }
 }

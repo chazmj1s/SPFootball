@@ -27,6 +27,10 @@
 
 @if (_document is { } doc)
 {
+    <MudTextField @bind-Value="doc.SupportEmail" Label="Support Email"
+                  Variant="Variant.Outlined" Class="mb-4"
+                  HelperText="Destination for the mobile app's Support panel email link." />
+
     <ContentSectionEditor Label="About J1S Sports" Section="doc.About" />
     <ContentSectionEditor Label="Privacy Policy" Section="doc.PrivacyPolicy" />
     <ContentSectionEditor Label="Terms of Service" Section="doc.TermsOfService" />

@@ -30,6 +30,13 @@ namespace SaturdayPulse.Services
     ///
     /// UserProfileDto/FollowedGamePairDto moved to Models/UserProfileDto.cs
     /// on 2026-07-22 — see that file if you're looking for the DTOs.
+    ///
+    /// Request body shapes below were previously marked "ASSUMPTION" pending
+    /// a look at the actual Contracts.Requests DTOs. Confirmed 2026-07-26
+    /// against UserController.cs's real parameter usage (request.Handle,
+    /// request.Email, request.PhoneNumber/MarketingSmsConsent, request.TeamId,
+    /// request.Enabled) - every one of the original guesses was correct, so
+    /// nothing changed except removing the "assumption" framing.
     /// </summary>
     public class UserApiService
     {
@@ -165,14 +172,39 @@ namespace SaturdayPulse.Services
             }
         }
 
+        /// <summary>
+        /// DELETE /user/me — permanently deletes the account and all
+        /// associated data server-side (contact info, follows, entitlements).
+        /// No confirmation prompt here — that's the caller's job (Settings'
+        /// Delete Account action shows one before calling this). Not
+        /// reversible; callers should clear all local state and route to
+        /// logged-out on success, same as LogoutCommand.
+        /// </summary>
+        public async Task<bool> DeleteAccountAsync()
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Delete, "user/me");
+                await AttachAuthAsync(request);
+
+                using var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                    System.Diagnostics.Debug.WriteLine($"[UserAPI] DeleteAccount failed: {response.StatusCode}");
+
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UserAPI] Error DeleteAccount: {ex.Message}");
+                return false;
+            }
+        }
+
         /// <summary>PATCH /user/me/primary-team. Null clears the primary team.</summary>
         public async Task<bool> SetPrimaryTeamAsync(int? teamId)
         {
             try
             {
-                // ASSUMPTION: body shape is { "teamId": int? }. Confirm against
-                // UserController's actual DTO once shared — adjust field name
-                // here if it doesn't match.
                 using var request = new HttpRequestMessage(HttpMethod.Patch, "user/me/primary-team")
                 {
                     Content = JsonContent.Create(new { teamId })
@@ -192,12 +224,7 @@ namespace SaturdayPulse.Services
             }
         }
 
-        /// <summary>
-        /// PATCH /user/me/handle. ASSUMPTION: body shape is { "handle": string } —
-        /// by analogy with UpdatePrimaryTeamRequest's { "teamId": ... } shape.
-        /// UpdateHandleRequest.cs wasn't available to confirm the exact field
-        /// name; adjust here if the server returns 400 on a well-formed handle.
-        /// </summary>
+        /// <summary>PATCH /user/me/handle.</summary>
         public async Task<bool> UpdateHandleAsync(string handle)
         {
             try
@@ -221,10 +248,7 @@ namespace SaturdayPulse.Services
             }
         }
 
-        /// <summary>
-        /// PATCH /user/me/email. ASSUMPTION: body shape is { "email": string } —
-        /// same reasoning as UpdateHandleAsync above.
-        /// </summary>
+        /// <summary>PATCH /user/me/email.</summary>
         public async Task<bool> UpdateEmailAsync(string email)
         {
             try
@@ -249,13 +273,36 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
-        /// PATCH /user/me/phone. ASSUMPTION: body shape is
-        /// { "phoneNumber": string, "marketingSmsConsent": bool } — field
-        /// names inferred from UserController's
-        /// UpdatePhoneAsync(userId, request.PhoneNumber, request.MarketingSmsConsent, token)
-        /// call signature, which is about as solid as an assumption gets
-        /// without the actual UpdatePhoneRequest.cs file.
+        /// PATCH /user/me/email-consent — standalone marketing-email consent
+        /// toggle, separate from UpdateEmailAsync (which changes the address
+        /// itself). Matches the new Settings inline checkbox, which saves
+        /// immediately on tap with no accompanying "edit email" action to
+        /// bundle into — unlike SMS consent, which piggybacks on UpdatePhone.
         /// </summary>
+        public async Task<bool> UpdateEmailConsentAsync(bool consent)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Patch, "user/me/email-consent")
+                {
+                    Content = JsonContent.Create(new { consent })
+                };
+                await AttachAuthAsync(request);
+
+                using var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                    System.Diagnostics.Debug.WriteLine($"[UserAPI] UpdateEmailConsent failed: {response.StatusCode}");
+
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UserAPI] Error UpdateEmailConsent: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>PATCH /user/me/phone.</summary>
         public async Task<bool> UpdatePhoneAsync(string phoneNumber, bool marketingSmsConsent)
         {
             try
@@ -318,7 +365,7 @@ namespace SaturdayPulse.Services
 
         // ── Followed teams ──────────────────────────────────────────────
 
-        /// <summary>GET /user/me/followed-teams. ASSUMPTION: returns a flat List&lt;int&gt; of team ids.</summary>
+        /// <summary>GET /user/me/followed-teams — returns a flat List&lt;int&gt; of team ids.</summary>
         public async Task<List<int>?> GetFollowedTeamsAsync()
         {
             try
@@ -384,7 +431,7 @@ namespace SaturdayPulse.Services
 
         // ── Followed games (team-pair matchups) ─────────────────────────
 
-        /// <summary>GET /user/me/followed-games. ASSUMPTION: returns List&lt;FollowedGamePairDto&gt;.</summary>
+        /// <summary>GET /user/me/followed-games — returns List&lt;FollowedGamePairDto&gt;.</summary>
         public async Task<List<FollowedGamePairDto>?> GetFollowedGamesAsync()
         {
             try

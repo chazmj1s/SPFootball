@@ -55,5 +55,11 @@ namespace SaturdayPulse.Repositories.Implementations
             if (existing != null)
                 _context.FollowedGames.Remove(existing);
         }
+
+        public async Task DeleteAllForUserAsync(string userId, CancellationToken token = default)
+        {
+            var rows = await _context.FollowedGames.Where(f => f.UserId == userId).ToListAsync(token);
+            _context.FollowedGames.RemoveRange(rows);
+        }
     }
 }

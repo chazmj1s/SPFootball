@@ -44,6 +44,9 @@ namespace SaturdayPulse.Infrastructure
         // ── Content management ─────────────────────────────────────────────────
         public IApplicationContentRepository ApplicationContent { get; }
 
+        // ── Account audit trail ────────────────────────────────────────────────
+        public IAccountAuditLogRepository AccountAuditLogs { get; }
+
 
         public UnitOfWork(NCAAContext context)
         {
@@ -72,6 +75,7 @@ namespace SaturdayPulse.Infrastructure
             Entitlements    = new UserEntitlementRepository(_context);
 
             ApplicationContent = new ApplicationContentRepository(_context);
+            AccountAuditLogs = new AccountAuditLogRepository(_context);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken token = default)

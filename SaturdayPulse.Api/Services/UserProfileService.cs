@@ -44,8 +44,9 @@ namespace SaturdayPulse.Services
 
             var contact = await _uow.UserContactInfo.GetByUserIdAsync(userId, token);
             var activeEntitlement = await _uow.Entitlements.GetActiveCfbSeasonPassAsync(userId, token);
+            var allEntitlements = await _uow.Entitlements.GetByUserIdAsync(userId, token);
 
-            return ToResponse(profile, contact!, activeEntitlement);
+            return ToResponse(profile, contact!, activeEntitlement, allEntitlements);
         }
 
         /// <summary>
@@ -88,11 +89,18 @@ namespace SaturdayPulse.Services
             };
             await _uow.UserContactInfo.CreateAsync(contact, token);
 
+            await _uow.AccountAuditLogs.AddAsync(new AccountAuditLog
+            {
+                UserId = userId,
+                EventType = "AccountCreated",
+                EventAt = DateTime.UtcNow
+            }, token);
+
             await _uow.SaveChangesAsync(token);
             _logger.LogInformation("Created new UserProfile for {UserId}", userId);
 
             // Brand new — never has an entitlement yet, no lookup needed.
-            return ToResponse(profile, contact, activeEntitlement: null);
+            return ToResponse(profile, contact, activeEntitlement: null, allEntitlements: new List<UserEntitlement>());
         }
         /// <summary>
         /// Admin-only dev toggle for the CFB Season Pass entitlement — lets an
@@ -139,8 +147,9 @@ namespace SaturdayPulse.Services
 
             var contact = await _uow.UserContactInfo.GetByUserIdAsync(userId, token);
             var refreshedActive = await _uow.Entitlements.GetActiveCfbSeasonPassAsync(userId, token);
+            var allEntitlements = await _uow.Entitlements.GetByUserIdAsync(userId, token);
 
-            return ToResponse(profile, contact!, refreshedActive);
+            return ToResponse(profile, contact!, refreshedActive, allEntitlements);
         }
 
         // ── Admin: Users page (list + grant/revoke beta access) ──────────────
@@ -235,6 +244,16 @@ namespace SaturdayPulse.Services
                 }, token);
             }
 
+            await _uow.AccountAuditLogs.AddAsync(new AccountAuditLog
+            {
+                UserId = userId,
+                EventType = "SeasonPassGranted",
+                EventAt = DateTime.UtcNow,
+                ProductKey = seasonedKey,
+                PassYear = betaSeason,
+                Source = "beta"
+            }, token);
+
             await _uow.SaveChangesAsync(token);
         }
 
@@ -260,6 +279,16 @@ namespace SaturdayPulse.Services
                 UserId = userId,
                 ProductKey = SeasonedProductKey(productKey, season),
                 ExpiryDate = new DateTime(season + 1, 7, 31),
+                PassYear = season,
+                Source = "manual-grant"
+            }, token);
+
+            await _uow.AccountAuditLogs.AddAsync(new AccountAuditLog
+            {
+                UserId = userId,
+                EventType = "SeasonPassGranted",
+                EventAt = DateTime.UtcNow,
+                ProductKey = SeasonedProductKey(productKey, season),
                 PassYear = season,
                 Source = "manual-grant"
             }, token);
@@ -320,6 +349,51 @@ namespace SaturdayPulse.Services
 
             await _uow.UserContactInfo.UpdateEmailAsync(userId, newEmail, token);
             await _uow.SaveChangesAsync(token);
+        }
+
+        /// <summary>
+        /// Standalone consent toggle - unlike phone/SMS consent (bundled into
+        /// UpdatePhoneAsync since there's no separate endpoint for it), email
+        /// consent gets its own endpoint because the new inline Settings
+        /// checkbox saves immediately on tap, with no accompanying "change
+        /// your email" action to piggyback on.
+        /// </summary>
+        public async Task UpdateEmailConsentAsync(string userId, bool consent, CancellationToken token = default)
+        {
+            await _uow.UserContactInfo.UpdateEmailConsentAsync(userId, consent, token);
+            await _uow.SaveChangesAsync(token);
+        }
+
+        /// <summary>
+        /// Permanently deletes the account and every related row - UserProfile,
+        /// UserContactInfo, FollowedTeams, FollowedGames, UserEntitlements.
+        /// Writes an AccountDeleted row to AccountAuditLogs first, in the same
+        /// transaction, so the deletion and its audit record either both
+        /// happen or neither does. AccountAuditLogs itself is deliberately
+        /// untouched - no FK to UserProfile, so this row (and any prior
+        /// AccountCreated/SeasonPassGranted rows for this UserId) survive.
+        /// </summary>
+        public async Task DeleteAccountAsync(string userId, CancellationToken token = default)
+        {
+            var profile = await _uow.UserProfiles.GetByUserIdAsync(userId, token);
+            if (profile == null)
+                throw new InvalidOperationException("No such user.");
+
+            await _uow.AccountAuditLogs.AddAsync(new AccountAuditLog
+            {
+                UserId = userId,
+                EventType = "AccountDeleted",
+                EventAt = DateTime.UtcNow
+            }, token);
+
+            await _uow.FollowedTeams.DeleteAllForUserAsync(userId, token);
+            await _uow.FollowedGames.DeleteAllForUserAsync(userId, token);
+            await _uow.Entitlements.DeleteAllForUserAsync(userId, token);
+            await _uow.UserContactInfo.DeleteAsync(userId, token);
+            await _uow.UserProfiles.DeleteAsync(userId, token);
+
+            await _uow.SaveChangesAsync(token);
+            _logger.LogInformation("Deleted account and all associated data for {UserId}", userId);
         }
 
         public async Task UpdatePhoneAsync(
@@ -400,7 +474,8 @@ namespace SaturdayPulse.Services
             => _uow.FollowedGames.GetByUserIdAsync(userId, token);
 
         private static UserProfileResponse ToResponse(
-            UserProfile profile, UserContactInfo contact, UserEntitlement? activeEntitlement) => new()
+            UserProfile profile, UserContactInfo contact, UserEntitlement? activeEntitlement,
+            List<UserEntitlement> allEntitlements) => new()
         {
             UserId = profile.UserId,
             Handle = profile.Handle,
@@ -412,7 +487,16 @@ namespace SaturdayPulse.Services
             EmailVerified = contact.EmailVerifiedAt.HasValue,
             PhoneNumber = contact.PhoneNumber,
             PhoneVerified = contact.PhoneVerifiedAt.HasValue,
-            MarketingSmsConsent = contact.MarketingSmsConsent
+            MarketingSmsConsent = contact.MarketingSmsConsent,
+            MarketingEmailConsent = contact.MarketingEmailConsent,
+            Entitlements = allEntitlements.Select(e => new EntitlementSummary
+            {
+                ProductKey = e.ProductKey,
+                Source = e.Source,
+                ExpiryDate = e.ExpiryDate,
+                PassYear = e.PassYear,
+                IsActive = e.ExpiryDate.HasValue && e.ExpiryDate.Value > DateTime.UtcNow
+            }).ToList()
         };
     }
 }
