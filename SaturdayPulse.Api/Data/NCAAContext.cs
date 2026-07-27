@@ -43,6 +43,7 @@ namespace SaturdayPulse.Data
         // no unique constraints — see ApplicationContent.cs class summary).
         public DbSet<ApplicationContent> ApplicationContent { get; set; } = null!;
 
+        public DbSet<AccountAuditLog> AccountAuditLogs { get; set; } = null!;
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
