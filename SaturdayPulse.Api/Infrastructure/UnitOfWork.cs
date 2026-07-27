@@ -41,6 +41,9 @@ namespace SaturdayPulse.Infrastructure
         public IFollowedGameRepository FollowedGames { get; }
         public IUserEntitlementRepository Entitlements { get; }
 
+        // ── Content management ─────────────────────────────────────────────────
+        public IApplicationContentRepository ApplicationContent { get; }
+
 
         public UnitOfWork(NCAAContext context)
         {
@@ -67,6 +70,8 @@ namespace SaturdayPulse.Infrastructure
             FollowedTeams   = new FollowedTeamRepository(_context);
             FollowedGames   = new FollowedGameRepository(_context);
             Entitlements    = new UserEntitlementRepository(_context);
+
+            ApplicationContent = new ApplicationContentRepository(_context);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken token = default)

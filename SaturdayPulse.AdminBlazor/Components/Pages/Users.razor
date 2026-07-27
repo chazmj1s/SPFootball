@@ -1,0 +1,196 @@
+@page "/users"
+@inject AdminApiService Api
+@inject ISnackbar Snackbar
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Users</MudText>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" OnClick="LoadUsersAsync">
+        Refresh
+    </MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (_users is { Count: > 0 })
+{
+    <MudTable Items="_users" Hover="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Handle</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Admin</MudTh>
+            <MudTh>Entitlements</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            @{
+                var cfbActive = context.Entitlements.Any(e => e.ProductKey.StartsWith(CfbProductKey) && e.IsActive);
+            }
+            <MudTd DataLabel="Handle">@context.Handle</MudTd>
+            <MudTd DataLabel="Email">@context.Email</MudTd>
+            <MudTd DataLabel="Admin">
+                @if (context.IsAdmin)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Entitlements">
+                @if (context.Entitlements.Count == 0)
+                {
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">None</MudChip>
+                }
+                else
+                {
+                    <div class="d-flex flex-column" style="gap: 4px;">
+                        @foreach (var ent in context.Entitlements.OrderByDescending(e => e.ExpiryDate))
+                        {
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(ent.IsActive ? Color.Success : Color.Default)"
+                                     Variant="@(ent.IsActive ? Variant.Filled : Variant.Outlined)">
+                                @ent.ProductKey — @SeasonLabel(ent) (@ent.Source)
+                            </MudChip>
+                        }
+                    </div>
+                }
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <div class="d-flex flex-column" style="gap: 6px;">
+                    <div class="d-flex align-center" style="gap: 6px;">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busyUserId == context.UserId"
+                                   OnClick="() => GrantBetaAsync(context.UserId)">
+                            @(cfbActive ? "Extend Beta" : "Grant Beta")
+                        </MudButton>
+                        @if (cfbActive)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="_busyUserId == context.UserId"
+                                       OnClick="() => RevokeAsync(context.UserId)">
+                                Revoke
+                            </MudButton>
+                        }
+                    </div>
+                    <div class="d-flex align-center" style="gap: 6px;">
+                        <MudNumericField T="int" Value="GetSeasonYear(context.UserId)" ValueChanged="@(v => SetSeasonYear(context.UserId, v))"
+                                         Label="Season" Variant="Variant.Outlined" Class="season-field" Disabled="_busyUserId == context.UserId" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busyUserId == context.UserId"
+                                   OnClick="() => GrantSeasonPassAsync(context.UserId)">
+                            Grant Season Pass
+                        </MudButton>
+                    </div>
+                </div>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+else if (!_loading)
+{
+    <MudText Color="Color.Secondary">No users found.</MudText>
+}
+
+@code {
+    // Only product in use today - see UserEntitlement.cs's class summary.
+    // Becomes a real product picker once a second league/product exists.
+    private const string CfbProductKey = "cfb-season-pass";
+
+    private List<AdminUserSummaryDto>? _users;
+    private bool _loading;
+    private string? _busyUserId;
+    private readonly Dictionary<string, int> _seasonYearByUser = new();
+
+    protected override async Task OnInitializedAsync() => await LoadUsersAsync();
+
+    private async Task LoadUsersAsync()
+    {
+        _loading = true;
+        try
+        {
+            _users = await Api.GetUsersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load users \u2014 check the API logs.", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private int GetSeasonYear(string userId) =>
+        _seasonYearByUser.TryGetValue(userId, out var year) ? year : DateTime.Now.Year;
+
+    private void SetSeasonYear(string userId, int year) => _seasonYearByUser[userId] = year;
+
+    /// <summary>
+    /// Prefers the explicit PassYear field (set on every grant going forward).
+    /// Falls back to the July-31 date convention only for legacy rows that
+    /// predate PassYear existing - never guesses a season for a row that
+    /// genuinely doesn't have one (the "forever" dev-toggle sentinel, etc.).
+    /// </summary>
+    private static string SeasonLabel(AdminEntitlementDto entitlement)
+    {
+        if (entitlement.PassYear is { } passYear) return $"{passYear} season";
+        if (entitlement.ExpiryDate is not { } expiry) return "no expiry";
+        if (expiry.Year >= 2900) return "no expiry";
+        if (expiry.Month == 7 && expiry.Day == 31) return $"{expiry.Year - 1} season";
+        return $"expires {expiry:MMM d, yyyy}";
+    }
+
+    private async Task GrantBetaAsync(string userId)
+    {
+        _busyUserId = userId;
+        try
+        {
+            await Api.GrantBetaAccessAsync(userId, CfbProductKey);
+            Snackbar.Add("Beta access granted.", Severity.Success);
+            await LoadUsersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to grant access \u2014 check the API logs.", Severity.Error);
+        }
+        finally
+        {
+            _busyUserId = null;
+        }
+    }
+
+    private async Task GrantSeasonPassAsync(string userId)
+    {
+        _busyUserId = userId;
+        try
+        {
+            await Api.GrantSeasonPassAsync(userId, CfbProductKey, GetSeasonYear(userId));
+            Snackbar.Add("Season pass granted.", Severity.Success);
+            await LoadUsersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to grant season pass \u2014 check the API logs.", Severity.Error);
+        }
+        finally
+        {
+            _busyUserId = null;
+        }
+    }
+
+    private async Task RevokeAsync(string userId)
+    {
+        _busyUserId = userId;
+        try
+        {
+            await Api.RevokeAccessAsync(userId, CfbProductKey);
+            Snackbar.Add("Access revoked.", Severity.Success);
+            await LoadUsersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to revoke access \u2014 check the API logs.", Severity.Error);
+        }
+        finally
+        {
+            _busyUserId = null;
+        }
+    }
+}

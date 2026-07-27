@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using SaturdayPulse.AdminBlazor.Services.Models;
+using SaturdayPulse.Core.Content;
 
 namespace SaturdayPulse.AdminBlazor.Services;
 
@@ -76,6 +77,52 @@ public class AdminApiService(HttpClient http)
 
     public Task<JsonElement> ComputePortalMetricsAsync(int season, CancellationToken ct = default) =>
         PostAsync("developer/computePortalMetrics", Query(("season", season)), ct);
+
+    // ── Roster Capacity ────────────────────────────────────────────
+    // New in this admin console — no Angular equivalent existed. Mirrors the
+    // "Roster Capacity" endpoint region added to DeveloperController.cs.
+    public Task<JsonElement> LoadRosterCapacityRosterAsync(int season, CancellationToken ct = default) =>
+        PostAsync("developer/loadRosterCapacityRoster", Query(("season", season)), ct);
+
+    public Task<JsonElement> LoadRosterCapacityRosterBothSeasonsAsync(int currentSeason, CancellationToken ct = default) =>
+        PostAsync("developer/loadRosterCapacityRosterBothSeasons", Query(("currentSeason", currentSeason)), ct);
+
+    public Task<JsonElement> LoadRosterCapacityStatsAsync(int season, CancellationToken ct = default) =>
+        PostAsync("developer/loadRosterCapacityStats", Query(("season", season)), ct);
+
+    public Task<JsonElement> LoadRosterCapacityCoachesAsync(int year, CancellationToken ct = default) =>
+        PostAsync("developer/loadRosterCapacityCoaches", Query(("year", year)), ct);
+
+    public Task<JsonElement> LoadAndApplyRosterCapacityRecruitingAsync(int year, CancellationToken ct = default) =>
+        PostAsync("developer/loadAndApplyRosterCapacityRecruiting", Query(("year", year)), ct);
+
+    public Task<JsonElement> LoadAndApplyPortalRatingsAsync(int season, CancellationToken ct = default) =>
+        PostAsync("developer/loadAndApplyPortalRatings", Query(("season", season)), ct);
+
+    // ── Users ──────────────────────────────────────────────────────
+    // No Angular equivalent - new admin capability.
+    public async Task<List<AdminUserSummaryDto>> GetUsersAsync(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<List<AdminUserSummaryDto>>("developer/users", JsonOpts, ct) ?? new();
+
+    public Task<JsonElement> GrantBetaAccessAsync(string userId, string productKey, CancellationToken ct = default) =>
+        PostAsync("developer/grantBetaAccess", Query(("userId", userId), ("productKey", productKey)), ct);
+
+    public Task<JsonElement> GrantSeasonPassAsync(string userId, string productKey, int season, CancellationToken ct = default) =>
+        PostAsync("developer/grantSeasonPass", Query(("userId", userId), ("productKey", productKey), ("season", season)), ct);
+
+    public Task<JsonElement> RevokeAccessAsync(string userId, string productKey, CancellationToken ct = default) =>
+        PostAsync("developer/revokeAccess", Query(("userId", userId), ("productKey", productKey)), ct);
+
+    // ── Content ────────────────────────────────────────────────────
+    // No Angular equivalent - new admin capability. Talks to ContentController,
+    // not DeveloperController - different route root, no "developer/" prefix.
+    // ApplicationContentDocument comes from SaturdayPulse.Core - same type
+    // Api serializes and Mobile will eventually deserialize, not a local copy.
+    public async Task<ApplicationContentDocument?> GetContentAsync(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<ApplicationContentDocument>("content", JsonOpts, ct);
+
+    public Task<ApplicationContentDocument?> SaveContentAsync(ApplicationContentDocument document, CancellationToken ct = default) =>
+        PutAsync<ApplicationContentDocument>("content", document, ct);
 
     // ── Metrics Rebuild ────────────────────────────────────────────
     public Task<JsonElement> BackfillAllMetricsAsync(int? startYear = null, CancellationToken ct = default) =>
@@ -163,6 +210,13 @@ public class AdminApiService(HttpClient http)
     {
         var response = await http.PostAsJsonAsync(path, body, JsonOpts, ct);
         return await ReadOrThrowAsync(response, ct);
+    }
+
+    private async Task<T?> PutAsync<T>(string path, object body, CancellationToken ct)
+    {
+        var response = await http.PutAsJsonAsync(path, body, JsonOpts, ct);
+        var element = await ReadOrThrowAsync(response, ct);
+        return element.ValueKind == JsonValueKind.Undefined ? default : element.Deserialize<T>(JsonOpts);
     }
 
     /// <summary>

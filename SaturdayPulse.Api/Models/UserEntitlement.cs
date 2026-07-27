@@ -11,6 +11,14 @@ namespace SaturdayPulse.Models
     /// (see session-handoff notes — bringing other leagues online is a major
     /// rework, not just a new ProductKey value).
     /// Only the payment/sync process or an admin grant should write ExpiryDate.
+    ///
+    /// PassYear (added 2026-07-26): the season this grant covers, as an explicit
+    /// value rather than something inferred from ExpiryDate. Needed for Apple/
+    /// Google IAP reconciliation, where a purchased subscription product maps to
+    /// a specific season (e.g. a "2026 CFB Season Pass" SKU) and the app needs to
+    /// know which season that is directly, not by parsing a date convention.
+    /// Nullable - rows created before this field existed, and non-seasonal grants
+    /// like the admin dev-toggle's "forever" sentinel, legitimately have no season.
     /// </summary>
     public class UserEntitlement
     {
@@ -27,6 +35,8 @@ namespace SaturdayPulse.Models
 
         [Required, MaxLength(32)]
         public string Source { get; set; } = null!; // "stripe" | "manual-grant" | "beta"
+
+        public int? PassYear { get; set; }
 
         public DateTime CreatedAt { get; set; }
     }

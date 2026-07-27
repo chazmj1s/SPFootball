@@ -26,16 +26,42 @@
 
         <MudDivider Class="my-4" />
 
-        <!-- ── Season Setup ────────────────────────────────────── -->
-        <MudText Typo="Typo.overline" Color="Color.Secondary">Season Setup</MudText>
-        <div class="section-row">
-            <MudNumericField @bind-Value="_seasonYear" Label="Year" Variant="Variant.Outlined"
-                             Disabled="IsBusy" Class="param-field" />
-            <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunSeasonSetupAsync"
-                       StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
-                Run Season Setup
-            </MudButton>
-        </div>
+        <!-- ── Season Setup + Roster Capacity (paired: setup creates the year's
+             TeamRecords row, roster capacity populates ZRoster onto it - side
+             by side as a visual cue that they're a two-step yearly pair) ── -->
+        <MudGrid>
+            <MudItem xs="12" md="5">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Season Setup</MudText>
+                <div class="section-row">
+                    <MudNumericField @bind-Value="_seasonYear" Label="Year" Variant="Variant.Outlined"
+                                     Disabled="IsBusy" Class="param-field" />
+                    <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunSeasonSetupAsync"
+                               StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
+                        Run Season Setup
+                    </MudButton>
+                </div>
+            </MudItem>
+
+            <MudItem xs="12" md="7">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Roster Capacity</MudText>
+                <div class="section-row">
+                    <MudNumericField @bind-Value="_rosterYear" Label="Year" Variant="Variant.Outlined"
+                                     Disabled="IsBusy" Class="param-field" />
+                    <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunRosterCapacityAllAsync"
+                               StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
+                        Run All
+                    </MudButton>
+                </div>
+                <div class="section-row">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="LoadRosterAsync">Load Roster</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="LoadStatsAsync">Load Stats</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="LoadCoachesAsync">Load Coaches</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="LoadRecruitingAsync">Load &amp; Apply Recruiting</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="LoadPortalRatingsAsync">Load &amp; Apply Portal Ratings</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="ComputeZRosterAsync">Compute Portal Metrics</MudButton>
+                </div>
+            </MudItem>
+        </MudGrid>
 
         <MudDivider Class="my-4" />
 
@@ -121,6 +147,7 @@
     private int _weeklyYear = DateTime.Now.Year;
     private int _weeklyWeek = 1;
     private int _seasonYear = DateTime.Now.Year;
+    private int _rosterYear = DateTime.Now.Year;
 
     // Postseason state
     private int _postseasonYear = DateTime.Now.Year;
@@ -222,6 +249,150 @@
             await StepAsync("Initialize Season", () => Api.InitializeSeasonAsync(_seasonYear));
             await StepAsync("Load Portal", () => Api.LoadPortalAsync(_seasonYear));
             await StepAsync("Compute Portal Metrics", () => Api.ComputePortalMetricsAsync(_seasonYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    // ── Roster Capacity ─────────────────────────────────────────────────
+    // No Angular equivalent - new admin capability for the CoachRecords/
+    // PlayerStats/PortalEntries/RecruitPlayers/RosterPlayers tables.
+    private async Task LoadRosterAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Load Roster (Both Seasons)  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Load Roster (Both Seasons)", () => Api.LoadRosterCapacityRosterBothSeasonsAsync(_rosterYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Load Stats  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Load Stats", () => Api.LoadRosterCapacityStatsAsync(_rosterYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task LoadCoachesAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Load Coaches  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Load Coaches", () => Api.LoadRosterCapacityCoachesAsync(_rosterYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task LoadRecruitingAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Load & Apply Recruiting  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Load & Apply Recruiting", () => Api.LoadAndApplyRosterCapacityRecruitingAsync(_rosterYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task LoadPortalRatingsAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Load & Apply Portal Ratings  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Load & Apply Portal Ratings", () => Api.LoadAndApplyPortalRatingsAsync(_rosterYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task ComputeZRosterAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Compute Portal Metrics  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Compute Portal Metrics", () => Api.ComputePortalMetricsAsync(_rosterYear));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    // Runs every Roster Capacity step in dependency order: roster must be
+    // loaded before recruiting/portal ratings can be joined onto it, and
+    // Compute Portal Metrics (ZRoster) needs all of the above in place first.
+    private async Task RunRosterCapacityAllAsync()
+    {
+        _running = true;
+        Append($"\u2500\u2500 Roster Capacity \u2014 Run All  Year={_rosterYear} \u2500\u2500");
+        try
+        {
+            await StepAsync("Load Roster (Both Seasons)", () => Api.LoadRosterCapacityRosterBothSeasonsAsync(_rosterYear));
+            await StepAsync("Load Stats", () => Api.LoadRosterCapacityStatsAsync(_rosterYear));
+            await StepAsync("Load Coaches", () => Api.LoadRosterCapacityCoachesAsync(_rosterYear));
+            await StepAsync("Load & Apply Recruiting", () => Api.LoadAndApplyRosterCapacityRecruitingAsync(_rosterYear));
+            await StepAsync("Load & Apply Portal Ratings", () => Api.LoadAndApplyPortalRatingsAsync(_rosterYear));
+            await StepAsync("Compute Portal Metrics", () => Api.ComputePortalMetricsAsync(_rosterYear));
             Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
         }
         catch

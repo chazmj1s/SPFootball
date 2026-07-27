@@ -20,6 +20,7 @@ namespace SaturdayPulse.Controllers
         DeveloperService developerService,
         ProjectionAccuracyService _projectionAccuracyService,
         RatingComparisonService _ratingComparisonService,
+        UserProfileService userProfileService,
         ILogger<DeveloperController> logger) : ControllerBase
     {
         #region CFBD V2 — Load
@@ -1276,6 +1277,105 @@ namespace SaturdayPulse.Controllers
             {
                 logger.LogError(ex, "Error reverting games from playoff");
                 return StatusCode(500, "An error occurred while reverting playoff games.");
+            }
+        }
+
+        #endregion
+
+        #region Users
+
+        /// <summary>
+        /// All user profiles with their entitlements, for the admin console's
+        /// Users page.
+        /// Example: GET /api/developer/users
+        /// </summary>
+        [HttpGet("users")]
+        [Tags("Users")]
+        public async Task<IActionResult> GetUsers(CancellationToken token = default)
+        {
+            try
+            {
+                var users = await userProfileService.GetAllUsersWithEntitlementsAsync(token);
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving users");
+                return StatusCode(500, "An error occurred while retrieving users.");
+            }
+        }
+
+        /// <summary>
+        /// Grants (or extends) beta access to a product for a user.
+        /// Example: POST /api/developer/grantBetaAccess?userId=abc123&productKey=cfb-season-pass
+        /// </summary>
+        [HttpPost("grantBetaAccess")]
+        [Tags("Users")]
+        public async Task<IActionResult> GrantBetaAccess(
+            [FromQuery] string userId, [FromQuery] string productKey, CancellationToken token = default)
+        {
+            try
+            {
+                await userProfileService.GrantBetaAccessAsync(userId, productKey, token);
+                return Ok(new { message = $"Beta access granted for {productKey}" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error granting beta access for {UserId}/{ProductKey}", userId, productKey);
+                return StatusCode(500, "An error occurred while granting access.");
+            }
+        }
+
+        /// <summary>
+        /// Grants a season pass for a specific season year - ad hoc admin tool
+        /// for special cases, distinct from grantBetaAccess. Always creates a
+        /// new entitlement row (doesn't extend an existing one), so a user can
+        /// accumulate multiple distinct season grants over time.
+        /// Example: POST /api/developer/grantSeasonPass?userId=abc123&productKey=cfb-season-pass&season=2026
+        /// </summary>
+        [HttpPost("grantSeasonPass")]
+        [Tags("Users")]
+        public async Task<IActionResult> GrantSeasonPass(
+            [FromQuery] string userId, [FromQuery] string productKey, [FromQuery] int season, CancellationToken token = default)
+        {
+            try
+            {
+                await userProfileService.GrantSeasonPassAsync(userId, productKey, season, token);
+                return Ok(new { message = $"Season pass granted for {productKey}, season {season}" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error granting season pass for {UserId}/{ProductKey}/{Season}", userId, productKey, season);
+                return StatusCode(500, "An error occurred while granting the season pass.");
+            }
+        }
+
+        /// <summary>
+        /// Revokes a user's active entitlement for a product (expires it; does not delete the row).
+        /// Example: POST /api/developer/revokeAccess?userId=abc123&productKey=cfb-season-pass
+        /// </summary>
+        [HttpPost("revokeAccess")]
+        [Tags("Users")]
+        public async Task<IActionResult> RevokeAccess(
+            [FromQuery] string userId, [FromQuery] string productKey, CancellationToken token = default)
+        {
+            try
+            {
+                await userProfileService.RevokeAccessAsync(userId, productKey, token);
+                return Ok(new { message = $"Access revoked for {productKey}" });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error revoking access for {UserId}/{ProductKey}", userId, productKey);
+                return StatusCode(500, "An error occurred while revoking access.");
             }
         }
 

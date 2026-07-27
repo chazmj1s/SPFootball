@@ -31,6 +31,9 @@ namespace SaturdayPulse.Contracts
         IFollowedGameRepository FollowedGames { get; }
         IUserEntitlementRepository Entitlements { get; }
 
+        // ── Content management ─────────────────────────────────────────────────
+        IApplicationContentRepository ApplicationContent { get; }
+
         Task<int> SaveChangesAsync(CancellationToken token = default);
     }
 }

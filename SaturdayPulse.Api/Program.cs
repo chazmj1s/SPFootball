@@ -62,6 +62,10 @@ builder.Services.AddScoped<ConferenceTierService>();
 builder.Services.AddScoped<RosterCapacityService>();
 builder.Services.AddScoped<UserProfileService>();
 
+// Content management (About/Privacy/Terms/etc.) — same Scoped lifetime as
+// every other *Service above, since it goes through IUnitOfWork the same way.
+builder.Services.AddScoped<ContentService>();
+
 // ADDED — K=4 inertia-blending experimental comparison path. Registered the same
 // way (Scoped) as the other per-request services above (GamePredictionService,
 // RollingAverageService, etc.). Read-only, not wired into any production path.

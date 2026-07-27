@@ -15,6 +15,14 @@ builder.Services.AddHttpClient<AdminApiService>(client =>
 {
     var baseUrl = builder.Configuration["AdminApi:BaseUrl"]
         ?? throw new InvalidOperationException("AdminApi:BaseUrl is not configured.");
+
+    // HttpClient.BaseAddress combines with relative request URIs using standard
+    // Uri rules: without a trailing slash, the last segment (here "api") is
+    // treated as replaceable and gets dropped instead of kept. Every AdminApiService
+    // call uses a relative path with no leading slash specifically so this
+    // trailing-slash normalization is what keeps "/api" in the final request URL.
+    if (!baseUrl.EndsWith('/')) baseUrl += "/";
+
     client.BaseAddress = new Uri(baseUrl);
 });
 
