@@ -43,7 +43,12 @@ namespace SaturdayPulse.Data
         // no unique constraints — see ApplicationContent.cs class summary).
         public DbSet<ApplicationContent> ApplicationContent { get; set; } = null!;
 
+        // Account audit trail — added for Delete Account. Deliberately no
+        // relationship/FK to UserProfile configured anywhere below: these
+        // rows must survive DeleteAccountAsync's hard delete of everything
+        // else. See AccountAuditLog.cs class summary.
         public DbSet<AccountAuditLog> AccountAuditLogs { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

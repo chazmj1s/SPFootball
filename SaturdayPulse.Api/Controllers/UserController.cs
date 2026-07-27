@@ -89,6 +89,33 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        /// <summary>
+        /// DELETE /api/user/me — permanently deletes the calling identity's
+        /// account and every related row (contact info, follows, entitlements).
+        /// Writes a permanent AccountDeleted audit entry first (UserId +
+        /// timestamp only, no PII) via UserProfileService.DeleteAccountAsync -
+        /// that record is not affected by this deletion. No confirmation
+        /// step server-side; the client is responsible for confirming with
+        /// the person before calling this.
+        /// </summary>
+        [HttpDelete("me")]
+        public async Task<IActionResult> DeleteAccount(CancellationToken token = default)
+        {
+            if (TryResolveUserId(out var userId) is { } badRequest) return badRequest;
+
+            try
+            {
+                await userProfileService.DeleteAccountAsync(userId, token);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error deleting account for {UserId}", userId);
+                return StatusCode(500, "An error occurred while deleting the account.");
+            }
+        }
+
         /// <summary>PATCH /api/user/me/handle</summary>
         [HttpPatch("me/handle")]
         public async Task<IActionResult> UpdateHandle(
@@ -147,6 +174,32 @@ namespace SaturdayPulse.Controllers
             {
                 logger.LogError(ex, "Error updating email for {UserId}", userId);
                 return StatusCode(500, "An error occurred while updating the email.");
+            }
+        }
+
+        /// <summary>
+        /// PATCH /api/user/me/email-consent — standalone toggle for marketing
+        /// email consent. Separate from UpdateEmail above (which is about the
+        /// address itself) because the new Settings UI saves this checkbox
+        /// immediately on tap, with no accompanying email-address edit to
+        /// bundle it into — unlike SMS consent, which piggybacks on
+        /// UpdatePhone since there's an existing "edit this" action to attach to.
+        /// </summary>
+        [HttpPatch("me/email-consent")]
+        public async Task<IActionResult> UpdateEmailConsent(
+            [FromBody] UpdateEmailConsentRequest request, CancellationToken token = default)
+        {
+            if (TryResolveUserId(out var userId) is { } badRequest) return badRequest;
+
+            try
+            {
+                await userProfileService.UpdateEmailConsentAsync(userId, request.Consent, token);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error updating email consent for {UserId}", userId);
+                return StatusCode(500, "An error occurred while updating email consent.");
             }
         }
 

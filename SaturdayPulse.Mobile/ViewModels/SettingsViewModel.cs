@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using SaturdayPulse.Core.Content;
 using SaturdayPulse.Helpers;
 using SaturdayPulse.Models;
 using SaturdayPulse.Services;
@@ -16,6 +19,7 @@ namespace SaturdayPulse.ViewModels
         private readonly AuthService                   _authService;
         private readonly FeedbackService                _feedbackService;
         private readonly EntitlementService              _entitlementService;
+        private readonly ContentApiService               _contentApi;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -35,18 +39,26 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsTeamsView));
                 OnPropertyChanged(nameof(IsGamesView));
+                OnPropertyChanged(nameof(ShowFlatTeamsList));
+                OnPropertyChanged(nameof(ShowGroupedTeamsList));
             }
         }
 
         // ── Accordion state — only one section open at a time ─────────────
-        // User Profile is the default-expanded section (was "nothing" before
-        // the Auth0 login/Season Pass controls landed there).
+        // User Profile is the default-expanded section. Internal keys are
+        // unchanged from before the rename pass (UserConfig/Following/
+        // Feedback) even though their XAML labels are now App Settings/
+        // Favorites/Support — renaming the keys too would've meant touching
+        // every ToggleSectionCommand CommandParameter for no functional
+        // benefit. SeasonPass/Content are the two new panels.
         private string? _expandedSection = "UserProfile";
 
-        public bool IsFollowingExpanded     => _expandedSection == "Following";
-        public bool IsUserConfigExpanded    => _expandedSection == "UserConfig";
         public bool IsUserProfileExpanded   => _expandedSection == "UserProfile";
-        public bool IsFeedbackExpanded      => _expandedSection == "Feedback";
+        public bool IsUserConfigExpanded    => _expandedSection == "UserConfig";      // App Settings
+        public bool IsFollowingExpanded     => _expandedSection == "Following";       // Favorites
+        public bool IsSeasonPassExpanded    => _expandedSection == "SeasonPass";      // NEW
+        public bool IsContentExpanded       => _expandedSection == "Content";         // NEW
+        public bool IsFeedbackExpanded      => _expandedSection == "Feedback";        // Support
         public bool IsDebugLogExpanded      => _expandedSection == "DebugLog";
 
         public bool IsTeamsView => _selectedView == "Teams";
@@ -128,7 +140,7 @@ namespace SaturdayPulse.ViewModels
             _            => "My Teams"
         };
 
-        // ── User preference: Handle ─────────────────────────────────────
+        // ── User preference: Handle (label shown as "User Name" in XAML) ──
         // Sourced from UserProfile via UserApiService — no local Preferences
         // copy. Populated by LoadDataAsync alongside teams/rivalries.
         private string _handle = string.Empty;
@@ -176,7 +188,33 @@ namespace SaturdayPulse.ViewModels
             private set { _marketingSmsConsent = value; OnPropertyChanged(); }
         }
 
-        // ── Auth0 — login state / Season Pass ───────────────────────────
+        // ── User preference: marketing email consent ───────────────────────
+        // Unlike MarketingSmsConsent (set only via the popup that follows
+        // editing the phone number - see EditPhoneCommand), this is a live
+        // inline checkbox that saves immediately on tap. The public setter
+        // fires the save; ApplyProfile below sets the backing field directly
+        // so loading a profile never triggers an unwanted PATCH.
+        private bool _marketingEmailConsent;
+        public bool MarketingEmailConsent
+        {
+            get => _marketingEmailConsent;
+            set
+            {
+                if (_marketingEmailConsent == value) return;
+                _marketingEmailConsent = value;
+                OnPropertyChanged();
+                _ = SaveEmailConsentAsync(value);
+            }
+        }
+
+        private async Task SaveEmailConsentAsync(bool consent)
+        {
+            var ok = await _userApi.UpdateEmailConsentAsync(consent);
+            if (!ok)
+                StatusMessage = "Couldn't update notification preference.";
+        }
+
+        // ── Auth0 — login state ─────────────────────────────────────────
         // No forced login anywhere in the app. This is purely opt-in: the
         // person taps Login/Create Account (or Season Pass, which offers to
         // log in first) when THEY want to. See AuthService for StayLoggedIn.
@@ -198,9 +236,8 @@ namespace SaturdayPulse.ViewModels
             }
         }
 
-        /// <summary>Drives which button row Settings shows — Login/Create
-        /// Account, or Logout. Two separate actions now (2026-07-22), not
-        /// one button whose behavior was inferred from HasAccount.</summary>
+        /// <summary>Drives which link row Settings shows — Login/Create
+        /// Account, or Logout/Delete Account.</summary>
         public bool IsLoggedOut => !IsLoggedIn;
 
         public bool StayLoggedIn
@@ -212,8 +249,8 @@ namespace SaturdayPulse.ViewModels
         // ── Admin ────────────────────────────────────────────────────────
         // Sourced directly from UserProfileResponse.IsAdmin — server-side
         // only, never client-writable. Gates the Debug Log section and
-        // swaps the Season Pass "Get Season Pass" button for the dev
-        // toggle below. Populated by ApplyProfile alongside everything else.
+        // swaps the Season Pass "Get Season Pass" link for the dev toggle.
+        // Populated by ApplyProfile alongside everything else.
         private bool _isAdmin;
         public bool IsAdmin
         {
@@ -234,7 +271,7 @@ namespace SaturdayPulse.ViewModels
         public bool CanAccessDebugLog => IsAdmin;
 
         /// <summary>Inverse of IsAdmin — exists purely so SettingsPage.xaml
-        /// can show/hide the two Season Pass UI states (real button vs. dev
+        /// can show/hide the two Season Pass UI states (real link vs. dev
         /// toggle) without needing an inverse-bool converter registered.</summary>
         public bool IsNotAdmin => !IsAdmin;
 
@@ -256,8 +293,41 @@ namespace SaturdayPulse.ViewModels
             }
         }
 
+        /// <summary>
+        /// One row per distinct product the user holds (deduped to the
+        /// latest row per ProductKey - repeated dev-toggle on/off, for
+        /// example, can leave several historical rows for the same bare key;
+        /// AccountAuditLog keeps the full history, this panel shows current
+        /// status only), plus a synthetic "Purchase" row for the current
+        /// season if the user doesn't already hold it. Rebuilt by
+        /// RebuildSeasonPassEntries whenever ApplyProfile runs.
+        /// </summary>
+        public ObservableCollection<SeasonPassEntryViewModel> SeasonPassEntries { get; } = new();
+
         // ── Teams ─────────────────────────────────────────────────────────
         public ObservableCollection<TeamInfo> Teams { get; } = new();
+
+        /// <summary>
+        /// Populated instead of Teams when the header conference filter is
+        /// "All" - groups the same underlying team list by conference,
+        /// each group independently expandable. Teams stays empty in that
+        /// case (and vice versa) rather than keeping both in sync, since
+        /// only one is ever visible at a time - see IsConferenceAll.
+        /// </summary>
+        public ObservableCollection<ConferenceGroupInfo> TeamGroups { get; } = new();
+
+        public bool IsConferenceAll => _navState.SelectedConference == "All";
+        public bool IsConferenceNotAll => !IsConferenceAll;
+
+        /// <summary>
+        /// These, not IsConferenceAll/IsConferenceNotAll directly, are what
+        /// SettingsPage.xaml's two Teams CollectionViews bind IsVisible to.
+        /// Bug fixed 2026-07-26: the first pass only checked the conference
+        /// filter, so a Teams list stayed visible even when the Games sub-tab
+        /// was selected - the two are supposed to be mutually exclusive.
+        /// </summary>
+        public bool ShowFlatTeamsList => IsTeamsView && IsConferenceNotAll;
+        public bool ShowGroupedTeamsList => IsTeamsView && IsConferenceAll;
 
         // ── Games ─────────────────────────────────────────────────────────
         public ObservableCollection<RivalryInfo> Games { get; } = new();
@@ -278,7 +348,7 @@ namespace SaturdayPulse.ViewModels
             }
         }
 
-        // ── Feedback (Season Pass gated) ────────────────────────────────
+        // ── Feedback / Support (Season Pass gated) ─────────────────────────
         // Beta access: Season Pass is being granted free to beta testers
         // specifically so this can sit behind the same entitlement gate
         // real paying members will eventually use.
@@ -307,6 +377,24 @@ namespace SaturdayPulse.ViewModels
             private set { _feedbackStatus = value; OnPropertyChanged(); }
         }
 
+        // Destination for the "Email the Dev Team" link - admin-editable via
+        // the Content document rather than hardcoded, so it can change
+        // without an app release. Empty until content loads; the link
+        // command no-ops if it's still empty.
+        private string _supportEmail = string.Empty;
+        public string SupportEmail
+        {
+            get => _supportEmail;
+            private set { _supportEmail = value; OnPropertyChanged(); }
+        }
+
+        // ── Content / About (read-only) ────────────────────────────────────
+        // One entry per non-empty ContentSection (About/Privacy/Terms/Season
+        // Pass info/FAQ/Announcements/Release Notes) - sections with no
+        // content yet (Title and Content both blank) are skipped rather than
+        // shown as an empty expandable panel.
+        public ObservableCollection<ContentSectionViewModel> ContentSections { get; } = new();
+
         // ── Debug Log ─────────────────────────────────────────────────────
 
         /// <summary>Bound to the Debug Log CollectionView in Settings.</summary>
@@ -332,9 +420,11 @@ namespace SaturdayPulse.ViewModels
         public ICommand LoginCommand                   { get; }
         public ICommand CreateAccountCommand           { get; }
         public ICommand LogoutCommand                  { get; }
+        public ICommand DeleteAccountCommand           { get; }
         public ICommand SeasonPassCommand              { get; }
         public ICommand SetDevEntitlementCommand       { get; }
         public ICommand SubmitFeedbackCommand          { get; }
+        public ICommand EmailSupportCommand            { get; }
         public ICommand CloseCommand                   { get; }
 
         /// <summary>
@@ -357,7 +447,8 @@ namespace SaturdayPulse.ViewModels
             UserApiService userApi,
             AuthService authService,
             FeedbackService feedbackService,
-            EntitlementService entitlementService)
+            EntitlementService entitlementService,
+            ContentApiService contentApi)
             : base(followService)
         {
             _apiService          = apiService;
@@ -368,6 +459,7 @@ namespace SaturdayPulse.ViewModels
             _authService         = authService;
             _feedbackService     = feedbackService;
             _entitlementService  = entitlementService;
+            _contentApi          = contentApi;
 
             TierFilters.Add("All");
             TierFilters.Add("♥ Personal");
@@ -409,9 +501,11 @@ namespace SaturdayPulse.ViewModels
             ToggleSectionCommand = new Command<string>(section =>
             {
                 _expandedSection = _expandedSection == section ? null : section;
-                OnPropertyChanged(nameof(IsFollowingExpanded));
-                OnPropertyChanged(nameof(IsUserConfigExpanded));
                 OnPropertyChanged(nameof(IsUserProfileExpanded));
+                OnPropertyChanged(nameof(IsUserConfigExpanded));
+                OnPropertyChanged(nameof(IsFollowingExpanded));
+                OnPropertyChanged(nameof(IsSeasonPassExpanded));
+                OnPropertyChanged(nameof(IsContentExpanded));
                 OnPropertyChanged(nameof(IsFeedbackExpanded));
                 OnPropertyChanged(nameof(IsDebugLogExpanded));
             });
@@ -492,7 +586,7 @@ namespace SaturdayPulse.ViewModels
             EditHandleCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var result = await Shell.Current.DisplayPromptAsync(
-                    "Handle", "Choose a display handle", initialValue: Handle, maxLength: 32);
+                    "User Name", "Choose a display name", initialValue: Handle, maxLength: 32);
 
                 if (string.IsNullOrWhiteSpace(result) || result.Trim() == Handle) return;
 
@@ -501,7 +595,7 @@ namespace SaturdayPulse.ViewModels
                 if (ok)
                     Handle = trimmed;
                 else
-                    StatusMessage = "Couldn't update handle — it may already be taken.";
+                    StatusMessage = "Couldn't update user name — it may already be taken.";
             });
 
             EditEmailCommand = new Microsoft.Maui.Controls.Command(async () =>
@@ -522,9 +616,10 @@ namespace SaturdayPulse.ViewModels
 
             // The phone endpoint bundles marketing SMS consent into the same
             // PATCH as the number itself (see UserController — there's no
-            // separate consent-only endpoint), so this asks both in one flow
-            // rather than exposing consent as a standalone, always-visible
-            // toggle that would have nothing to save on its own.
+            // separate consent-only endpoint, unlike email consent below),
+            // so this asks both in one flow rather than exposing SMS consent
+            // as a standalone, always-editable toggle that would have
+            // nothing to save on its own.
             EditPhoneCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var result = await Shell.Current.DisplayPromptAsync(
@@ -558,24 +653,47 @@ namespace SaturdayPulse.ViewModels
             LogoutCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 await _authService.LogoutAsync();
-                IsLoggedIn = false;
-                Handle = string.Empty;
-                Email = string.Empty;
-                PhoneNumber = string.Empty;
-                MarketingSmsConsent = false;
-                HasSeasonPass = false;
-                IsAdmin = false;
-                _entitlementService.Clear();
+                ClearLocalAccountState();
             });
 
-            // Placeholder — Stripe isn't wired up yet (separate feature).
-            // The login-check itself now lives in
-            // EntitlementService.EnsureLoggedInForPurchaseAsync (2026-07-25),
+            // Permanent, server-side deletion (2026-07-26) — confirms first,
+            // then calls DeleteAccountAsync (which itself writes a permanent
+            // AccountAuditLog entry server-side before removing everything
+            // else), then clears the Auth0 session and all local state the
+            // same way LogoutCommand does, since the account no longer
+            // exists to log back into.
+            DeleteAccountCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                var confirmed = await Shell.Current.DisplayAlert(
+                    "Delete Account",
+                    "This permanently deletes your account and all associated data — followed teams, followed games, and season pass history. This cannot be undone.",
+                    "Delete", "Cancel");
+
+                if (!confirmed) return;
+
+                var ok = await _userApi.DeleteAccountAsync();
+                if (!ok)
+                {
+                    StatusMessage = "Couldn't delete account — try again.";
+                    return;
+                }
+
+                await _authService.LogoutAsync();
+                ClearLocalAccountState();
+
+                await Shell.Current.DisplayAlert(
+                    "Account Deleted", "Your account and all associated data have been permanently deleted.", "OK");
+            });
+
+            // Placeholder — Stripe isn't wired up yet (separate feature), and
+            // real Apple/Google IAP isn't scoped yet either (2026-07-26
+            // decision: keep this a placeholder for now). The login-check
+            // itself lives in EntitlementService.EnsureLoggedInForPurchaseAsync,
             // shared with MyTeamsViewModel's gated Details paywall message —
-            // one method means Stripe only needs to be wired up in one place
-            // once it exists. This command just applies the freshly-fetched
-            // profile to its own local bound properties if a new login just
-            // happened (EntitlementService already has it either way).
+            // one method means IAP only needs wiring up in one place once it
+            // exists. This command just applies the freshly-fetched profile
+            // to its own local bound properties if a new login just happened
+            // (EntitlementService already has it either way).
             SeasonPassCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
                 var result = await _entitlementService.EnsureLoggedInForPurchaseAsync();
@@ -591,8 +709,8 @@ namespace SaturdayPulse.ViewModels
                     "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
             });
 
-            // Admin-only dev toggle (2026-07-24) — replaces the "Get Season
-            // Pass" button in Settings when IsAdmin, letting an admin flip
+            // Admin-only dev toggle — replaces the "Get Season Pass" link in
+            // the new Season Pass panel when IsAdmin, letting an admin flip
             // their own entitlement on/off to verify both experiences
             // without a real purchase. Server enforces the IsAdmin check
             // independently (UserProfileService.SetDevEntitlementAsync) —
@@ -635,6 +753,24 @@ namespace SaturdayPulse.ViewModels
                 }
             });
 
+            // Opens the device's mail app with SupportEmail pre-addressed.
+            // No-ops quietly if content hasn't loaded yet (SupportEmail
+            // still empty) rather than opening a blank mailto: link.
+            EmailSupportCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                if (string.IsNullOrWhiteSpace(SupportEmail)) return;
+
+                try
+                {
+                    await Launcher.Default.OpenAsync(new Uri($"mailto:{SupportEmail}"));
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Settings] Error opening mail app: {ex.Message}");
+                    StatusMessage = "Couldn't open your mail app.";
+                }
+            });
+
             CloseCommand = new Microsoft.Maui.Controls.Command(() =>
                 CloseRequested?.Invoke(this, EventArgs.Empty));
 
@@ -655,12 +791,35 @@ namespace SaturdayPulse.ViewModels
             _navState.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(SharedNavigationStateService.SelectedConference))
+                {
                     ApplyTeamFilter();
+                    OnPropertyChanged(nameof(IsConferenceAll));
+                    OnPropertyChanged(nameof(IsConferenceNotAll));
+                    OnPropertyChanged(nameof(ShowFlatTeamsList));
+                    OnPropertyChanged(nameof(ShowGroupedTeamsList));
+                }
                 if (e.PropertyName == nameof(SharedNavigationStateService.DefaultWeek))
                     OnPropertyChanged(nameof(DefaultWeek));
                 if (e.PropertyName == nameof(SharedNavigationStateService.DefaultConference))
                     OnPropertyChanged(nameof(DefaultConference));
             };
+        }
+
+        /// <summary>Shared by LogoutCommand and DeleteAccountCommand - both
+        /// end with the same "nobody's logged in anymore" local state.</summary>
+        private void ClearLocalAccountState()
+        {
+            IsLoggedIn = false;
+            Handle = string.Empty;
+            Email = string.Empty;
+            PhoneNumber = string.Empty;
+            MarketingSmsConsent = false;
+            _marketingEmailConsent = false;
+            OnPropertyChanged(nameof(MarketingEmailConsent));
+            HasSeasonPass = false;
+            IsAdmin = false;
+            SeasonPassEntries.Clear();
+            _entitlementService.Clear();
         }
 
         // ── Auth actions ──────────────────────────────────────────────────
@@ -741,15 +900,23 @@ namespace SaturdayPulse.ViewModels
         /// <summary>Applies a fetched/created profile's fields — shared by
         /// LoadDataAsync (passive startup fetch), both auth actions above,
         /// and SetDevEntitlementCommand, so there's one place that knows how
-        /// a UserProfileDto maps onto this ViewModel's bound properties.</summary>
+        /// a UserProfileDto maps onto this ViewModel's bound properties.
+        ///
+        /// Sets the MarketingEmailConsent backing field directly (not via
+        /// its public setter) - going through the setter would fire an
+        /// unwanted save-to-server PATCH every time a profile loads.</summary>
         private void ApplyProfile(UserProfileDto profile)
         {
             Handle = profile.Handle;
             Email = profile.Email ?? string.Empty;
             PhoneNumber = profile.PhoneNumber ?? string.Empty;
-            MarketingSmsConsent = profile.MarketingSmsConsent ?? false;
+            MarketingSmsConsent = profile.MarketingSmsConsent;
+            _marketingEmailConsent = profile.MarketingEmailConsent;
+            OnPropertyChanged(nameof(MarketingEmailConsent));
             HasSeasonPass = profile.IsEntitled;
             IsAdmin = profile.IsAdmin;
+
+            RebuildSeasonPassEntries(profile.Entitlements);
 
             // Keep the shared EntitlementService in lockstep so
             // PowerRankingsViewModel/ScheduleViewModel/MyTeamsViewModel/
@@ -758,7 +925,85 @@ namespace SaturdayPulse.ViewModels
             _entitlementService.ApplyProfile(profile);
         }
 
-        // ── Load ──────────────────────────────────────────────────────────
+        /// <summary>Builds ContentSections from a fetched document, skipping
+        /// any section with no content yet. Called once per LoadDataAsync -
+        /// content doesn't change often enough to warrant re-fetching on
+        /// every panel expand.</summary>
+        private void ApplyContent(ApplicationContentDocument? content)
+        {
+            SupportEmail = content?.SupportEmail ?? string.Empty;
+
+            ContentSections.Clear();
+            if (content == null) return;
+
+            void AddSection(string fallbackTitle, ContentSection section)
+            {
+                if (string.IsNullOrWhiteSpace(section.Content)) return;
+
+                ContentSections.Add(new ContentSectionViewModel
+                {
+                    Title = string.IsNullOrWhiteSpace(section.Title) ? fallbackTitle : section.Title,
+                    Html = Markdig.Markdown.ToHtml(section.Content)
+                });
+            }
+
+            AddSection("About J1S Sports", content.About);
+            AddSection("Privacy Policy", content.PrivacyPolicy);
+            AddSection("Terms of Service", content.TermsOfService);
+            AddSection("Season Pass", content.SeasonPass);
+            AddSection("FAQ", content.Faq);
+            AddSection("Announcements", content.Announcements);
+            AddSection("Release Notes", content.ReleaseNotes);
+        }
+
+        /// <summary>
+        /// Builds the Season Pass panel's catalog view from the raw
+        /// entitlement list: one row per distinct ProductKey actually held
+        /// (deduped to the latest-expiring row per key - see
+        /// SeasonPassEntries' doc comment for why), plus a synthetic
+        /// "Purchase" row for the current season if not already held.
+        /// "Current season" = the current calendar year, per the 2026-07-26
+        /// example (today being mid-2026, "set up 2026" means this year).
+        /// The bare, non-seasoned key (the admin dev-toggle sentinel) is
+        /// never offered as a Purchase row - only real dated products are.
+        /// </summary>
+        private void RebuildSeasonPassEntries(List<EntitlementSummaryDto> allEntitlements)
+        {
+            SeasonPassEntries.Clear();
+
+            var latestPerProduct = allEntitlements
+                .GroupBy(e => e.ProductKey)
+                .Select(g => g.OrderByDescending(e => e.ExpiryDate ?? DateTime.MinValue).First())
+                .OrderByDescending(e => e.ExpiryDate);
+
+            foreach (var e in latestPerProduct)
+            {
+                SeasonPassEntries.Add(new SeasonPassEntryViewModel
+                {
+                    ProductKey = e.ProductKey,
+                    IsActive = e.IsActive,
+                    IsPurchasable = false,
+                    DisplayLine = e.DisplayLine
+                });
+            }
+
+            const string baseProductKey = "cfb-season-pass";
+            var currentSeasonKey = $"{baseProductKey}-{DateTime.Now.Year}";
+            var alreadyHasCurrentSeason = allEntitlements.Any(e => e.ProductKey == currentSeasonKey && e.IsActive);
+
+            if (!alreadyHasCurrentSeason)
+            {
+                SeasonPassEntries.Add(new SeasonPassEntryViewModel
+                {
+                    ProductKey = currentSeasonKey,
+                    IsActive = false,
+                    IsPurchasable = true,
+                    DisplayLine = null
+                });
+            }
+        }
+
+
         public async Task LoadDataAsync()
         {
             if (IsBusy) return;
@@ -770,9 +1015,11 @@ namespace SaturdayPulse.ViewModels
                 var teamsTask     = Task.Run(() => _apiService.GetTeamsAsync());
                 var rivalriesTask = Task.Run(() => _apiService.GetNamedRivalriesAsync());
                 var profileTask   = _userApi.GetMeAsync();
+                var contentTask   = _contentApi.GetContentAsync();
 
-                await Task.WhenAll(teamsTask, rivalriesTask, profileTask);
-                var (teams, rivalries, profile) = (teamsTask.Result, rivalriesTask.Result, profileTask.Result);
+                await Task.WhenAll(teamsTask, rivalriesTask, profileTask, contentTask);
+                var (teams, rivalries, profile, content) =
+                    (teamsTask.Result, rivalriesTask.Result, profileTask.Result, contentTask.Result);
 
                 if (teams != null && teams.Count > 0)
                 {
@@ -797,6 +1044,8 @@ namespace SaturdayPulse.ViewModels
                 {
                     IsLoggedIn = false;
                 }
+
+                ApplyContent(content);
 
                 var allRivalries = rivalries ?? [];
                 var followedIds  = _followService.GetFollowedIds();
@@ -869,20 +1118,32 @@ namespace SaturdayPulse.ViewModels
         }
 
         // ── Filters ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Rebuilds either the flat Teams list (a specific conference
+        /// selected) or the grouped TeamGroups list ("All" selected) - the
+        /// two are mutually exclusive, matching which CollectionView
+        /// SettingsPage.xaml shows via IsConferenceAll. Same "followed
+        /// teams first" sort in both cases.
+        /// </summary>
         private void ApplyTeamFilter()
         {
-            var filtered = _allTeams.AsEnumerable();
+            if (IsConferenceAll)
+            {
+                Teams.Clear();
+                RebuildTeamGroups();
+                return;
+            }
+
+            TeamGroups.Clear();
 
             // SelectedConference already stores the abbreviation — compare directly.
             // (The old DisplayToAbbr call treated it as a display name and, after the
             //  abbreviation refactor, silently filtered the Teams list to nothing.)
             var conf = _navState.SelectedConference;
-            if (conf != "All")
-            {
-                filtered = filtered.Where(t =>
-                    t.ConferenceAbbr != null &&
-                    t.ConferenceAbbr.Equals(conf, StringComparison.OrdinalIgnoreCase));
-            }
+            var filtered = _allTeams.Where(t =>
+                t.ConferenceAbbr != null &&
+                t.ConferenceAbbr.Equals(conf, StringComparison.OrdinalIgnoreCase));
 
             var sorted = filtered
                 .OrderByDescending(t => t.IsFollowed)
@@ -891,6 +1152,32 @@ namespace SaturdayPulse.ViewModels
             Teams.Clear();
             foreach (var t in sorted)
                 Teams.Add(t);
+        }
+
+        private void RebuildTeamGroups()
+        {
+            // Preserve which groups were already expanded across a rebuild
+            // (e.g. after a follow toggle re-sorts within groups) rather than
+            // collapsing everything every time.
+            var previouslyExpanded = TeamGroups
+                .Where(g => g.IsExpanded)
+                .Select(g => g.ConferenceName)
+                .ToHashSet();
+
+            var groups = _allTeams
+                .GroupBy(t => t.ConferenceAbbr ?? "Independent")
+                .OrderBy(g => g.Key)
+                .Select(g => new ConferenceGroupInfo
+                {
+                    ConferenceName = g.Key,
+                    IsExpanded = previouslyExpanded.Contains(g.Key),
+                    Teams = new ObservableCollection<TeamInfo>(
+                        g.OrderByDescending(t => t.IsFollowed).ThenBy(t => t.TeamName))
+                });
+
+            TeamGroups.Clear();
+            foreach (var group in groups)
+                TeamGroups.Add(group);
         }
 
         private void ApplyGamesFilter()
@@ -970,5 +1257,90 @@ namespace SaturdayPulse.ViewModels
             "MEH"      => 3,
             _          => 4
         };
+    }
+
+    /// <summary>
+    /// One row in the Season Pass panel - either a product the user
+    /// actually holds (IsPurchasable false, status is Active/Expired) or a
+    /// synthetic "you could buy this" row (IsPurchasable true). Plain
+    /// immutable class, not INotifyPropertyChanged - unlike
+    /// ConferenceGroupInfo/ContentSectionViewModel, these are rebuilt fresh
+    /// each time rather than mutated in place, so there's no state to notify
+    /// changes on.
+    /// </summary>
+    public class SeasonPassEntryViewModel
+    {
+        public required string ProductKey { get; init; }
+        public required bool IsActive { get; init; }
+        public required bool IsPurchasable { get; init; }
+        public string? DisplayLine { get; init; }
+
+        public bool HasDisplayLine => !string.IsNullOrWhiteSpace(DisplayLine);
+
+        /// <summary>
+        /// Single-valued status used to drive the status label's text AND
+        /// color via one set of mutually-exclusive DataTriggers, rather than
+        /// juggling IsPurchasable/IsActive as separate booleans in XAML
+        /// (which risks two triggers matching the same Setter simultaneously).
+        /// </summary>
+        public string StatusKey => IsPurchasable ? "Purchase" : (IsActive ? "Active" : "Expired");
+    }
+
+    /// <summary>
+    /// One conference's worth of teams, independently expandable - backs
+    /// SettingsPage.xaml's Favorites panel when the header conference filter
+    /// is "All". Plain INotifyPropertyChanged rather than a full ViewModel
+    /// since it's a display-only grouping wrapper, not a service-backed page.
+    /// </summary>
+    public class ConferenceGroupInfo : INotifyPropertyChanged
+    {
+        public required string ConferenceName { get; init; }
+        public required ObservableCollection<TeamInfo> Teams { get; init; }
+
+        private bool _isExpanded;
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set { _isExpanded = value; OnPropertyChanged(); }
+        }
+
+        public ICommand ToggleCommand { get; }
+
+        public ConferenceGroupInfo()
+        {
+            ToggleCommand = new Microsoft.Maui.Controls.Command(() => IsExpanded = !IsExpanded);
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    /// <summary>
+    /// One content section (About/Privacy/Terms/etc.), pre-rendered to HTML
+    /// via Markdig and independently expandable - backs the Content panel.
+    /// </summary>
+    public class ContentSectionViewModel : INotifyPropertyChanged
+    {
+        public required string Title { get; init; }
+        public required string Html { get; init; }
+
+        private bool _isExpanded;
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set { _isExpanded = value; OnPropertyChanged(); }
+        }
+
+        public ICommand ToggleCommand { get; }
+
+        public ContentSectionViewModel()
+        {
+            ToggleCommand = new Microsoft.Maui.Controls.Command(() => IsExpanded = !IsExpanded);
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

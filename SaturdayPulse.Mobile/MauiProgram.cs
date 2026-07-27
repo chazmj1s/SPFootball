@@ -63,6 +63,7 @@ public static class MauiProgram
         // registered elsewhere in this method) — DI resolves the graph at
         // request time, so registration order here doesn't matter.
         builder.Services.AddSingleton<EntitlementService>();
+        builder.Services.AddSingleton<ContentApiService>();
 
         // Register Services
         var gameDataClientBuilder = builder.Services.AddHttpClient<GameDataApiService>(client =>
@@ -98,6 +99,14 @@ public static class MauiProgram
 
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+
+        builder.Services.AddHttpClient<ContentApiService>(client =>
+        {
+            client.BaseAddress = new Uri(ApiConfiguration.ApiRootUrl);
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
 #if DEBUG && ANDROID
         userApiClientBuilder.ConfigurePrimaryHttpMessageHandler(GetInsecureAndroidHandler);
 #endif

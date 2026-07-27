@@ -15,5 +15,8 @@ namespace SaturdayPulse.Repositories.Interfaces
         Task<UserEntitlement?> GetActiveCfbSeasonPassAsync(string userId, CancellationToken token = default);
 
         Task AddAsync(UserEntitlement entitlement, CancellationToken token = default);
+
+        /// <summary>Part of Delete Account - removes every row for this user.</summary>
+        Task DeleteAllForUserAsync(string userId, CancellationToken token = default);
     }
 }

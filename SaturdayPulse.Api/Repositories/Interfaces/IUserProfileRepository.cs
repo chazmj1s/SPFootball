@@ -15,5 +15,8 @@ namespace SaturdayPulse.Repositories.Interfaces
         /// Users page - fine as an unpaginated full-table read at current scale
         /// (pre-beta, single admin); revisit if the user count grows large.</summary>
         Task<List<UserProfile>> GetAllAsync(CancellationToken token = default);
+
+        /// <summary>Part of Delete Account - removes this user's row entirely.</summary>
+        Task DeleteAsync(string userId, CancellationToken token = default);
     }
 }
