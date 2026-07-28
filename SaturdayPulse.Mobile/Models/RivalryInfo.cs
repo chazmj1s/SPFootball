@@ -41,8 +41,8 @@ namespace SaturdayPulse.Models
                 ? $"{Team1Name} vs {Team2Name}"
                 : RivalryName!;
         public string DisplayMatchup => $"{Team1ShortName} vs {Team2ShortName}";
-        public string DisplaySeries => $"{GamesPlayed} games ({FirstPlayed}–{LastPlayed})";
-        public string DisplayUpsetRate => $"{UpsetRate:P0} upset rate";
+        public string DisplaySeries => $"first played: {FirstPlayed}";
+        public string DisplayUpsetRate => $"upset rate: {UpsetRate:P0}";
         public string DisplayAvgMargin => $"avg margin: {AvgMargin:F1}";
         public string DisplayAvgSwing => $"avg swing: {StDevMargin:F1}";
         public string TierBadge => RivalryTier switch

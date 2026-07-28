@@ -342,6 +342,75 @@ namespace SaturdayPulse.Services
         }
 
         // ════════════════════════════════════════════════════════════════════════
+        // Rivalry Notes — Scores + My Teams game card only. NOT the Sandbox footer
+        // (GamePredictionService.BuildConfidenceExplanation) — that one deliberately
+        // never names a rivalry, since Sandbox matchups are hypothetical and can pair
+        // any two team-seasons. This card is the opposite case: a real, scheduled game
+        // between two teams that actually are one of the 52 curated MatchupHistory
+        // pairs, so naming the rivalry here is the entire point.
+        //
+        // Grid fields map directly to MatchupHistory (Layer 1/2 backfill from earlier
+        // in this project): RivalryName, FirstPlayed, AvgMargin ("Average Spread"),
+        // AvgTotalPoints ("Average O/U"), UpsetRate ("Chance of upset").
+        //
+        // Blurb compares this specific game's actual result (if played) or current
+        // projection (if not) against the rivalry's historical averages — plain
+        // numbers side by side, no "closer than" / "notably higher" editorializing,
+        // since that would need a new threshold to decide what counts as "notable"
+        // and the numbers speak for themselves. Deliberately no superlative claims
+        // about any rivalry being the best/greatest/etc. — every curated pair gets
+        // the same neutral treatment.
+        // ════════════════════════════════════════════════════════════════════════
+
+        internal static object? BuildRivalryNotes(
+            MatchupHistory? rivalry,
+            bool isPlayed,
+            double? actualMargin,
+            double? actualTotal,
+            double? projectedMargin,
+            double? projectedTotal)
+        {
+            if (rivalry == null) return null;
+
+            string blurb;
+            if (isPlayed && actualMargin.HasValue && actualTotal.HasValue)
+            {
+                blurb =
+                    $"This year's result — a {actualMargin.Value:F0}-point margin on " +
+                    $"{actualTotal.Value:F0} total points — compares to this matchup's " +
+                    $"historical average of {rivalry.AvgMargin:F0} points and " +
+                    $"{rivalry.AvgTotalPoints:F0} total points.";
+            }
+            else if (!isPlayed && projectedMargin.HasValue && projectedTotal.HasValue)
+            {
+                blurb =
+                    $"This year's projection — a {projectedMargin.Value:F0}-point margin on " +
+                    $"{projectedTotal.Value:F0} total points — compares to this matchup's " +
+                    $"historical average of {rivalry.AvgMargin:F0} points and " +
+                    $"{rivalry.AvgTotalPoints:F0} total points.";
+            }
+            else
+            {
+                // No projection available and the game hasn't been played yet —
+                // fall back to a plain historical statement with no comparison.
+                blurb =
+                    $"This matchup has historically been decided by about {rivalry.AvgMargin:F0} " +
+                    $"points, with a total near {rivalry.AvgTotalPoints:F0} and an upset in roughly " +
+                    $"{rivalry.UpsetRate:P0} of meetings.";
+            }
+
+            return new
+            {
+                RivalryName      = rivalry.RivalryName,
+                FirstPlayed      = rivalry.FirstPlayed,
+                AverageSpread    = Math.Round((double)rivalry.AvgMargin,      2),
+                AverageOverUnder = Math.Round((double)rivalry.AvgTotalPoints, 2),
+                UpsetChance      = Math.Round((double)rivalry.UpsetRate,      2),
+                Blurb            = blurb
+            };
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
         // Helper — builds a single game object in the same shape as
         // GetScheduleV2Async's results. Used for the championship title game.
         // Once the schedule method itself is refactored to call this helper,

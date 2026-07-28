@@ -41,6 +41,7 @@ namespace SaturdayPulse.Models
                 HomeStats     = dto.HomeStats?.ToGameTeamStats(),
                 AwayStats     = dto.AwayStats?.ToGameTeamStats(),
                 VegasLines    = dto.VegasLines?.ToGameLines(),
+                RivalryNotes  = dto.RivalryNotes?.ToRivalryNotes(),
             };
         }
 
@@ -74,6 +75,17 @@ namespace SaturdayPulse.Models
                 HomeMoneyline = dto.HomeMoneyline,
                 AwayMoneyline = dto.AwayMoneyline,
                 ProviderCount = dto.ProviderCount,
+            };
+
+        private static RivalryNotes ToRivalryNotes(this RivalryNotesDto dto)
+            => new()
+            {
+                RivalryName      = dto.RivalryName ?? string.Empty,
+                FirstPlayed      = dto.FirstPlayed,
+                AverageSpread    = dto.AverageSpread,
+                AverageOverUnder = dto.AverageOverUnder,
+                UpsetChance      = dto.UpsetChance,
+                Blurb            = dto.Blurb ?? string.Empty,
             };
     }
 }

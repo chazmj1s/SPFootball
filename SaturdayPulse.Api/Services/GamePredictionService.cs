@@ -51,6 +51,103 @@ namespace SaturdayPulse.Services
     ///
     ///   Old cliff behavior is retired, not preserved inline — see this session's
     ///   history for the full old implementation if it's ever needed again.
+    ///
+    /// ── REBUILT — margin/total/confidence data-correctness pass ─────────────────
+    ///   Root issue found: PowerRating is itself derived from Ranking + SOS + Record
+    ///   (confirmed with Charlie). The margin calc was keying the historical bucket
+    ///   lookup on Ranking AND THEN applying a ×10 PowerRating-delta correction on
+    ///   top — double- (for SOS/Record, triple-) counting the same underlying
+    ///   strength signal. Verified against live Week 20 2025 WeeklyRankings data:
+    ///   Texas Ranking 0.8314 / PowerRating 0.0808, Alabama Ranking 0.8593 /
+    ///   PowerRating 0.1718 — two closely-related, not independent, numbers. This
+    ///   was very likely why closely-rated teams (e.g. Texas/Alabama, Sandbox) were
+    ///   compressing toward a near-zero margin regardless of what the historical
+    ///   bucket for their differential actually said. The ×10 correction has been
+    ///   removed; AvgScoreDifferentialService's interpolated AverageMargin (keyed
+    ///   purely on Ranking) is now the sole margin source.
+    ///
+    ///   Total points previously came ENTIRELY from team PPG/PAG averaging —
+    ///   AvgScoreDifferential.AverageTotalPoints existed in the DB but was never
+    ///   mapped through to this class at all. Total points is now a reliability-
+    ///   weighted blend: the bucket's own historical AverageTotalPoints anchors the
+    ///   number, corroborated (not overridden) by these two teams' actual PPG/PAG,
+    ///   weighted by the bucket's own ReliabilityWeight — well-sampled buckets lean
+    ///   on 60 years of history, thin buckets lean more on this year's real scoring.
+    ///
+    ///   MarginOfError/RawStdDev no longer floor/cap against constants borrowed from
+    ///   the retired AvgScoreDelta class ([7, 21]) — they report the real,
+    ///   interpolated historical StdDevMargin for this differential directly.
+    ///
+    ///   Confidence is rebuilt on two data-derived signals instead of fixed point
+    ///   thresholds (previously <10/<14/<18 on raw stddev, calibrated against a
+    ///   bucket system that's no longer in use): a baseline volatility tier from
+    ///   this matchup's stddev percentile within the FULL AvgScoreDifferential
+    ///   table's own distribution (self-calibrating — moves with the data, not a
+    ///   guessed cutoff), modulated by a game-specific corroboration check — do
+    ///   these two teams' OffensiveZScore/DefensiveZScore edges point the same
+    ///   direction as the historical margin. SOS/PowerRating/Record/Win% are
+    ///   deliberately excluded from corroboration since they're already folded into
+    ///   the Ranking-keyed margin itself (same double-counting problem as above);
+    ///   OffensiveZScore/DefensiveZScore are the only genuinely independent signals
+    ///   left. The corroboration adjustment is itself gated by the bucket's own
+    ///   ReliabilityWeight — a thin bucket doesn't let a single game's Z-score
+    ///   agreement override the baseline in either direction.
+    ///
+    /// ── FOLLOW-UP — week=0 / ranked-check / postseason-check cleanup ────────────
+    ///   PredictSandboxMatchupAsync always calls CalculatePrediction with week = 0.
+    ///   That was silently triggering the "early season" branch of weekMultiplier
+    ///   (a real calendar-scoring-variance adjustment with no meaning for a
+    ///   hypothetical, possibly cross-year, neutral-site matchup) on every single
+    ///   Sandbox prediction. Now gated behind an explicit
+    ///   applyWeeklyScoringAdjustments flag — true for all real calendar-anchored
+    ///   callers (PredictMatchup/PredictMatchups/PredictMatchupsWithRatings,
+    ///   unchanged behavior), false for PredictSandboxMatchupAsync.
+    ///
+    ///   Also removed from scoringAdjustment: a "ranked vs ranked" check that
+    ///   compared TeamRecord.Ranking (continuous ~0-1 Rating) against <= 25 — never
+    ///   true criteria, since Ranking is never > 25; it silently fired on every
+    ///   matchup with any Ranking at all rather than genuinely detecting top-25
+    ///   status. No ordinal rank field exists on TeamRecord to do this correctly
+    ///   today, so it was removed rather than patched with another guess.
+    ///
+    ///   Also removed: a week >= 15 postseason-scoring-compression multiplier — an
+    ///   unreliable proxy for conference championship week, which doesn't land on a
+    ///   fixed week number every season.
+    ///
+    ///   These three combined were coincidentally near-canceling for the Texas/
+    ///   Alabama Sandbox case (1.05 weekMultiplier × 0.95 always-on "ranked" hack ≈
+    ///   0.9975), which is why the total looked roughly reasonable despite every
+    ///   input being wrong. Not something to rely on — worth re-validating total
+    ///   points on a few more Sandbox pairings now that both bugs are gone at once.
+    ///
+    ///   RivalryScoringAdjustment/RivalryVarianceMultiplier/
+    ///   RivalryVarianceMultiplierForDisplay (in RatingCalculator) still use
+    ///   hand-picked EPIC/NATIONAL/STATE tier constants — flagged as the next
+    ///   candidate for a MatchupHistory-driven replacement (real per-pair AvgMargin/
+    ///   StdDevMargin/VarianceRatio instead of a tier lookup), not addressed here:
+    ///   RatingCalculator is shared with other services and MatchupHistory.
+    ///   VarianceRatio's current baseline needs verifying before it's trusted for
+    ///   this.
+    ///
+    /// ── FOLLOW-UP RESOLVED — rivalry adjustments now data-driven (display side) ──
+    ///   RivalryVarianceMultiplierForDisplay and RivalryScoringAdjustment now take
+    ///   the real MatchupHistory row (Layer 1: AvgTotalPoints column added; Layer 2:
+    ///   MatchupHistoryCalculator backfilled from actual game data for the 50
+    ///   curated rivalries) and the live, interpolated AvgScoreDifferential values
+    ///   for the pair's current differential, computing a real ratio instead of an
+    ///   EPIC/NATIONAL/STATE guess. See RatingCalculator.cs remarks for the full
+    ///   detail — notably, RivalryVarianceMultiplierForDisplay reduces cleanly to
+    ///   "use this pair's own real historical StdDevMargin directly" for known
+    ///   rivalries. VarianceRatio itself was confirmed (by reading
+    ///   MatchupHistoryCalculator directly) to have never been populated at all —
+    ///   not stale, just never wired up — so this computes the ratio live at
+    ///   prediction time instead of trusting that unset field.
+    ///
+    ///   RivalryVarianceMultiplier (no "ForDisplay" suffix) is confirmed via
+    ///   reference search to also feed ComputeGameZScore, TeamMetricsService, and
+    ///   WeeklyRankingsService — the live weekly rating pipeline, not just
+    ///   prediction display — and remains untouched, deferred to the planned
+    ///   calc-engine refactor where its wider blast radius can be validated properly.
     /// </summary>
     public class GamePredictionService
     {
@@ -61,6 +158,7 @@ namespace SaturdayPulse.Services
         private const    int                          RecentYearsForAverage = 5;
         private          double?                      _cachedAvgTeamScore;
         private          int                          _cachedAvgTeamScoreYear = -1;
+        private          List<AvgScoreDifferential>?   _cachedDifferentials;
 
         public GamePredictionService(
             IUnitOfWork uow,
@@ -86,9 +184,10 @@ namespace SaturdayPulse.Services
             var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
                            ?? throw new ArgumentException($"Team not found: {opponentName}");
 
-            var recordsById    = await GetRatingsForWeekAsync(year, week, token);
-            var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
-            var avgTeamScore   = await GetAverageTeamScoreAsync(year, token);
+            var recordsById     = await GetRatingsForWeekAsync(year, week, token);
+            var rivalries       = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var avgTeamScore    = await GetAverageTeamScoreAsync(year, token);
+            var allDifferentials = await GetAllDifferentialsAsync(token);
 
             if (!recordsById.TryGetValue(team.TeamId,     out var teamRecord) ||
                 !recordsById.TryGetValue(opponent.TeamId, out var oppRecord))
@@ -96,7 +195,7 @@ namespace SaturdayPulse.Services
 
             return CalculatePrediction(
                 teamRecord, oppRecord, team, opponent, location,
-                rivalries, avgTeamScore, year, week, null);
+                rivalries, avgTeamScore, allDifferentials, year, week, null);
         }
 
         /// <summary>
@@ -127,12 +226,15 @@ namespace SaturdayPulse.Services
 
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             // Average team score across both years for realistic scoring context
-            var avgTeamScore = await GetAverageTeamScoreAsync(Math.Min(teamYear, opponentYear), token);
+            var avgTeamScore    = await GetAverageTeamScoreAsync(Math.Min(teamYear, opponentYear), token);
+            var allDifferentials = await GetAllDifferentialsAsync(token);
 
             return CalculatePrediction(
                 teamRecord, oppRecord, team, opponent, 'N',
-                rivalries, avgTeamScore,
-                Math.Max(teamYear, opponentYear), 0, null);
+                rivalries, avgTeamScore, allDifferentials,
+                Math.Max(teamYear, opponentYear), 0, null,
+                applyWeeklyScoringAdjustments: false,
+                isSandboxContext: true);
         }
 
         /// <summary>
@@ -151,6 +253,7 @@ namespace SaturdayPulse.Services
             var recordsById  = await GetRatingsForWeekAsync(year, asOfWeek, token);
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
+            var allDifferentials = await GetAllDifferentialsAsync(token);
 
             var predictions = new List<GamePrediction>();
 
@@ -164,7 +267,7 @@ namespace SaturdayPulse.Services
 
                 predictions.Add(CalculatePrediction(
                     teamRecord, oppRecord, team, opponent, matchup.Location,
-                    rivalries, avgTeamScore, year, matchup.Week, null));
+                    rivalries, avgTeamScore, allDifferentials, year, matchup.Week, null));
             }
 
             return predictions.OrderByDescending(p => Math.Abs(p.ExpectedMargin)).ToList();
@@ -197,6 +300,7 @@ namespace SaturdayPulse.Services
             var teams        = await _uow.Teams.GetDictionaryByNameAsync(token);
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
+            var allDifferentials = await GetAllDifferentialsAsync(token);
 
             var predictions = new List<GamePrediction>();
 
@@ -210,7 +314,7 @@ namespace SaturdayPulse.Services
 
                 predictions.Add(CalculatePrediction(
                     teamRecord, oppRecord, team, opponent, matchup.Location,
-                    rivalries, avgTeamScore, year, matchup.Week, hfaOverride));
+                    rivalries, avgTeamScore, allDifferentials, year, matchup.Week, hfaOverride));
             }
 
             return predictions.OrderByDescending(p => Math.Abs(p.ExpectedMargin)).ToList();
@@ -327,55 +431,94 @@ namespace SaturdayPulse.Services
             char location,
             List<MatchupHistory> rivalries,
             double avgTeamScore,
+            List<AvgScoreDifferential> allDifferentials,
             int year, int week,
-            double? hfaOverride)
+            double? hfaOverride,
+            bool applyWeeklyScoringAdjustments = true,
+            bool isSandboxContext = false)
         {
-            // Use Ranking values for the differential lookup — matches the scale
-            // used when building the AvgScoreDifferential table (ExpandStrength(Ranking)).
-            // BucketWinPct (0-1 range) produces differentials far too small for the table.
+            // Historical baseline — interpolated AverageMargin from AvgScoreDifferential,
+            // keyed on Ranking. This is now the SOLE margin source. The previous ×10
+            // PowerRating-delta correction has been removed: PowerRating is derived from
+            // Ranking + SOS + Record (confirmed), so stacking it on top of a
+            // Ranking-keyed bucket lookup was double-counting the same strength signal
+            // this table already accounts for. See class remarks for the Week 20 2025
+            // Texas/Alabama numbers that surfaced this.
             var distribution = _avgScoreDifferentialService.GetExpectedDistribution(
                 (double)(teamRecord.Ranking ?? 0m),
                 (double)(oppRecord.Ranking  ?? 0m));
 
-            var expectedFromTeam = distribution.ExpectedMargin;
-            expectedFromTeam     = RatingCalculator.ApplyHomeField(
-                expectedFromTeam, location == 'H', location == 'N', (double)(hfaOverride.HasValue ? hfaOverride : _config.HomeFieldAdvantage));
-
-            if (teamRecord.PowerRating.HasValue && oppRecord.PowerRating.HasValue)
-                expectedFromTeam += (double)(teamRecord.PowerRating.Value - oppRecord.PowerRating.Value) * 10.0;
+            var expectedMargin = RatingCalculator.ApplyHomeField(
+                distribution.ExpectedMargin, location == 'H', location == 'N',
+                hfaOverride ?? _config.HomeFieldAdvantage);
 
             var normalizedT1 = Math.Min(team.TeamId, opponent.TeamId);
             var normalizedT2 = Math.Max(team.TeamId, opponent.TeamId);
             var rivalry      = rivalries.FirstOrDefault(
                 r => r.Team1Id == normalizedT1 && r.Team2Id == normalizedT2);
 
-            double  varianceMultiplier = RatingCalculator.RivalryVarianceMultiplierForDisplay(rivalry?.RivalryTier);
+            double  varianceMultiplier = RatingCalculator.RivalryVarianceMultiplierForDisplay(rivalry, distribution.StdDev);
             string? rivalryNote        = rivalry != null
                 ? $"{rivalry.RivalryName} ({rivalry.RivalryTier})" : null;
 
-            var teamPPG = (double)teamRecord.AvgPointsScored;
-            var oppPPG  = (double)oppRecord.AvgPointsScored;
-            var teamPAG = (double)teamRecord.AvgPointsAllowed;
-            var oppPAG  = (double)oppRecord.AvgPointsAllowed;
+            // Total points: the bucket's own historical AverageTotalPoints anchors the
+            // number (same 60-year trust level as AverageMargin), corroborated — not
+            // overridden — by these two teams' own PPG/PAG. Weighted by the bucket's
+            // ReliabilityWeight: well-sampled buckets lean on history, thin buckets lean
+            // more on this year's actual scoring. teamStatsImpliedTotal reconstructs
+            // what the old PPG/PAG-only total implicitly was, now used as the
+            // corroborating input instead of the sole source.
+            var teamStatsImpliedTotal =
+                ((double)teamRecord.AvgPointsScored + (double)oppRecord.AvgPointsAllowed) / 2.0 +
+                ((double)oppRecord.AvgPointsScored  + (double)teamRecord.AvgPointsAllowed) / 2.0;
 
-            var predictedTeamScore = (teamPPG + oppPAG) / 2.0 + (expectedFromTeam / 2.0);
-            var predictedOppScore  = (oppPPG  + teamPAG) / 2.0 - (expectedFromTeam / 2.0);
+            var reliabilityWeight = distribution.Reliability;
+            var totalPoints = (reliabilityWeight * distribution.AverageTotalPoints)
+                             + ((1.0 - reliabilityWeight) * teamStatsImpliedTotal);
 
-            double weekMultiplier = week switch { <= 4 => 1.05, >= 11 => 0.95, _ => 1.0 };
-            predictedTeamScore   *= weekMultiplier;
-            predictedOppScore    *= weekMultiplier;
+            var rawTeamScore = (totalPoints + expectedMargin) / 2.0;
+            var rawOppScore  = (totalPoints - expectedMargin) / 2.0;
 
-            double scoringAdjustment = RatingCalculator.RivalryScoringAdjustment(rivalry?.RivalryTier);
-            if (teamRecord.Ranking.HasValue && teamRecord.Ranking <= 25 &&
-                oppRecord.Ranking.HasValue  && oppRecord.Ranking  <= 25)
-                scoringAdjustment *= 0.95;
-            if (week >= 15) scoringAdjustment *= 0.93;
+            // weekMultiplier represents real early/late-calendar-season scoring
+            // variance and only means something for an actual calendar week.
+            // PredictSandboxMatchupAsync always passes week = 0 for hypothetical,
+            // possibly cross-year, neutral-site matchups — week 0 isn't "early
+            // season" there, it's "no season at all" — so it must not fire. Gated
+            // by an explicit flag rather than inferring intent from the week number
+            // itself, which is exactly the kind of implicit-meaning bug this was.
+            double weekMultiplier = applyWeeklyScoringAdjustments
+                ? week switch { <= 4 => 1.05, >= 11 => 0.95, _ => 1.0 }
+                : 1.0;
 
-            predictedTeamScore = Math.Max(0, predictedTeamScore * scoringAdjustment);
-            predictedOppScore  = Math.Max(0, predictedOppScore  * scoringAdjustment);
+            // Rivalry-tier scoring adjustment only (still uses the RatingCalculator
+            // hand-picked tier constants — flagged separately as a candidate to
+            // replace with real MatchupHistory data, not addressed in this pass).
+            //
+            // Removed: a "ranked vs ranked" check that compared TeamRecord.Ranking
+            // (the continuous ~0-1 Rating value) against <= 25. Ranking is never
+            // greater than 25, so this was true for essentially every matchup and
+            // never actually detected top-25 status — there's no ordinal rank field
+            // on TeamRecord to check this correctly today. Removed rather than left
+            // silently always-on.
+            //
+            // Removed: a week >= 15 postseason-compression multiplier — an unreliable
+            // calendar proxy for "conference championship week," which doesn't land
+            // on a fixed week number every season.
+            double scoringAdjustment = RatingCalculator.RivalryScoringAdjustment(rivalry, distribution.AverageTotalPoints);
 
+            var predictedTeamScore = Math.Max(0, rawTeamScore * weekMultiplier * scoringAdjustment);
+            var predictedOppScore  = Math.Max(0, rawOppScore  * weekMultiplier * scoringAdjustment);
+
+            // Real, interpolated historical stddev for this differential — no floor or
+            // cap against the retired AvgScoreDelta constants. Rivalry variance
+            // multiplier still applies (a rivalry genuinely is less predictable than the
+            // baseline for that strength gap).
             var stdDev        = distribution.StdDev * varianceMultiplier;
-            var marginOfError = Math.Min(Math.Max(stdDev, AvgScoreDelta.DefaultAverageScoreDelta), 21.0);
+            var marginOfError = stdDev;
+
+            var confidence = BuildConfidence(
+                allDifferentials, distribution, varianceMultiplier,
+                teamRecord, oppRecord, expectedMargin);
 
             return new GamePrediction
             {
@@ -388,10 +531,11 @@ namespace SaturdayPulse.Services
                 OpponentWins           = (int)oppRecord.Wins,
                 PredictedTeamScore     = Math.Round(predictedTeamScore, 1),
                 PredictedOpponentScore = Math.Round(predictedOppScore,  1),
-                ExpectedMargin         = Math.Round(expectedFromTeam,   1),
+                ExpectedMargin         = Math.Round(expectedMargin,     1),
                 MarginOfError          = Math.Round(marginOfError,      1),
                 RawStdDev              = stdDev,
-                Confidence             = CalculateConfidence(stdDev, varianceMultiplier),
+                Confidence             = confidence.Tier,
+                ConfidenceExplanation  = isSandboxContext ? confidence.Explanation : null,
                 RivalryNote            = rivalryNote,
                 TeamPowerRating        = teamRecord.PowerRating,
                 OpponentPowerRating    = oppRecord.PowerRating
@@ -416,13 +560,202 @@ namespace SaturdayPulse.Services
             return _cachedAvgTeamScore.Value;
         }
 
-        private static string CalculateConfidence(double stdDev, double varianceMultiplier)
+        /// <summary>
+        /// Fetches the full AvgScoreDifferential table once per service instance, used
+        /// to rank a given matchup's stddev against the table's own real distribution
+        /// for confidence tiering (see BuildConfidence). Same simple per-instance
+        /// caching pattern as GetAverageTeamScoreAsync above — the table doesn't change
+        /// mid-request.
+        /// </summary>
+        private async Task<List<AvgScoreDifferential>> GetAllDifferentialsAsync(CancellationToken token)
         {
-            var adjusted = stdDev * varianceMultiplier;
-            if (adjusted < 10) return "High";
-            if (adjusted < 14) return "Medium";
-            if (adjusted < 18) return "Low";
-            return "Very Low";
+            _cachedDifferentials ??= await _uow.Lookups.GetAvgScoreDifferentialsAsync(token);
+            return _cachedDifferentials;
+        }
+
+        /// <summary>
+        /// Confidence tier and footer explanation, built together from the same two
+        /// data-derived signals so they can never disagree with each other:
+        ///
+        ///   1. Baseline volatility tier — where THIS matchup's stddev falls relative
+        ///      to the percentile distribution of StdDevMargin across the FULL
+        ///      AvgScoreDifferential table. Self-calibrating: the boundaries are
+        ///      quartiles of the table's own real data, not guessed cutoffs, so they
+        ///      move automatically as more historical data is added.
+        ///
+        ///   2. Game-specific corroboration — do these two teams' own OffensiveZScore/
+        ///      DefensiveZScore edges point the same direction as the historical
+        ///      margin. Both are already stdev-unit-consistent, so they're combined
+        ///      unweighted (no tuning coefficient needed, unlike an earlier draft that
+        ///      hand-picked 1.25/2.0 weights). SOS/PowerRating/Record/Win% are
+        ///      deliberately excluded — they're already folded into the Ranking-keyed
+        ///      margin itself, so including them here would be corroborating the
+        ///      baseline with itself.
+        ///
+        /// The corroboration signal shifts the baseline tier one step up (agrees) or
+        /// down (contradicts), but ONLY when the bucket's own ReliabilityWeight is at
+        /// least 0.5 — half of the entity's own ReliabilityThreshold's worth of sample
+        /// size. A thin bucket doesn't have enough of a trusted baseline for a single
+        /// game's metric agreement to override in either direction.
+        ///
+        /// The Explanation text is Sandbox-only footer copy — deliberately never names
+        /// a rivalry or implies a real scheduled game (Sandbox matchups are hypothetical
+        /// and can pair any two team-seasons, so "the Iron Bowl" would be misleading
+        /// even when the pairing happens to be one of the 52 curated rivalries). A
+        /// curated pair's real historical data still shapes the NUMBERS (baselineStdDev
+        /// vs effectiveStdDev diverge whenever RivalryVarianceMultiplierForDisplay
+        /// actually moved something) — the copy just describes that divergence
+        /// generically ("matchups between these two") rather than naming it.
+        /// </summary>
+        private static (string Tier, string Explanation) BuildConfidence(
+            List<AvgScoreDifferential> allDifferentials,
+            ExpectedGameDistribution distribution,
+            double varianceMultiplier,
+            TeamRecord teamRecord,
+            TeamRecord oppRecord,
+            double expectedMargin)
+        {
+            var baselineStdDev  = distribution.StdDev;
+            var effectiveStdDev = distribution.StdDev * varianceMultiplier;
+
+            var allStdDevs = allDifferentials
+                .Select(b => (double)b.StdDevMargin)
+                .OrderBy(x => x)
+                .ToList();
+
+            var baselineTier = TierFromPercentile(allStdDevs, effectiveStdDev);
+
+            var netZEdge =
+                ((double)teamRecord.OffensiveZScore - (double)oppRecord.DefensiveZScore) -
+                ((double)oppRecord.OffensiveZScore  - (double)teamRecord.DefensiveZScore);
+
+            var marginSign = Math.Sign(expectedMargin);
+            var zEdgeSign  = Math.Sign(netZEdge);
+
+            bool corroborates = marginSign != 0 && zEdgeSign != 0 && marginSign == zEdgeSign;
+            bool contradicts  = marginSign != 0 && zEdgeSign != 0 && marginSign != zEdgeSign;
+
+            bool reliableEnoughToAdjust = distribution.Reliability >= 0.5;
+
+            var tier = baselineTier;
+            if (reliableEnoughToAdjust && corroborates) tier = ShiftTier(baselineTier, +1);
+            if (reliableEnoughToAdjust && contradicts)  tier = ShiftTier(baselineTier, -1);
+
+            // A curated rivalry only counts as "adjusted" if it actually moved the
+            // number — RivalryVarianceMultiplierForDisplay returns exactly 1.00 for
+            // any non-curated pair (~750+ of them), so this is really asking "was this
+            // one of the 52," not re-deciding anything.
+            bool rivalryAdjusted = Math.Abs(varianceMultiplier - 1.0) > 0.0001;
+
+            var explanation = BuildConfidenceExplanation(
+                tier, baselineStdDev, effectiveStdDev, rivalryAdjusted,
+                reliableEnoughToAdjust, corroborates, contradicts);
+
+            return (tier, explanation);
+        }
+
+        /// <summary>
+        /// Sandbox-only footer copy. See BuildConfidence remarks for why rivalry names
+        /// are never mentioned even when a curated pair's real data drove the numbers.
+        /// </summary>
+        private static string BuildConfidenceExplanation(
+            string tier,
+            double baselineStdDev,
+            double effectiveStdDev,
+            bool rivalryAdjusted,
+            bool reliableEnoughToAdjust,
+            bool corroborates,
+            bool contradicts)
+        {
+            var lead = $"{tier} confidence. ";
+            string volatilityClause;
+
+            if (rivalryAdjusted)
+            {
+                var direction = effectiveStdDev > baselineStdDev ? "more volatile" : "more predictable";
+                volatilityClause =
+                    $"Matchups between these two have historically run {direction} than a typical game " +
+                    $"at this strength gap — about \u00b1{effectiveStdDev:F0} points compared to the usual " +
+                    $"\u00b1{baselineStdDev:F0}.";
+            }
+            else
+            {
+                var descriptor = tier switch
+                {
+                    "Very Low" or "Low" => "evenly matched",
+                    "High"               => "lopsided",
+                    _                    => "a moderate strength gap"
+                };
+
+                var trailing = descriptor switch
+                {
+                    "evenly matched" => " \u2014 closer games are inherently less predictable than blowouts.",
+                    "lopsided"        => " \u2014 blowouts are simply more predictable than close games.",
+                    _                 => "."
+                };
+
+                volatilityClause =
+                    $"In a matchup this {descriptor}, historical outcomes have varied by about " +
+                    $"\u00b1{effectiveStdDev:F0} points from the projection{trailing}";
+            }
+
+            if (!reliableEnoughToAdjust)
+                return lead + volatilityClause;
+
+            string metricsClause;
+            if (corroborates)
+            {
+                metricsClause = rivalryAdjusted
+                    ? " This year's offensive and defensive numbers reinforce that lean."
+                    : " This year's offensive and defensive numbers for both teams support that projection.";
+            }
+            else if (contradicts)
+            {
+                metricsClause = tier == "Very Low"
+                    ? " This year's offensive and defensive numbers actually point the other way \u2014 " +
+                      "treat this projection as a coin flip at best."
+                    : " This year's offensive and defensive numbers actually lean the other way, so " +
+                      "treat this margin with extra caution.";
+            }
+            else
+            {
+                metricsClause = "";
+            }
+
+            return lead + volatilityClause + metricsClause;
+        }
+
+        private static readonly string[] TierOrder = { "Very Low", "Low", "Medium", "High" };
+
+        /// <summary>
+        /// percentile = fraction of all buckets in the table with StdDevMargin at or
+        /// below this matchup's stddev. Low percentile = this matchup is unusually
+        /// predictable relative to the whole table = High confidence. High percentile =
+        /// unusually volatile = Very Low confidence. Quartile boundaries, not fixed
+        /// point values — they're relative to whatever the table's real distribution is.
+        /// </summary>
+        private static string TierFromPercentile(List<double> sortedStdDevs, double stdDev)
+        {
+            if (sortedStdDevs.Count == 0) return "Medium";
+
+            var countAtOrBelow = sortedStdDevs.Count(x => x <= stdDev);
+            var percentile = (double)countAtOrBelow / sortedStdDevs.Count;
+
+            return percentile switch
+            {
+                <= 0.25 => "High",
+                <= 0.50 => "Medium",
+                <= 0.75 => "Low",
+                _       => "Very Low"
+            };
+        }
+
+        private static string ShiftTier(string tier, int steps)
+        {
+            var idx = Array.IndexOf(TierOrder, tier);
+            if (idx < 0) return tier;
+            idx = Math.Clamp(idx + steps, 0, TierOrder.Length - 1);
+            return TierOrder[idx];
         }
     }
 }

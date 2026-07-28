@@ -165,6 +165,15 @@ namespace SaturdayPulse.ViewModels
                 game.IsDetailsExpanded = !game.IsDetailsExpanded;
             });
 
+            // Mirrors ScheduleViewModel's ToggleRivalryNotesCommand exactly —
+            // separate expand state from Details. Visibility (entitlement + data)
+            // is decided in XAML via RivalryNotesVisibilityConverter, not here.
+            ToggleRivalryNotesCommand = new Command<GameResult>(game =>
+            {
+                if (game == null) return;
+                game.IsRivalryNotesExpanded = !game.IsRivalryNotesExpanded;
+            });
+
             _followService.TeamFollowChanged  += OnTeamFollowChanged;
             _followService.PrimaryTeamChanged += OnPrimaryTeamChanged;
             _navState.PropertyChanged         += OnNavStateChanged;
@@ -276,6 +285,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleArcExpandCommand     { get; }
         public ICommand ToggleStatsExpandCommand   { get; }
         public ICommand ToggleDetailsCommand       { get; }
+        public ICommand ToggleRivalryNotesCommand  { get; }
         public ICommand TogglePersonalGameCommand  { get; }
         public ICommand SeasonPassCommand          { get; }
         // ToggleFollowCommand is inherited from BaseViewModel — already

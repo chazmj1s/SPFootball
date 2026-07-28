@@ -599,7 +599,7 @@
                                                        HorizontalOptions="End" />
                                             </Grid>
 
-                                            <Grid ColumnDefinitions="24,*,Auto,Auto" RowDefinitions="Auto,Auto" RowSpacing="2">
+                                            <Grid ColumnDefinitions="24,*,Auto,Auto" RowDefinitions="Auto,Auto" RowSpacing="2" ColumnSpacing="8">
 
                                                 <!-- Heart: follow team 1 -->
                                                 <controls:FollowTeamIcon

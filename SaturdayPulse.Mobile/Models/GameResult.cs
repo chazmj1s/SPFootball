@@ -138,6 +138,28 @@ namespace SaturdayPulse.Models
 
         public string DetailsExpandIcon => _isDetailsExpanded ? "▲" : "▼";
 
+        // ── Rivalry Notes expand ──────────────────────────────────────────
+        // Visibility is NOT decided here (unlike ShowDetails above) — GameResult
+        // has no access to EntitlementService, and the visibility rule needs both
+        // this data AND Season Pass status. See RivalryNotesVisibilityConverter,
+        // bound via MultiBinding in XAML instead.
+
+        private RivalryNotes? _rivalryNotes;
+        public RivalryNotes? RivalryNotes
+        {
+            get => _rivalryNotes;
+            set { _rivalryNotes = value; OnPropertyChanged(); }
+        }
+
+        private bool _isRivalryNotesExpanded;
+        public bool IsRivalryNotesExpanded
+        {
+            get => _isRivalryNotesExpanded;
+            set { _isRivalryNotesExpanded = value; OnPropertyChanged(); OnPropertyChanged(nameof(RivalryExpandIcon)); }
+        }
+
+        public string RivalryExpandIcon => _isRivalryNotesExpanded ? "▲" : "▼";
+
         private GameTeamStats? _homeStats;
         public GameTeamStats? HomeStats
         {

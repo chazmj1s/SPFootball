@@ -57,6 +57,11 @@ namespace SaturdayPulse.Services
 
             var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
 
+            // Rivalry Notes — fetched once, same batch-fetch pattern as
+            // allProjections/rankingsByWeek below, not queried per-game.
+            var allRivalries = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var rivalryLookup = allRivalries.ToDictionary(r => (r.Team1Id, r.Team2Id));
+
             // ── WeeklyRankings lookup ─────────────────────────────────────────
             var availableWeeks = (await _uow.WeeklyRankings
                 .GetDistinctYearWeeksAsync(token))
@@ -125,6 +130,21 @@ namespace SaturdayPulse.Services
 
                 var projOU = projHome.HasValue && projAway.HasValue
                     ? (double?)Math.Round(projHome.Value + projAway.Value, 1) : null;
+
+                // Rivalry Notes — normalized pair lookup, same normalization
+                // MatchupHistoryCalculator used to store the table (lower ID first).
+                rivalryLookup.TryGetValue(
+                    (Math.Min(g.HomeId ?? 0, g.AwayId ?? 0), Math.Max(g.HomeId ?? 0, g.AwayId ?? 0)),
+                    out var rivalryForGame);
+
+                var rivalryNotes = BuildRivalryNotes(
+                    rivalryForGame,
+                    isPlayed,
+                    actualMargin:     isPlayed ? (double?)Math.Abs(homePoints - awayPoints) : null,
+                    actualTotal:      isPlayed ? (double?)actualOU : null,
+                    projectedMargin:  (projHome.HasValue && projAway.HasValue)
+                                          ? (double?)Math.Abs(projHome.Value - projAway.Value) : null,
+                    projectedTotal:   projOU);
 
                 // ── Team stats ────────────────────────────────────────────────
                 var lookupWeek = LookupWeek(g.Week);
@@ -222,6 +242,7 @@ namespace SaturdayPulse.Services
                     HomeStats = homeStats,
                     AwayStats = awayStats,
                     VegasLines = vegasLines,
+                    RivalryNotes = rivalryNotes,
 
                     // Legacy fields
                     WinnerName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
@@ -1238,6 +1259,10 @@ namespace SaturdayPulse.Services
 
             var allProjections = await _projectionCache.GetAllProjections(year, token);
 
+            // Rivalry Notes — same batch-fetch pattern as GetScheduleV2Async.
+            var allRivalries = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+            var rivalryLookup = allRivalries.ToDictionary(r => (r.Team1Id, r.Team2Id));
+
             var games = teamGames.Select(g =>
             {
                 bool isHome  = g.HomeId == teamId;
@@ -1261,6 +1286,22 @@ namespace SaturdayPulse.Services
                     confidence = pred.Confidence ?? "Unknown";
                 }
 
+                // Rivalry Notes — normalized pair lookup, same normalization
+                // MatchupHistoryCalculator used to store the table (lower ID first).
+                rivalryLookup.TryGetValue(
+                    (Math.Min(teamId, oppId), Math.Max(teamId, oppId)),
+                    out var rivalryForGame);
+
+                var rivalryNotes = BuildRivalryNotes(
+                    rivalryForGame,
+                    isPlayed,
+                    actualMargin:    isPlayed ? (double?)Math.Abs(myPts - oppPts) : null,
+                    actualTotal:     isPlayed ? (double?)(myPts + oppPts) : null,
+                    projectedMargin: (projMy.HasValue && projOpp.HasValue)
+                                         ? (double?)Math.Abs(projMy.Value - projOpp.Value) : null,
+                    projectedTotal:  (projMy.HasValue && projOpp.HasValue)
+                                         ? (double?)(projMy.Value + projOpp.Value) : null);
+
                 return (object)new
                 {
                     g.Week,
@@ -1277,7 +1318,8 @@ namespace SaturdayPulse.Services
                         ? $"{(int)Math.Round(projMy.Value)}-{(int)Math.Round(projOpp!.Value)}" : null,
                     Confidence = isPlayed ? null : confidence,
                     Type       = isPlayed ? "Actual" : "Projected",
-                    SeasonType = g.SeasonType
+                    SeasonType = g.SeasonType,
+                    RivalryNotes = rivalryNotes
                 };
             }).ToList();
 

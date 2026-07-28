@@ -13,8 +13,8 @@ namespace SaturdayPulse.Services
     ///   ExpectedFromPerspective — teamWinPct >= oppWinPct flip
     ///   ApplyHomeField          — IsHomeTeam/Location if-else
     ///   RivalryVarianceMultiplier        — metrics pipeline tier switch
-    ///   RivalryVarianceMultiplierForDisplay — prediction display tier switch
-    ///   RivalryScoringAdjustment         — scoring reduction for rivalry games
+    ///   RivalryVarianceMultiplierForDisplay — prediction display, data-driven ratio
+    ///   RivalryScoringAdjustment         — prediction display, data-driven ratio
     ///   DivisionWeight          — FCS 0.25 / FBS 1.0
     ///   DampenZScore            — sign * Log(1 + |z|)
     ///   ComputeGameZScore       — full per-game Z-score pipeline
@@ -23,6 +23,31 @@ namespace SaturdayPulse.Services
     ///   ConferenceDisplayOrder  — standard sort order for display
     ///
     /// All methods are stateless and unit-testable without any DI setup.
+    ///
+    /// ── REBUILT — RivalryVarianceMultiplierForDisplay / RivalryScoringAdjustment ──
+    ///   Both previously keyed off RivalryTier (EPIC/NATIONAL/STATE — hand-picked
+    ///   constants with no data behind them: 1.75/1.50/1.30 and 0.90/0.93/0.95).
+    ///   Replaced with a real ratio against MatchupHistory (Layer 1/2: AvgTotalPoints
+    ///   column added, MatchupHistoryCalculator backfilled from actual game data for
+    ///   the 50 curated rivalry pairs) compared against the live, interpolated
+    ///   AvgScoreDifferential values for the pair's current strength differential.
+    ///
+    ///   For a known rivalry, RivalryVarianceMultiplierForDisplay reduces cleanly to
+    ///   just using that pair's own real historical StdDevMargin directly as the
+    ///   effective stddev (see GamePredictionService: stdDev = distribution.StdDev *
+    ///   multiplier = distribution.StdDev * (rivalry.StDevMargin /
+    ///   distribution.StdDev) = rivalry.StDevMargin). For a non-rivalry pairing
+    ///   (rivalry == null — true for anything outside the 50 curated pairs, e.g.
+    ///   Texas/Alabama 2025), the multiplier is 1.00 — not a guess, the correct
+    ///   "no specific information, use the generic differential-based baseline"
+    ///   default.
+    ///
+    ///   RivalryVarianceMultiplier (no "ForDisplay" suffix) is UNTOUCHED — confirmed
+    ///   via reference search that it's also called by RatingCalculator.
+    ///   ComputeGameZScore, TeamMetricsService, and WeeklyRankingsService directly —
+    ///   i.e. it feeds the live weekly rating computation, not just prediction
+    ///   display. Changing its behavior belongs with the already-planned calc-engine
+    ///   refactor (WeeklyRankingsService/RollingAverageService/etc.), not this pass.
     /// </summary>
     public static class RatingCalculator
     {
@@ -72,8 +97,17 @@ namespace SaturdayPulse.Services
             return expected - homeFieldAdvantage;
         }
 
-        // ── Rivalry variance ──────────────────────────────────────────────────────
+        // ── Rivalry variance (metrics pipeline — UNTOUCHED) ─────────────────────────
 
+        /// <summary>
+        /// Still tier-based (EPIC/NATIONAL/STATE/MEH hand-picked constants). Feeds
+        /// ComputeGameZScore below plus TeamMetricsService and WeeklyRankingsService
+        /// directly — the live weekly rating computation, not just prediction
+        /// display. Out of scope for the display-side data-driven rebuild; belongs
+        /// with the planned calc-engine refactor instead, where its blast radius
+        /// (every team's weekly rating, not just Sandbox output) can be validated
+        /// properly.
+        /// </summary>
         public static double RivalryVarianceMultiplier(string? tier) => tier switch
         {
             "EPIC"     => 1.75,
@@ -83,21 +117,47 @@ namespace SaturdayPulse.Services
             _          => 1.00
         };
 
-        public static double RivalryVarianceMultiplierForDisplay(string? tier) => tier switch
-        {
-            "EPIC"     => 1.30,
-            "NATIONAL" => 1.20,
-            "STATE"    => 1.10,
-            _          => 1.00
-        };
+        // ── Rivalry variance / scoring (prediction display — REBUILT) ───────────────
 
-        public static double RivalryScoringAdjustment(string? tier) => tier switch
+        /// <summary>
+        /// Data-driven replacement for the old EPIC/NATIONAL/STATE tier switch.
+        /// Returns the ratio of this specific pair's real historical StDevMargin
+        /// (MatchupHistoryCalculator, backfilled from actual game data for the 50
+        /// curated rivalries) to the live, interpolated expected stddev for their
+        /// current strength differential (AvgScoreDifferential, via
+        /// AvgScoreDifferentialService).
+        ///
+        /// Returns 1.00 (no adjustment) when the pair isn't one of the 50 curated
+        /// rivalries, or when there's not enough data to trust a ratio — both
+        /// correct "no specific information" defaults, not guesses.
+        /// </summary>
+        public static double RivalryVarianceMultiplierForDisplay(
+            MatchupHistory? rivalry, double expectedStdDev)
         {
-            "EPIC"     => 0.90,
-            "NATIONAL" => 0.93,
-            "STATE"    => 0.95,
-            _          => 1.00
-        };
+            if (rivalry == null || rivalry.GamesPlayed <= 0 || expectedStdDev <= 0)
+                return 1.00;
+
+            return (double)rivalry.StDevMargin / expectedStdDev;
+        }
+
+        /// <summary>
+        /// Data-driven replacement for the old EPIC/NATIONAL/STATE scoring-reduction
+        /// tier switch. Returns the ratio of this specific pair's real historical
+        /// AvgTotalPoints (MatchupHistoryCalculator, same backfill as above) to the
+        /// live, interpolated expected total points for their current strength
+        /// differential (AvgScoreDifferential.AverageTotalPoints).
+        ///
+        /// Returns 1.00 (no adjustment) under the same "not a curated rivalry, or not
+        /// enough data" conditions as RivalryVarianceMultiplierForDisplay.
+        /// </summary>
+        public static double RivalryScoringAdjustment(
+            MatchupHistory? rivalry, double expectedTotalPoints)
+        {
+            if (rivalry == null || rivalry.GamesPlayed <= 0 || expectedTotalPoints <= 0)
+                return 1.00;
+
+            return (double)rivalry.AvgTotalPoints / expectedTotalPoints;
+        }
 
         // ── Division weighting ────────────────────────────────────────────────────
 

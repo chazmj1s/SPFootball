@@ -1,4 +1,4 @@
-﻿using SaturdayPulse.ModelViews;
+using SaturdayPulse.ModelViews;
 
 namespace SaturdayPulse.Contracts.Responses
 {
@@ -31,6 +31,25 @@ namespace SaturdayPulse.Contracts.Responses
 
     public record ChampionshipQualifiersResult(IReadOnlyList<object> Conferences);
     public record TeamScheduleV2Result(object? Summary, IReadOnlyList<object> Games);
-    public record ExpectedGameDistribution(double ExpectedMargin, double StdDev, double Reliability, int SampleSize);
+
+    /// <summary>
+    /// AverageTotalPoints added — it already existed on the AvgScoreDifferential entity
+    /// (populated in the DB from the same 60-year historical build as AverageMargin/
+    /// StdDevMargin) but was never mapped into this record, so GamePredictionService
+    /// had no way to use the bucket's own historical total scoring; it built total
+    /// points entirely from PPG/PAG averaging instead. Now surfaced so
+    /// GamePredictionService can anchor total points on real historical data for this
+    /// exact strength differential, with team-specific PPG/PAG as a reliability-
+    /// weighted corroboration adjustment rather than the sole source.
+    ///
+    /// Default value of 0.0 preserves source compatibility with any positional-arg
+    /// construction elsewhere that predates this field.
+    /// </summary>
+    public record ExpectedGameDistribution(
+        double ExpectedMargin,
+        double StdDev,
+        double Reliability,
+        int SampleSize,
+        double AverageTotalPoints = 0.0);
 
 }
