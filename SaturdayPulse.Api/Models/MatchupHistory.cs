@@ -6,7 +6,7 @@ namespace SaturdayPulse.Models
     /// <summary>
     /// Stores historical performance statistics for specific team-vs-team matchups.
     /// Used to detect high-variance rivalries by comparing actual matchup variance
-    /// to expected variance from win-based AvgScoreDeltas.
+    /// to expected variance from the live AvgScoreDifferential baseline.
     /// </summary>
     [Table("MatchupHistory")]
     public class MatchupHistory
@@ -46,6 +46,17 @@ namespace SaturdayPulse.Models
         public decimal StDevMargin { get; set; }
 
         /// <summary>
+        /// Average combined total points (both teams) across all games in this matchup.
+        /// Added to support a real, data-driven RivalryScoringAdjustment — replaces a
+        /// prior hand-picked EPIC/NATIONAL/STATE scoring-reduction guess with this
+        /// pair's own historical scoring level, compared against the live
+        /// AvgScoreDifferential.AverageTotalPoints for their current strength
+        /// differential at prediction time.
+        /// </summary>
+        [Column("AvgTotalPoints", TypeName = "decimal(6,2)")]
+        public decimal AvgTotalPoints { get; set; }
+
+        /// <summary>
         /// Percentage of games won by the team with fewer season wins (upset rate).
         /// Range: 0.00 to 1.00 (e.g., 0.35 = 35% upset rate).
         /// </summary>
@@ -73,14 +84,22 @@ namespace SaturdayPulse.Models
 
         /// <summary>
         /// Optional rivalry tier indicating intensity level.
-        /// EPIC = highest variance, NATIONAL = high variance, STATE = moderate variance
+        /// EPIC = highest variance, NATIONAL = high variance, STATE = moderate variance.
+        /// No longer drives RivalryVarianceMultiplierForDisplay/RivalryScoringAdjustment
+        /// directly (those now compute a live ratio against this row's own
+        /// StDevMargin/AvgTotalPoints) — retained for display/labeling purposes only.
         /// </summary>
         [Column("RivalryTier", TypeName = "varchar(20)")]
         public string? RivalryTier { get; set; }
 
         /// <summary>
-        /// Calculated variance ratio: StDevMargin / Expected StDev from AvgScoreDeltas.
-        /// Values > 1.0 indicate higher-than-expected variance (rivalry indicator).
+        /// RETIRED — never populated by MatchupHistoryCalculator (confirmed by reading
+        /// the calculator directly: it sets every other field on this entity except
+        /// this one). Left in place as a NotMapped property rather than removed,
+        /// per the project's convention of leaving retired fields intact. The live
+        /// replacement is computed on demand in RatingCalculator using this row's
+        /// StDevMargin against AvgScoreDifferential's interpolated StdDev for the
+        /// pair's current differential — not stored here.
         /// </summary>
         [NotMapped]
         public double VarianceRatio { get; set; }

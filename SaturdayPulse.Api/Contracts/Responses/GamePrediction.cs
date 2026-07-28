@@ -1,5 +1,3 @@
-using SaturdayPulse.Models;
-
 namespace SaturdayPulse.Contracts.Responses
 {
     /// <summary>
@@ -20,11 +18,28 @@ namespace SaturdayPulse.Contracts.Responses
         public double  MarginOfError          { get; set; }
 
         /// <summary>
-        /// Unclamped std dev used for win probability math.
-        /// Distinct from MarginOfError which is capped at [7, 21] for display.
+        /// The real, interpolated historical standard deviation for this matchup's
+        /// strength differential (from AvgScoreDifferential), adjusted only for rivalry
+        /// variance where applicable. No floor or cap is applied — a prior version
+        /// clamped this to [7, 21] using a constant borrowed from the legacy, retired
+        /// AvgScoreDelta class, which compressed genuine historical volatility toward a
+        /// guessed range. MarginOfError below is this same value, rounded for display.
         /// </summary>
         public double   RawStdDev             { get; set; }
         public string?  Confidence            { get; set; }
+
+        /// <summary>
+        /// Sandbox-only footer text explaining MarginOfError/Confidence in plain
+        /// language, specific to this matchup. Null for real, calendar-anchored
+        /// predictions (PredictMatchup/PredictMatchups/PredictMatchupsWithRatings) —
+        /// deliberately not built for those yet; see GamePredictionService remarks.
+        /// Never names a rivalry even when the pairing is one of the 52 curated ones,
+        /// since Sandbox matchups are hypothetical and can pair any two team-seasons —
+        /// a curated pair's real historical data still shapes the underlying numbers,
+        /// the text just describes the effect generically ("matchups between these
+        /// two") rather than naming the rivalry.
+        /// </summary>
+        public string?  ConfidenceExplanation { get; set; }
         public string?  RivalryNote           { get; set; }
         public decimal? TeamPowerRating       { get; set; }
         public decimal? OpponentPowerRating   { get; set; }
@@ -45,7 +60,12 @@ namespace SaturdayPulse.Contracts.Responses
         {
             get
             {
-                var sigma = Math.Max(RawStdDev, AvgScoreDelta.DefaultAverageScoreDelta);
+                // Numerical safety floor only — prevents divide-by-zero if a bucket's
+                // real historical stddev were ever exactly 0. This is NOT a business/
+                // calibration constant (the previous version floored with
+                // AvgScoreDelta.DefaultAverageScoreDelta, a margin default, not a
+                // stddev value, borrowed from a class that's otherwise retired).
+                var sigma = Math.Max(RawStdDev, 0.01);
                 return NormalCdf(ExpectedMargin / sigma);
             }
         }

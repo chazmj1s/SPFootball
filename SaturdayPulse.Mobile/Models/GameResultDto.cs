@@ -36,9 +36,10 @@ namespace SaturdayPulse.Models
         public double? ProjOU    { get; set; }
 
         // Nested stats — deserialized as raw objects, mapped separately
-        public GameTeamStatsDto? HomeStats  { get; set; }
-        public GameTeamStatsDto? AwayStats  { get; set; }
-        public GameLinesDto?     VegasLines { get; set; }
+        public GameTeamStatsDto? HomeStats    { get; set; }
+        public GameTeamStatsDto? AwayStats    { get; set; }
+        public GameLinesDto?     VegasLines   { get; set; }
+        public RivalryNotesDto?  RivalryNotes { get; set; }
     }
 
     public class GameTeamStatsDto
@@ -66,5 +67,22 @@ namespace SaturdayPulse.Models
         public int?     HomeMoneyline { get; set; }
         public int?     AwayMoneyline { get; set; }
         public int      ProviderCount { get; set; }
+    }
+
+    /// <summary>
+    /// Maps 1:1 onto the "RivalryNotes" object added to GetScheduleV2Async /
+    /// GetTeamScheduleV2Async's response (null for non-curated pairings).
+    /// Field names match ProductionGameDataService's BuildRivalryNotes output
+    /// exactly: RivalryName, FirstPlayed, AverageSpread, AverageOverUnder,
+    /// UpsetChance, Blurb.
+    /// </summary>
+    public class RivalryNotesDto
+    {
+        public string? RivalryName      { get; set; }
+        public int      FirstPlayed      { get; set; }
+        public double   AverageSpread    { get; set; }
+        public double   AverageOverUnder { get; set; }
+        public double   UpsetChance      { get; set; }
+        public string?  Blurb            { get; set; }
     }
 }

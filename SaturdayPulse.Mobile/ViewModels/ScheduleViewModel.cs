@@ -80,6 +80,15 @@ namespace SaturdayPulse.ViewModels
                 game.IsDetailsExpanded = !game.IsDetailsExpanded;
             });
 
+            // Mirrors ToggleDetailsCommand exactly — separate expand state, same
+            // shape. Visibility (entitlement + data) is decided in XAML via
+            // RivalryNotesVisibilityConverter, not here.
+            ToggleRivalryNotesCommand = new Microsoft.Maui.Controls.Command<GameResult>(game =>
+            {
+                if (game == null) return;
+                game.IsRivalryNotesExpanded = !game.IsRivalryNotesExpanded;
+            });
+
             // Gated Details paywall message (2026-07-25) — same shared
             // login-check as MyTeamsViewModel/SettingsViewModel. The Details
             // section itself stays open for everyone (per design); only the
@@ -164,6 +173,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand NextWeekCommand           { get; }
         public ICommand TogglePersonalGameCommand { get; }
         public ICommand ToggleDetailsCommand      { get; }
+        public ICommand ToggleRivalryNotesCommand { get; }
         public ICommand SeasonPassCommand         { get; }
 
         // ── Load ──────────────────────────────────────────────────────────

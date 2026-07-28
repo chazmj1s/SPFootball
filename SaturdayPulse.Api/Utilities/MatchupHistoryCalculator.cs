@@ -8,18 +8,27 @@ namespace SaturdayPulse.Utilities
     /// <summary>
     /// Calculates and populates matchup-specific historical statistics.
     /// Used to identify high-variance rivalries by comparing actual matchup performance
-    /// to expected performance from win-based AvgScoreDeltas.
+    /// to expected performance from the live AvgScoreDifferential baseline.
     /// </summary>
     public class MatchupHistoryCalculator(IUnitOfWork _uow, ILogger<MatchupHistoryCalculator> _logger)
     {
         private class GameData
         {
-            public int? Team1    { get; set; }
-            public int? Team2    { get; set; }
-            public int? Margin   { get; set; }
-            public int? Year     { get; set; }
-            public int? WinnerId { get; set; }
-            public int? LoserId  { get; set; }
+            public int? Team1       { get; set; }
+            public int? Team2       { get; set; }
+            public int? Margin      { get; set; }
+
+            /// <summary>
+            /// Combined points scored by both teams. Added alongside Margin so
+            /// AvgTotalPoints can be computed the same way AvgMargin/StDevMargin
+            /// already are — previously only the derived margin was kept, so there
+            /// was no way to compute a real scoring-level number for a rivalry pair.
+            /// </summary>
+            public int? TotalPoints { get; set; }
+
+            public int? Year        { get; set; }
+            public int? WinnerId    { get; set; }
+            public int? LoserId     { get; set; }
         }
 
         /// <summary>
@@ -37,12 +46,13 @@ namespace SaturdayPulse.Utilities
             var allGames = (await _uow.Games.GetPlayedGamesSinceYearAsync(1, cancellationToken))
                 .Select(g => new GameData
                 {
-                    Team1    = g.HomeId,
-                    Team2    = g.AwayId,
-                    Margin   = g.HomePoints - g.AwayPoints,
-                    Year     = g.Year,
-                    WinnerId = g.HomePoints > g.AwayPoints ? g.HomeId : g.AwayId,
-                    LoserId  = g.HomePoints < g.AwayPoints ? g.HomeId : g.AwayId
+                    Team1       = g.HomeId,
+                    Team2       = g.AwayId,
+                    Margin      = g.HomePoints - g.AwayPoints,
+                    TotalPoints = g.HomePoints + g.AwayPoints,
+                    Year        = g.Year,
+                    WinnerId    = g.HomePoints > g.AwayPoints ? g.HomeId : g.AwayId,
+                    LoserId     = g.HomePoints < g.AwayPoints ? g.HomeId : g.AwayId
                 })
                 .ToList();
 
@@ -97,21 +107,25 @@ namespace SaturdayPulse.Utilities
                 var variance  = margins.Sum(m => Math.Pow((double)(m - avgMargin), 2)) / gameCount;
                 var stDev     = Math.Sqrt(variance);
 
+                // Average combined total points — same games, same in-memory pass
+                var avgTotalPoints = games.Select(g => (decimal)g.TotalPoints!.Value).Average();
+
                 // Upset rate calculated in memory using pre-loaded wins lookup
                 var upsets = CalculateUpsetRate(games, winsLookup);
 
                 matchupHistories.Add(new MatchupHistory
                 {
-                    Team1Id     = normalizedTeam1,
-                    Team2Id     = normalizedTeam2,
-                    GamesPlayed = gameCount,
-                    AvgMargin   = (decimal)avgMargin,
-                    StDevMargin = (decimal)stDev,
-                    UpsetRate   = (decimal)upsets,
-                    FirstPlayed = (int)games.Min(g => g.Year),
-                    LastPlayed  = (int)games.Max(g => g.Year),
-                    RivalryName = rivalry.RivalryName,
-                    RivalryTier = rivalry.Tier
+                    Team1Id        = normalizedTeam1,
+                    Team2Id        = normalizedTeam2,
+                    GamesPlayed    = gameCount,
+                    AvgMargin      = (decimal)avgMargin,
+                    StDevMargin    = (decimal)stDev,
+                    AvgTotalPoints = avgTotalPoints,
+                    UpsetRate      = (decimal)upsets,
+                    FirstPlayed    = (int)rivalry.FirstPlayed,
+                    LastPlayed     = (int)games.Max(g => g.Year),
+                    RivalryName    = rivalry.RivalryName,
+                    RivalryTier    = rivalry.Tier
                 });
             }
 
