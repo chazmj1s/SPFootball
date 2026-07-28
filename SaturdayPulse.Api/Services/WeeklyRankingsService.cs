@@ -261,17 +261,16 @@ namespace SaturdayPulse.Services
 
                 var t1 = Math.Min(gp.TeamId, gp.OpponentId);
                 var t2 = Math.Max(gp.TeamId, gp.OpponentId);
-                var rivalryTier = matchupHistories.FirstOrDefault(
-                    m => m.Team1Id == t1 && m.Team2Id == t2)?.RivalryTier;
+                var matchup = matchupHistories.FirstOrDefault(
+                    m => m.Team1Id == t1 && m.Team2Id == t2);
 
                 // Get StdDev from the differential bucket.
                 var bucketRow = avgScoreDifferentials
                     .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
                     .FirstOrDefault();
 
-                var effectiveStDev = bucketRow != null
-                    ? (double)bucketRow.StdDevMargin * RatingCalculator.RivalryVarianceMultiplier(rivalryTier)
-                    : 14.0 * RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+                var baseStdDev = bucketRow != null ? (double)bucketRow.StdDevMargin : 14.0;
+                var effectiveStDev = baseStdDev * RatingCalculator.RivalryVarianceMultiplier(matchup, baseStdDev);
 
                 if (effectiveStDev > 0)
                 {

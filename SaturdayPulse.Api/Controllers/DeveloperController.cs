@@ -797,7 +797,7 @@ namespace SaturdayPulse.Controllers
         {
             try
             {
-                var result = await developerService.BackfillWeeklyRankingsAsync(startYear, token);
+                var result = await developerService.BackfillWeeklyRankingsAsync(startYear, CancellationToken.None);
                 return Ok(new { message = result.Message, processed = result.Processed, startYear = result.StartYear });
             }
             catch (InvalidOperationException ex)
@@ -806,8 +806,8 @@ namespace SaturdayPulse.Controllers
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error during WeeklyRankings backfill");
-                return StatusCode(500, "An error occurred during backfill.");
+                logger.LogError(ex, $"Error during WeeklyRankings backfill. {ex.Message}");
+                return StatusCode(500, $"An error occurred during backfill. {ex.Message}");
             }
         }
 

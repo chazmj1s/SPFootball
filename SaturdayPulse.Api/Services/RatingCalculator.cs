@@ -100,22 +100,19 @@ namespace SaturdayPulse.Services
         // ── Rivalry variance (metrics pipeline — UNTOUCHED) ─────────────────────────
 
         /// <summary>
-        /// Still tier-based (EPIC/NATIONAL/STATE/MEH hand-picked constants). Feeds
-        /// ComputeGameZScore below plus TeamMetricsService and WeeklyRankingsService
-        /// directly — the live weekly rating computation, not just prediction
-        /// display. Out of scope for the display-side data-driven rebuild; belongs
-        /// with the planned calc-engine refactor instead, where its blast radius
-        /// (every team's weekly rating, not just Sandbox output) can be validated
-        /// properly.
+        /// Data-driven rivalry variance multiplier. When a curated MatchupHistory row
+        /// exists for this pair, this reduces to using that pair's own real StDevMargin
+        /// directly as the effective stddev (multiplier = pairStdDev / bucketStdDev).
+        /// Falls back to 1.0 (base stddev stands unmodified) when no curated data
+        /// exists for the pair.
         /// </summary>
-        public static double RivalryVarianceMultiplier(string? tier) => tier switch
+        public static double RivalryVarianceMultiplier(MatchupHistory? matchup, double bucketStdDev)
         {
-            "EPIC"     => 1.75,
-            "NATIONAL" => 1.50,
-            "STATE"    => 1.30,
-            "MEH"      => 1.10,
-            _          => 1.00
-        };
+            if (matchup == null || matchup.StDevMargin <= 0 || bucketStdDev <= 0)
+                return 1.0;
+
+            return (double)matchup.StDevMargin / bucketStdDev;
+        }
 
         // ── Rivalry variance / scoring (prediction display — REBUILT) ───────────────
 
@@ -170,40 +167,6 @@ namespace SaturdayPulse.Services
         {
             if (zScore == 0) return 0;
             return Math.Sign(zScore) * Math.Log(1 + Math.Abs(zScore));
-        }
-
-        // ── Composite Z-score ─────────────────────────────────────────────────────
-
-        public static double ComputeGameZScore(
-            int teamPoints, int opponentPoints,
-            int teamWins, int teamLosses,
-            int oppWins, int oppLosses,
-            bool isHomeTeam, bool isNeutralSite,
-            double homeFieldAdvantage,
-            IReadOnlyList<AvgScoreDelta> avgScoreDeltas,
-            string? rivalryTier = null)
-        {
-            var teamGames = teamWins + teamLosses;
-            var oppGames  = oppWins  + oppLosses;
-
-            var teamWinPct = BucketWinPct(teamWins, teamGames);
-            var oppWinPct  = BucketWinPct(oppWins,  oppGames);
-            var maxWinPct  = Math.Max(teamWinPct, oppWinPct);
-            var minWinPct  = Math.Min(teamWinPct, oppWinPct);
-
-            var asd = avgScoreDeltas.FirstOrDefault(
-                a => a.Team1WinPct == maxWinPct && a.Team2WinPct == minWinPct);
-
-            if (asd == null || asd.WeightedStdDev == 0) return 0;
-
-            var rawExpected    = (double)asd.AverageScoreDelta;
-            var expected       = ExpectedFromPerspective(rawExpected, teamWinPct, oppWinPct);
-            expected           = ApplyHomeField(expected, isHomeTeam, isNeutralSite, homeFieldAdvantage);
-
-            var effectiveStDev = (double)asd.WeightedStdDev * RivalryVarianceMultiplier(rivalryTier);
-            var delta          = teamPoints - opponentPoints;
-
-            return DampenZScore((delta - expected) / effectiveStDev);
         }
 
         // ── Conference / team classification ──────────────────────────────────────

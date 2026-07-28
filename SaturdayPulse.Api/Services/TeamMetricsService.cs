@@ -351,9 +351,9 @@ namespace SaturdayPulse.Services
                         .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
                         .FirstOrDefault();
 
-                    var rivalryTier = matchupHistories.FirstOrDefault(m =>
+                    var matchup = matchupHistories.FirstOrDefault(m =>
                         m.Team1Id == Math.Min(gp.TeamId, gp.OpponentId) &&
-                        m.Team2Id == Math.Max(gp.TeamId, gp.OpponentId))?.RivalryTier;
+                        m.Team2Id == Math.Max(gp.TeamId, gp.OpponentId));
 
                     double zScore = 0.0;
                     if (bucketRow != null && bucketRow.StdDevMargin != 0)
@@ -362,8 +362,9 @@ namespace SaturdayPulse.Services
                             avgScoreDifferentials, differential);
                         expected = RatingCalculator.ApplyHomeField(
                             expected, gp.IsHomeTeam, gp.Location == 'N', hfa);
+                        var bucketStdDev = (double)bucketRow.StdDevMargin;
                         var effectiveStDev = (double)bucketRow.StdDevMargin *
-                            RatingCalculator.RivalryVarianceMultiplier(rivalryTier);
+                            RatingCalculator.RivalryVarianceMultiplier(matchup, bucketStdDev);
                         zScore = RatingCalculator.DampenZScore(
                             (gp.TeamPoints - gp.OpponentPoints - expected) / effectiveStDev);
                     }
