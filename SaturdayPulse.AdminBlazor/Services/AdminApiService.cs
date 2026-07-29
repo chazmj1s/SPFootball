@@ -1,8 +1,10 @@
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using SaturdayPulse.AdminBlazor.Services.Models;
 using SaturdayPulse.Core.Content;
+using SaturdayPulse.Core.Progress;
 
 namespace SaturdayPulse.AdminBlazor.Services;
 
@@ -137,6 +139,36 @@ public class AdminApiService(HttpClient http)
     public Task<JsonElement> BackfillProjectionsAsync(int? startYear = null, CancellationToken ct = default) =>
         PostAsync("developer/backfillProjections", Query(("startYear", startYear)), ct);
 
+    // ── Metrics Rebuild — streaming (metrics-rebuild console) ────────────────
+    // Same endpoints/params as above where a non-streaming route still exists
+    // elsewhere (loadTeamsBulk etc. also power the Data Ops page); backfill*
+    // routes were converted in place since this console is their only caller.
+    public IAsyncEnumerable<ProgressUpdate> LoadTeamsBulkStreamAsync(int startYear, CancellationToken ct = default) =>
+        PostStreamAsync("developer/loadTeamsBulk/stream", Query(("startYear", startYear)), ct);
+
+    public IAsyncEnumerable<ProgressUpdate> LoadGamesBulkStreamAsync(int startYear, CancellationToken ct = default) =>
+        PostStreamAsync("developer/loadGamesBulk/stream", Query(("startYear", startYear)), ct);
+
+    public IAsyncEnumerable<ProgressUpdate> LoadLinesBulkStreamAsync(int startYear, CancellationToken ct = default) =>
+        PostStreamAsync("developer/loadLinesBulk/stream", Query(("startYear", startYear)), ct);
+
+    public IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(
+        int startYear, bool dryRun = false, CancellationToken ct = default) =>
+        PostStreamAsync("developer/buildTeamsConferenceHistory/stream", Query(("startYear", startYear), ("dryRun", dryRun)), ct);
+
+    public IAsyncEnumerable<ProgressUpdate> BackfillInitializeSeasonsStreamAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostStreamAsync("developer/backfillInitializeSeasons", Query(("startYear", startYear)), ct);
+
+    public IAsyncEnumerable<ProgressUpdate> BackfillWeeklyRankingsStreamAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostStreamAsync("developer/backfillWeeklyRankings", Query(("startYear", startYear)), ct);
+
+    public IAsyncEnumerable<ProgressUpdate> BackfillProjectionsStreamAsync(int? startYear = null, CancellationToken ct = default) =>
+        PostStreamAsync("developer/backfillProjections", Query(("startYear", startYear)), ct);
+
+    // ── Portal coverage check ─────────────────────────────────────────────
+    public async Task<PortalCoverageDto?> GetPortalCoverageAsync(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<PortalCoverageDto>("developer/portalCoverage", JsonOpts, ct);
+
     public Task<JsonElement> BuildAvgScoreDifferentialsAsync(int? startYear = null, CancellationToken ct = default) =>
         PostAsync("developer/buildAvgScoreDifferentials", Query(("startYear", startYear)), ct);
 
@@ -210,6 +242,39 @@ public class AdminApiService(HttpClient http)
     {
         var response = await http.PostAsJsonAsync(path, body, JsonOpts, ct);
         return await ReadOrThrowAsync(response, ct);
+    }
+
+    /// <summary>
+    /// Streaming counterpart to PostAsync. Uses ResponseHeadersRead so the response
+    /// body is read incrementally as the server yields items, instead of buffering
+    /// the whole thing — that's the whole point, since these calls can run for
+    /// tens of minutes and the caller wants to render each item as it arrives.
+    ///
+    /// Failure handling is asymmetric with PostAsync/ReadOrThrowAsync on purpose:
+    /// a non-success status here can only mean the server rejected the request
+    /// before writing any stream items (bad params, auth, etc.) — once the server
+    /// starts streaming it has already committed to 200 OK, so per-item failures
+    /// arrive as ProgressUpdate(Success: false) instead of an HTTP error. See
+    /// DeveloperController's streaming actions for the server-side half of this.
+    /// </summary>
+    private async IAsyncEnumerable<ProgressUpdate> PostStreamAsync(
+        string path, Dictionary<string, string?>? query, [EnumeratorCancellation] CancellationToken ct)
+    {
+        var url = query is null ? path : QueryHelpers.AddQueryString(path, query);
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new AdminApiException(body is { Length: > 0 } ? body : "check API logs");
+        }
+
+        await foreach (var item in response.Content.ReadFromJsonAsAsyncEnumerable<ProgressUpdate>(JsonOpts, ct))
+        {
+            if (item is not null)
+                yield return item;
+        }
     }
 
     private async Task<T?> PutAsync<T>(string path, object body, CancellationToken ct)
