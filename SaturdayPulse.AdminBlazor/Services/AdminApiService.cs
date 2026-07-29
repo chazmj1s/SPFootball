@@ -32,9 +32,6 @@ public class AdminApiService(HttpClient http)
     public Task<JsonElement> UpdateTeamRecordsAsync(int? year = null, CancellationToken ct = default) =>
         PostAsync("developer/updateTeamRecords", Query(("year", year)), ct);
 
-    public Task<JsonElement> UpdateWeeklyMetricsAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
-        PostAsync("developer/updateWeeklyMetrics", Query(("year", year), ("week", week)), ct);
-
     public Task<JsonElement> ComputeWeeklyAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
         PostAsync("developer/computeweekly", Query(("year", year), ("week", week)), ct);
 
@@ -127,9 +124,6 @@ public class AdminApiService(HttpClient http)
         PutAsync<ApplicationContentDocument>("content", document, ct);
 
     // ── Metrics Rebuild ────────────────────────────────────────────
-    public Task<JsonElement> BackfillAllMetricsAsync(int? startYear = null, CancellationToken ct = default) =>
-        PostAsync("developer/backfillAllMetrics", Query(("startYear", startYear)), ct);
-
     public Task<JsonElement> BackfillRollingAveragesAsync(int? startYear = null, CancellationToken ct = default) =>
         PostAsync("developer/backfillRollingAverages", Query(("startYear", startYear)), ct);
 
@@ -186,15 +180,6 @@ public class AdminApiService(HttpClient http)
 
     public Task<JsonElement> LoadLinesBulkAsync(int startYear, CancellationToken ct = default) =>
         PostAsync("developer/loadLinesBulk", Query(("startYear", startYear)), ct);
-
-    public Task<JsonElement> SetSOSAsync(int? year = null, int? week = null, CancellationToken ct = default) =>
-        PostAsync("developer/setSOS", Query(("year", year), ("week", week)), ct);
-
-    public Task<JsonElement> CalculatePowerRatingsAsync(int? startYear = null, CancellationToken ct = default) =>
-        PostAsync("developer/calculatePowerRatings", Query(("startYear", startYear)), ct);
-
-    public Task<JsonElement> CalculateRankingsAsync(int? startYear = null, CancellationToken ct = default) =>
-        PostAsync("developer/calculateRankings", Query(("startYear", startYear)), ct);
 
     // ── Analytics ──────────────────────────────────────────────────
     public async Task<ProjectionAccuracyResultDto?> GetProjectionAccuracyAsync(int? startYear = null, int? endYear = null, CancellationToken ct = default)
