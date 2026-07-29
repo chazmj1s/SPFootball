@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using SaturdayPulse.Api.Contracts.Responses;
+using SaturdayPulse.Core.Progress;
 
 namespace SaturdayPulse.Services
 {
@@ -102,6 +103,38 @@ namespace SaturdayPulse.Services
 
             return total;
         }
+
+        /// <summary>
+        /// Read-only coverage check — reports which seasons since portal data became
+        /// available (2021) have zero PortalEntries rows. Doesn't touch anything;
+        /// safe to call any time to sanity-check whether LoadPortalBulk needs a run.
+        /// </summary>
+        public async Task<PortalCoverageResult> GetPortalCoverageAsync(CancellationToken token = default)
+        {
+            const int firstPortalYear = 2021;
+            var currentYear = DateTime.Now.Year;
+
+            var seasonsWithData = (await _uow.Portal.GetDistinctSeasonsAsync(token))
+                .Select(s => (int)s)
+                .ToHashSet();
+
+            var seasons = new List<PortalSeasonCoverage>();
+            for (var year = firstPortalYear; year <= currentYear; year++)
+            {
+                var count = seasonsWithData.Contains(year)
+                    ? (await _uow.Portal.GetBySeasonAsync(year, token)).Count
+                    : 0;
+                seasons.Add(new PortalSeasonCoverage(year, count));
+            }
+
+            var missing = seasons.Where(s => s.EntryCount == 0).Select(s => s.Year).ToList();
+
+            var message = missing.Count == 0
+                ? $"Portal data present for all seasons {firstPortalYear}-{currentYear}."
+                : $"Missing portal data for {missing.Count} season(s): {string.Join(", ", missing)}.";
+
+            return new PortalCoverageResult(message, seasons, missing);
+        }
         /// <summary>
         /// Bulk load — fetches teams for every year from startYear to current.
         /// Teams change conference each year so we refresh annually.
@@ -119,6 +152,34 @@ namespace SaturdayPulse.Services
 
             Console.WriteLine($"LoadTeamsBulkAsync: {total} total team upserts from {startYear} to {currentYear}");
             return total;
+        }
+
+        /// <summary>Streaming version — yields one ProgressUpdate per year as it completes.</summary>
+        public async IAsyncEnumerable<ProgressUpdate> LoadTeamsBulkStreamAsync(
+            int startYear, [EnumeratorCancellation] CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                bool success; string message;
+                try
+                {
+                    var count = await LoadTeamsAsync(year, token);
+                    success = true;
+                    message = $"{count} teams upserted";
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
+                }
+
+                yield return new ProgressUpdate(year.ToString(), success, message);
+                await Task.Delay(300, token);
+            }
         }
 
         public async Task<int> BuildAvgScoreDifferentialsAsync(int startYear, CancellationToken token = default)
@@ -353,6 +414,122 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// Streaming version of BuildTeamsConferenceHistoryAsync, with an optional
+        /// dryRun mode. In dry-run, every change that WOULD be written is described
+        /// in the yielded message, but nothing is added/updated in
+        /// TeamsConferenceHistory and no team names are matched to a conference that
+        /// doesn't already exist in the Conferences table — same matching logic as
+        /// the live path, just without the write.
+        ///
+        /// Added specifically so 2026's conference realignment (Pac-12
+        /// reconstitution) can be checked against what CFBD actually reports before
+        /// trusting a live run — if CFBD's conference name string for a
+        /// reconstituted team doesn't match what's already in the Conferences
+        /// table, that team-year comes back as "unmatched" here exactly like it
+        /// would in the live path, but nothing gets written either way.
+        /// </summary>
+        public async IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(
+            int startYear, bool dryRun = false, [EnumeratorCancellation] CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+
+            var confByName = (await _uow.Conferences.GetAllAsync(token))
+                .ToDictionary(c => c.Name, c => c.ConferenceId, StringComparer.OrdinalIgnoreCase);
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                bool success = true;
+                var yearChanges = 0;
+                var unmatched = new List<string>();
+                string message;
+
+                try
+                {
+                    var response = await CfbdClient.GetAsync($"/teams?year={year}", token);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        success = false;
+                        message = $"CFBD returned {response.StatusCode}, skipped";
+                    }
+                    else
+                    {
+                        var dtos = await response.Content
+                            .ReadFromJsonAsync<List<CfbdTeamV2Dto>>(cancellationToken: token) ?? [];
+
+                        var fbsDtos = dtos
+                        .Where(d => string.Equals(d.Classification, "fbs", StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    unmatched = fbsDtos
+                        .Where(d => d.Conference == null || !confByName.ContainsKey(d.Conference))
+                        .Select(d => $"{d.School} → '{d.Conference ?? "null"}'")
+                        .ToList();
+
+                    fbsDtos = fbsDtos
+                        .Where(d => d.Conference != null && confByName.ContainsKey(d.Conference))
+                        .ToList();
+
+                    foreach (var dto in fbsDtos)
+                    {
+                        var confId = confByName[dto.Conference!];
+
+                        var history = await _uow.TeamsConferenceHistory.GetByTeamIdAsync(dto.Id, token);
+                        var openRow = history.FirstOrDefault(h => h.EndYear == null);
+
+                        if (openRow == null)
+                        {
+                            if (!dryRun)
+                            {
+                                await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
+                                {
+                                    TeamId = dto.Id,
+                                    ConferenceId = confId,
+                                    StartYear = year,
+                                    EndYear = null
+                                }, token);
+                            }
+                            yearChanges++;
+                        }
+                        else if (openRow.ConferenceId != confId)
+                        {
+                            if (!dryRun)
+                            {
+                                openRow.EndYear = year - 1;
+                                await _uow.TeamsConferenceHistory.UpdateAsync(openRow, token);
+
+                                await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
+                                {
+                                    TeamId = dto.Id,
+                                    ConferenceId = confId,
+                                    StartYear = year,
+                                    EndYear = null
+                                }, token);
+                            }
+                            yearChanges++;
+                        }
+                    }
+
+                        var prefix = dryRun ? "[DRY RUN] " : "";
+                        message = unmatched.Count == 0
+                            ? $"{prefix}{yearChanges} conference change(s)"
+                            : $"{prefix}{yearChanges} conference change(s); {unmatched.Count} unmatched: {string.Join("; ", unmatched.Take(5))}" +
+                              (unmatched.Count > 5 ? $" (+{unmatched.Count - 5} more)" : "");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
+                }
+
+                yield return new ProgressUpdate(year.ToString(), success, message);
+                await Task.Delay(300, token);
+            }
+        }
+
+        /// <summary>
         /// Assigns correct week numbers (17, 18, 19...) to postseason games for a given year.
         /// CFBD returns week=1 for all postseason games; this fixes that by bucketing on
         /// game date (Thursday-anchored weeks) and assigning sequential weeks from 17.
@@ -471,6 +648,34 @@ namespace SaturdayPulse.Services
             return total;
         }
 
+        /// <summary>Streaming version — yields one ProgressUpdate per year as it completes.</summary>
+        public async IAsyncEnumerable<ProgressUpdate> LoadGamesBulkStreamAsync(
+            int startYear, [EnumeratorCancellation] CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                bool success; string message;
+                try
+                {
+                    var count = await LoadGamesAsync(year, week: null, token);
+                    success = true;
+                    message = $"{count} games upserted";
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
+                }
+
+                yield return new ProgressUpdate(year.ToString(), success, message);
+                await Task.Delay(300, token);
+            }
+        }
+
         /// <summary>
         /// Bulk load — fetches lines for every week of every year from startYear to current.
         /// Two delays: 300ms between weeks, 500ms between years.
@@ -502,6 +707,46 @@ namespace SaturdayPulse.Services
 
             Console.WriteLine($"LoadLinesBulkAsync: {total} total lines from {startYear} to {currentYear}");
             return total;
+        }
+
+        /// <summary>Streaming version — yields one ProgressUpdate per year as it completes.</summary>
+        public async IAsyncEnumerable<ProgressUpdate> LoadLinesBulkStreamAsync(
+            int startYear, [EnumeratorCancellation] CancellationToken token = default)
+        {
+            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
+
+            for (var year = startYear; year <= currentYear; year++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                bool success; string message;
+                try
+                {
+                    var weeks = (await _uow.Games.GetByYearAsync(year, token))
+                        .Select(g => g.Week)
+                        .Distinct()
+                        .OrderBy(w => w)
+                        .ToList();
+
+                    var yearTotal = 0;
+                    foreach (var week in weeks)
+                    {
+                        yearTotal += await LoadLinesAsync(year, week, token);
+                        await Task.Delay(300, token);
+                    }
+
+                    success = true;
+                    message = $"{yearTotal} lines across {weeks.Count} weeks";
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
+                }
+
+                yield return new ProgressUpdate(year.ToString(), success, message);
+                await Task.Delay(500, token);
+            }
         }
 
         /// <summary>

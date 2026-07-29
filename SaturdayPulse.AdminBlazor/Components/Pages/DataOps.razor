@@ -1,8 +1,9 @@
 @page "/data-ops"
 @inject AdminApiService Api
 @inject ISnackbar Snackbar
+@using SaturdayPulse.AdminBlazor.Services.Models
 
-<MudText Typo="Typo.h5" Class="mb-4">Data Operations</MudText>
+<MudText Typo="Typo.h5" Class="mb-2">Data Operations</MudText>
 
 <div class="page-layout">
     <div class="sections">
@@ -10,44 +11,57 @@
         <!-- ── Weekly Operations ───────────────────────────────── -->
         <MudText Typo="Typo.overline" Color="Color.Secondary">Weekly Operations</MudText>
         <div class="section-row">
-            <MudNumericField @bind-Value="_weeklyYear" Label="Year" Variant="Variant.Outlined"
+            <MudNumericField @bind-Value="_weeklyYear" Label="Year" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Disabled="IsBusy" Class="param-field" />
-            <MudNumericField @bind-Value="_weeklyWeek" Label="Week" Variant="Variant.Outlined"
+            <MudNumericField @bind-Value="_weeklyWeek" Label="Week" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Disabled="IsBusy" Class="param-field narrow" />
-            <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunWeeklyRefreshAsync"
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="IsBusy" OnClick="RunWeeklyRefreshAsync"
                        StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
                 Run Weekly Refresh
             </MudButton>
-            <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunLoadLinesAsync"
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="IsBusy" OnClick="RunLoadLinesAsync"
                        StartIcon="@Icons.Material.Filled.PriceChange">
                 Load Lines
             </MudButton>
         </div>
 
-        <MudDivider Class="my-4" />
+        <MudDivider Class="my-2" />
 
         <!-- ── Season Setup + Roster Capacity (paired: setup creates the year's
              TeamRecords row, roster capacity populates ZRoster onto it - side
              by side as a visual cue that they're a two-step yearly pair) ── -->
-        <MudGrid>
+        <MudGrid Spacing="2">
             <MudItem xs="12" md="5">
                 <MudText Typo="Typo.overline" Color="Color.Secondary">Season Setup</MudText>
                 <div class="section-row">
-                    <MudNumericField @bind-Value="_seasonYear" Label="Year" Variant="Variant.Outlined"
+                    <MudNumericField @bind-Value="_seasonYear" Label="Year" Variant="Variant.Outlined" Margin="Margin.Dense"
                                      Disabled="IsBusy" Class="param-field" />
-                    <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunSeasonSetupAsync"
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="IsBusy" OnClick="RunSeasonSetupAsync"
                                StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
                         Run Season Setup
                     </MudButton>
+                </div>
+                <div class="section-row">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="CheckPortalCoverageAsync">
+                        Check Portal Coverage
+                    </MudButton>
+                    @if (_portalCoverage is not null)
+                    {
+                        <span class="coverage-result @(_portalCoverage.MissingSeasons.Count == 0 ? "coverage-ok" : "coverage-warn")">
+                            @(_portalCoverage.MissingSeasons.Count == 0
+                                ? "All seasons covered"
+                                : $"Missing: {string.Join(", ", _portalCoverage.MissingSeasons)}")
+                        </span>
+                    }
                 </div>
             </MudItem>
 
             <MudItem xs="12" md="7">
                 <MudText Typo="Typo.overline" Color="Color.Secondary">Roster Capacity</MudText>
                 <div class="section-row">
-                    <MudNumericField @bind-Value="_rosterYear" Label="Year" Variant="Variant.Outlined"
+                    <MudNumericField @bind-Value="_rosterYear" Label="Year" Variant="Variant.Outlined" Margin="Margin.Dense"
                                      Disabled="IsBusy" Class="param-field" />
-                    <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="RunRosterCapacityAllAsync"
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="IsBusy" OnClick="RunRosterCapacityAllAsync"
                                StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.PlayArrow)">
                         Run All
                     </MudButton>
@@ -63,22 +77,22 @@
             </MudItem>
         </MudGrid>
 
-        <MudDivider Class="my-4" />
+        <MudDivider Class="my-2" />
 
         <!-- ── Postseason Tagging ──────────────────────────────── -->
         <MudText Typo="Typo.overline" Color="Color.Secondary">Postseason Tagging</MudText>
         <div class="section-row">
-            <MudNumericField @bind-Value="_postseasonYear" Label="Year" Variant="Variant.Outlined"
+            <MudNumericField @bind-Value="_postseasonYear" Label="Year" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Disabled="IsBusy" Class="param-field" />
-            <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="LoadPostseasonAsync"
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="IsBusy" OnClick="LoadPostseasonAsync"
                        StartIcon="@(_running ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.CloudDownload)">
                 @(_running ? "Loading..." : "Load Postseason")
             </MudButton>
-            <MudButton Variant="Variant.Outlined" Disabled="IsBusy" OnClick="FetchPostseasonGamesAsync" StartIcon="@Icons.Material.Filled.Refresh">
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="IsBusy" OnClick="FetchPostseasonGamesAsync" StartIcon="@Icons.Material.Filled.Refresh">
                 Refresh List
             </MudButton>
             <div style="flex:1"></div>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(IsBusy || _dirtyCount == 0)"
+            <MudButton Variant="Variant.Filled" Size="Size.Small" Color="Color.Primary" Disabled="@(IsBusy || _dirtyCount == 0)"
                        OnClick="SavePostseasonAsync" StartIcon="@Icons.Material.Filled.Save">
                 Save (@_dirtyCount playoff)
             </MudButton>
@@ -237,6 +251,20 @@
     }
 
     // ── Season Setup ─────────────────────────────────────────────────────
+    private PortalCoverageDto? _portalCoverage;
+
+    private async Task CheckPortalCoverageAsync()
+    {
+        try
+        {
+            _portalCoverage = await Api.GetPortalCoverageAsync();
+        }
+        catch
+        {
+            Append("\u2717 Portal coverage check failed \u2014 check API logs", LogStatus.Error);
+        }
+    }
+
     private async Task RunSeasonSetupAsync()
     {
         _running = true;

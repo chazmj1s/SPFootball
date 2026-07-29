@@ -4,9 +4,11 @@ using SaturdayPulse.Configuration;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Contracts.Responses;
+using SaturdayPulse.Core.Progress;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Models;
 using SaturdayPulse.Utilities;
+using System.Runtime.CompilerServices;
 
 namespace SaturdayPulse.Services
 {
@@ -64,6 +66,9 @@ namespace SaturdayPulse.Services
         public Task<int> LoadTeamsBulkAsync(int startYear, CancellationToken token = default)
             => _gameDataService.LoadTeamsBulkAsync(startYear, token);
 
+        public IAsyncEnumerable<ProgressUpdate> LoadTeamsBulkStreamAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.LoadTeamsBulkStreamAsync(startYear, token);
+
         public Task<int> AssignPostseasonWeeksAsync(int year, CancellationToken token = default)
             => _gameDataService.AssignPostseasonWeeksAsync(year, token);
 
@@ -76,17 +81,30 @@ namespace SaturdayPulse.Services
         public Task<int> LoadGamesBulkAsync(int startYear, CancellationToken token = default)
             => _gameDataService.LoadGamesBulkAsync(startYear, token);
 
+        public IAsyncEnumerable<ProgressUpdate> LoadGamesBulkStreamAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.LoadGamesBulkStreamAsync(startYear, token);
+
         public Task<int> LoadLinesAsync(int year, int week, CancellationToken token = default)
             => _gameDataService.LoadLinesAsync(year, week, token);
 
         public Task<int> LoadLinesBulkAsync(int startYear, CancellationToken token = default)
             => _gameDataService.LoadLinesBulkAsync(startYear, token);
 
+        public IAsyncEnumerable<ProgressUpdate> LoadLinesBulkStreamAsync(int startYear, CancellationToken token = default)
+            => _gameDataService.LoadLinesBulkStreamAsync(startYear, token);
+
         public Task<int> BuildAvgScoreDifferentialsAsync(int startYear, CancellationToken token = default)
             => _gameDataService.BuildAvgScoreDifferentialsAsync(startYear, token);
 
         public Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
            => _gameDataService.BuildTeamsConferenceHistoryAsync(startYear, token);
+
+        public IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(
+            int startYear, bool dryRun = false, CancellationToken token = default)
+           => _gameDataService.BuildTeamsConferenceHistoryStreamAsync(startYear, dryRun, token);
+
+        public Task<PortalCoverageResult> GetPortalCoverageAsync(CancellationToken token = default)
+            => _gameDataService.GetPortalCoverageAsync(token);
 
         public Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default)
             => _gameDataService.WeeklyRefreshAsync(year, week, token);
@@ -698,8 +716,19 @@ namespace SaturdayPulse.Services
         ///
         /// Run once after the initial data load, before backfillWeeklyRankings.
         /// </summary>
-        public async Task<BackfillResult> BackfillInitializeSeasonsAsync(
-            int? startYear, CancellationToken token = default)
+        /// <summary>
+        /// Streaming version — yields one ProgressUpdate per year as it's initialized.
+        ///
+        /// NOTE: the previous version of this method called BackfillWeeklyRankingsAsync
+        /// per year internally, marked "//<<=== Add this." — removed here. The console
+        /// now runs Initialize Seasons and Weekly Rankings as two explicit, sequential
+        /// steps, so the internal call was doubling work: every year that needed
+        /// initializing would get its WeeklyRankings computed twice (once here, once
+        /// again when Weekly Rankings runs next). If that internal call was there for
+        /// a reason other than convenience, flag it and I'll put it back.
+        /// </summary>
+        public async IAsyncEnumerable<ProgressUpdate> BackfillInitializeSeasonsStreamAsync(
+            int? startYear, [EnumeratorCancellation] CancellationToken token = default)
         {
             var allSnapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
 
@@ -723,26 +752,30 @@ namespace SaturdayPulse.Services
                 .ToList();
 
             if (!yearsToInitialize.Any())
-                return new BackfillResult("All seasons already initialized.", 0, startYear);
+            {
+                yield return new ProgressUpdate("summary", true, "All seasons already initialized.");
+                yield break;
+            }
 
-            _logger.LogInformation(
-                "Backfilling season initialization for {Count} years...", yearsToInitialize.Count);
-
-            int processed = 0;
             foreach (var year in yearsToInitialize)
             {
                 token.ThrowIfCancellationRequested();
-                await InitializeSeasonAsync(year, token);
-                processed++;
-                _logger.LogInformation("Initialized season {Year} ({Done}/{Total})",year, processed, yearsToInitialize.Count);
 
-                await BackfillWeeklyRankingsAsync(year, token); //<<=== Add this.
+                bool success; string message;
+                try
+                {
+                    await InitializeSeasonAsync(year, token);
+                    success = true;
+                    message = "season initialized";
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
+                }
+
+                yield return new ProgressUpdate(year.ToString(), success, message);
             }
-
-            return new BackfillResult(
-                $"Season initialization backfill complete — {processed} seasons initialized.",
-                processed,
-                startYear);
         }
 
         // ── Weekly Rankings ───────────────────────────────────────────────────────
@@ -752,8 +785,18 @@ namespace SaturdayPulse.Services
         /// Includes both historical years (played games) and future years (unplayed games).
         /// Rolling averages run once per year for performance rather than once per week.
         /// </summary>
-        public async Task<WeeklyRankingsBackfillResult> BackfillWeeklyRankingsAsync(
-            int? startYear, CancellationToken token)
+        /// <summary>
+        /// Streaming version — yields one ProgressUpdate per year. Restructured from
+        /// the original's "run rolling averages when the year rolls over, plus once
+        /// more for the final year" pattern to an explicit per-year group: same end
+        /// result (rolling averages computed once per year, after that year's weeks
+        /// are all done), without needing the separate post-loop call for the last
+        /// year. SOS/Power Ratings/Rankings are computed inside
+        /// _weeklyRankingsService.ComputeAndSaveAsync per week, same as before —
+        /// that's why those aren't exposed as separate console ops anymore.
+        /// </summary>
+        public async IAsyncEnumerable<ProgressUpdate> BackfillWeeklyRankingsStreamAsync(
+            int? startYear, [EnumeratorCancellation] CancellationToken token = default)
         {
             var fromYear = startYear ?? 1960;
 
@@ -766,44 +809,40 @@ namespace SaturdayPulse.Services
                 .ToList();
 
             if (!yearWeeks.Any())
-                throw new InvalidOperationException("No games found matching the criteria.");
-
-            _logger.LogInformation(
-                "Backfilling WeeklyRankings for {Count} year/week combinations...", yearWeeks.Count);
-
-            int  processed  = 0;
-            int? priorYear  = null;
-
-            foreach (var yw in yearWeeks)
             {
-                // Skip rolling averages per-week during backfill — run once per year below.
-                await _weeklyRankingsService.ComputeAndSaveAsync(
-                    yw.Year, yw.Week, token, computeRollingAverages: false);
+                yield return new ProgressUpdate("summary", false, "No games found matching the criteria.");
+                yield break;
+            }
 
-                processed++;
+            foreach (var yearGroup in yearWeeks.GroupBy(yw => yw.Year))
+            {
+                token.ThrowIfCancellationRequested();
 
-                // When the year rolls over, run rolling averages once for the completed year.
-                if (priorYear.HasValue && yw.Year != priorYear.Value)
+                bool success = true;
+                var weeksProcessed = 0;
+                string message;
+
+                try
                 {
-                    await _rollingAverageService.ComputeAndPersistAsync(priorYear.Value, null, token);
-                    _logger.LogInformation("Rolling averages complete for {Year}", priorYear.Value);
+                    foreach (var yw in yearGroup)
+                    {
+                        // Skip rolling averages per-week — run once per year below.
+                        await _weeklyRankingsService.ComputeAndSaveAsync(
+                            yw.Year, yw.Week, token, computeRollingAverages: false);
+                        weeksProcessed++;
+                    }
+
+                    await _rollingAverageService.ComputeAndPersistAsync(yearGroup.Key, null, token);
+                    message = $"{weeksProcessed} week(s) computed";
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
                 }
 
-                priorYear = yw.Year;
-
-                _logger.LogInformation(
-                    "Completed {Year} week {Week} ({Done}/{Total})",
-                    yw.Year, yw.Week, processed, yearWeeks.Count);
+                yield return new ProgressUpdate(yearGroup.Key.ToString(), success, message);
             }
-
-            // Run rolling averages for the final year.
-            if (priorYear.HasValue)
-            {
-                await _rollingAverageService.ComputeAndPersistAsync(priorYear.Value, null, token);
-                _logger.LogInformation("Rolling averages complete for {Year}", priorYear.Value);
-            }
-
-            return new WeeklyRankingsBackfillResult("Backfill complete.", processed, startYear);
         }
 
         public async Task<ComputeWeeklyResult> ComputeWeeklyAsync(
@@ -826,10 +865,12 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
-        /// Backfills the Projections table for every year/week in the database.
+        /// Streaming version — inner per-snapshot logic is unchanged from the
+        /// original, just wrapped in an outer year-grouping so the console gets one
+        /// ProgressUpdate per year instead of per (year, week) snapshot.
         /// </summary>
-        public async Task<BackfillResult> BackfillProjectionsAsync(
-            int? startYear, CancellationToken token = default)
+        public async IAsyncEnumerable<ProgressUpdate> BackfillProjectionsStreamAsync(
+            int? startYear, [EnumeratorCancellation] CancellationToken token = default)
         {
             const int firstYear   = 1965;
             var effectiveStart    = startYear ?? firstYear;
@@ -842,20 +883,30 @@ namespace SaturdayPulse.Services
                 .ToList();
 
             if (snapshots.Count == 0)
-                throw new InvalidOperationException(
-                    $"No WeeklyRankings data found from {effectiveStart} onward.");
+            {
+                yield return new ProgressUpdate(
+                    "summary", false, $"No WeeklyRankings data found from {effectiveStart} onward.");
+                yield break;
+            }
 
             var teamsById      = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
             var avgScoreDeltas = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
             var rivalries      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
 
-            int processed = 0;
-
-            foreach (var (snapshotYear, snapshotWeek) in snapshots)
+            foreach (var yearGroup in snapshots.GroupBy(s => s.Year))
             {
                 token.ThrowIfCancellationRequested();
 
-                var allGames = await _uow.Games.GetByYearAsync(snapshotYear, token);
+                bool success = true;
+                var snapshotsProcessed = 0;
+                var gamesProjected = 0;
+                string message;
+
+                try
+                {
+                    foreach (var (snapshotYear, snapshotWeek) in yearGroup)
+                    {
+                        var allGames = await _uow.Games.GetByYearAsync(snapshotYear, token);
 
                 var maxWeek        = allGames.Max(g => g.Week);
                 var remainingGames = allGames
@@ -929,18 +980,21 @@ namespace SaturdayPulse.Services
                         awayTeamId: awayId));
                 }
 
-                await _uow.Projections.UpsertManyAsync(projections, token);
-                processed++;
+                        await _uow.Projections.UpsertManyAsync(projections, token);
+                        snapshotsProcessed++;
+                        gamesProjected += projections.Count;
+                    }
 
-                _logger.LogInformation(
-                    "Projections backfill: {Year} week {Week} — {Count} games projected",
-                    snapshotYear, snapshotWeek, projections.Count);
+                    message = $"{snapshotsProcessed} snapshot(s), {gamesProjected} game(s) projected";
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    message = ex.Message;
+                }
+
+                yield return new ProgressUpdate(yearGroup.Key.ToString(), success, message);
             }
-
-            return new BackfillResult(
-                $"Projections backfill complete — {processed} snapshots processed.",
-                processed,
-                effectiveStart);
         }
     }
 }

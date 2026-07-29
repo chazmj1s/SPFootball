@@ -1,6 +1,6 @@
 .page-layout {
     display: flex;
-    gap: 24px;
+    gap: 16px;
 }
 
 .sections {
@@ -11,9 +11,9 @@
 .section-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     flex-wrap: wrap;
-    margin: 8px 0 4px;
+    margin: 4px 0 2px;
 }
 
 .param-field {
@@ -22,4 +22,16 @@
 
 .param-field.narrow {
     max-width: 100px;
+}
+
+.coverage-result {
+    font-size: 0.78rem;
+}
+
+.coverage-ok {
+    color: var(--mud-palette-success);
+}
+
+.coverage-warn {
+    color: var(--mud-palette-warning);
 }

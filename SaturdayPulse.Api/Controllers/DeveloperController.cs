@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Contracts.Responses;
+using SaturdayPulse.Core.Progress;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 
@@ -138,6 +140,24 @@ namespace SaturdayPulse.Controllers
         }
 
         /// <summary>
+        /// Streaming version — yields one ProgressUpdate per year as it completes,
+        /// instead of one response after the full range finishes. Used by the
+        /// metrics-rebuild console for live progress.
+        /// NOTE: no try/catch here — once the response starts streaming, an
+        /// exception thrown before any item is yielded can't be turned into an
+        /// HTTP error status (the 200 + opening bracket are already written).
+        /// Per-item failures are caught inside the service and yielded as a failed
+        /// ProgressUpdate instead; see LoadTeamsBulkStreamAsync.
+        /// Example: POST /api/developer/loadTeamsBulk/stream?startYear=2000
+        /// </summary>
+        [HttpPost("loadTeamsBulk/stream")]
+        [Tags("CFBD V2 - Load")]
+        public IAsyncEnumerable<ProgressUpdate> LoadTeamsBulkStream(
+            [FromQuery] int startYear,
+            CancellationToken token) =>
+            developerService.LoadTeamsBulkStreamAsync(startYear, token);
+
+        /// <summary>
         /// Fetches games for a single year (and optionally week) from CFBD and upserts into the Games table.
         /// Omit week to load the full season.
         /// Example: POST /api/developer/loadGames?year=2025
@@ -183,6 +203,14 @@ namespace SaturdayPulse.Controllers
                 return StatusCode(500, "An error occurred during bulk game load.");
             }
         }
+
+        /// <summary>Streaming version — see LoadTeamsBulkStream for the no-try/catch rationale.</summary>
+        [HttpPost("loadGamesBulk/stream")]
+        [Tags("CFBD V2 - Load")]
+        public IAsyncEnumerable<ProgressUpdate> LoadGamesBulkStream(
+            [FromQuery] int startYear,
+            CancellationToken token) =>
+            developerService.LoadGamesBulkStreamAsync(startYear, token);
 
         /// <summary>
         /// Fetches Vegas lines for a single year/week from CFBD and upserts into the Lines table.
@@ -230,6 +258,14 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        /// <summary>Streaming version — see LoadTeamsBulkStream for the no-try/catch rationale.</summary>
+        [HttpPost("loadLinesBulk/stream")]
+        [Tags("CFBD V2 - Load")]
+        public IAsyncEnumerable<ProgressUpdate> LoadLinesBulkStream(
+            [FromQuery] int startYear,
+            CancellationToken token) =>
+            developerService.LoadLinesBulkStreamAsync(startYear, token);
+
         [HttpPost("buildTeamsConferenceHistory")]
         [Tags("CFBD V2 - Load")]
         public async Task<IActionResult> BuildTeamsConferenceHistory(
@@ -238,6 +274,20 @@ namespace SaturdayPulse.Controllers
             var result = await developerService.BuildTeamsConferenceHistoryAsync(startYear, token);
             return Ok(new { message = $"{result} conference changes recorded from {startYear}" });
         }
+
+        /// <summary>
+        /// Streaming version, with an optional dryRun flag — see
+        /// GameDataService.BuildTeamsConferenceHistoryStreamAsync for what dry-run
+        /// mode does and why it exists (2026 Pac-12 reconstitution check).
+        /// Example: POST /api/developer/buildTeamsConferenceHistory/stream?startYear=2000&dryRun=true
+        /// </summary>
+        [HttpPost("buildTeamsConferenceHistory/stream")]
+        [Tags("CFBD V2 - Load")]
+        public IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStream(
+            [FromQuery] int startYear,
+            [FromQuery] bool dryRun,
+            CancellationToken token) =>
+            developerService.BuildTeamsConferenceHistoryStreamAsync(startYear, dryRun, token);
 
         /// <summary>
         /// Sunday/Wednesday refresh — loads games and lines for a single week.
@@ -599,32 +649,18 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/backfillInitializeSeasons
         /// Example: POST /api/developer/backfillInitializeSeasons?startYear=2020
         /// </summary>
+        /// <summary>
+        /// Streaming — yields one ProgressUpdate per year as it's initialized.
+        /// No try/catch: see LoadTeamsBulkStream's doc comment for why. Per-year
+        /// failures are caught inside the service and yielded as a failed
+        /// ProgressUpdate instead of aborting the stream.
+        /// </summary>
         [HttpPost("backfillInitializeSeasons")]
         [Tags("Season Initialization")]
-        public async Task<IActionResult> BackfillInitializeSeasons(
+        public IAsyncEnumerable<ProgressUpdate> BackfillInitializeSeasons(
             [FromQuery] int? startYear,
-            CancellationToken token = default)
-        {
-            try
-            {
-                var result = await developerService.BackfillInitializeSeasonsAsync(startYear, token);
-                return Ok(new
-                {
-                    message   = result.Message,
-                    processed = result.Processed,
-                    startYear = result.StartYear
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error during season initialization backfill");
-                return StatusCode(500, "An error occurred during season initialization backfill.");
-            }
-        }
+            CancellationToken token) =>
+            developerService.BackfillInitializeSeasonsStreamAsync(startYear, token);
 
         #endregion
 
@@ -789,27 +825,19 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/backfillWeeklyRankings
         /// Example: POST /api/developer/backfillWeeklyRankings?startYear=2010
         /// </summary>
+        /// <summary>
+        /// Streaming — yields one ProgressUpdate per year. This also fixes the
+        /// earlier CancellationToken.None bug: the real request token is now
+        /// threaded through instead of being discarded, so an aborted/timed-out
+        /// client actually stops server-side work instead of it running to
+        /// completion unobserved.
+        /// </summary>
         [HttpPost("backfillWeeklyRankings")]
         [Tags("Analytics and Diagnostics")]
-        public async Task<IActionResult> BackfillWeeklyRankings(
+        public IAsyncEnumerable<ProgressUpdate> BackfillWeeklyRankings(
             [FromQuery] int? startYear,
-            CancellationToken token = default)
-        {
-            try
-            {
-                var result = await developerService.BackfillWeeklyRankingsAsync(startYear, CancellationToken.None);
-                return Ok(new { message = result.Message, processed = result.Processed, startYear = result.StartYear });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, $"Error during WeeklyRankings backfill. {ex.Message}");
-                return StatusCode(500, $"An error occurred during backfill. {ex.Message}");
-            }
-        }
+            CancellationToken token) =>
+            developerService.BackfillWeeklyRankingsStreamAsync(startYear, token);
 
         /// <summary>
         /// Backfills the Projections table for every year/week combination in the database,
@@ -825,32 +853,13 @@ namespace SaturdayPulse.Controllers
         /// Example: POST /api/developer/backfillProjections
         /// Example: POST /api/developer/backfillProjections?startYear=2010
         /// </summary>
+        /// <summary>Streaming — yields one ProgressUpdate per year.</summary>
         [HttpPost("backfillProjections")]
         [Tags("Analytics and Diagnostics")]
-        public async Task<IActionResult> BackfillProjections(
+        public IAsyncEnumerable<ProgressUpdate> BackfillProjections(
             [FromQuery] int? startYear,
-            CancellationToken token = default)
-        {
-            try
-            {
-                var result = await developerService.BackfillProjectionsAsync(startYear, token);
-                return Ok(new
-                {
-                    message = result.Message,
-                    processed = result.Processed,
-                    startYear = result.StartYear
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error during Projections backfill");
-                return StatusCode(500, "An error occurred during projections backfill.");
-            }
-        }
+            CancellationToken token) =>
+            developerService.BackfillProjectionsStreamAsync(startYear, token);
 
 
         /// <summary>
@@ -1219,6 +1228,28 @@ namespace SaturdayPulse.Controllers
             {
                 logger.LogError(ex, "Error loading/applying portal ratings for season={Season}", season);
                 return StatusCode(500, "An error occurred while loading and applying portal data.");
+            }
+        }
+
+        /// <summary>
+        /// Read-only coverage check — which seasons since portal data became
+        /// available (2021) have zero PortalEntries rows. Safe to call any time;
+        /// writes nothing.
+        /// Example: GET /api/developer/portalCoverage
+        /// </summary>
+        [HttpGet("portalCoverage")]
+        [Tags("Roster Capacity")]
+        public async Task<IActionResult> GetPortalCoverage(CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.GetPortalCoverageAsync(token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error checking portal coverage");
+                return StatusCode(500, "An error occurred while checking portal coverage.");
             }
         }
 

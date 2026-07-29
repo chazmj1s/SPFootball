@@ -1,4 +1,5 @@
 ﻿using SaturdayPulse.Api.Contracts.Responses;
+using SaturdayPulse.Core.Progress;
 using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Interfaces
@@ -31,5 +32,23 @@ namespace SaturdayPulse.Interfaces
         Task<int> LoadRosterCapacityRecruitingAsync(int year, CancellationToken token);
         Task<(int RecruitsLoaded, int RatingsApplied)> LoadAndApplyRosterCapacityRecruitingAsync(int year, CancellationToken token);
         Task<(int PortalLoaded, int RatingsApplied)> LoadAndApplyPortalRatingsAsync(int season, CancellationToken token = default);
+
+        // ── CFBD V2 — Bulk load (streaming) ───────────────────────────────────
+        // Yield one ProgressUpdate per unit processed instead of returning a single
+        // total at the end, so the admin console can show live per-year progress
+        // instead of going silent for the full duration of the call.
+        IAsyncEnumerable<ProgressUpdate> LoadTeamsBulkStreamAsync(int startYear, CancellationToken token = default);
+        IAsyncEnumerable<ProgressUpdate> LoadGamesBulkStreamAsync(int startYear, CancellationToken token = default);
+        IAsyncEnumerable<ProgressUpdate> LoadLinesBulkStreamAsync(int startYear, CancellationToken token = default);
+
+        // dryRun: reports what conference changes WOULD be written without touching
+        // TeamsConferenceHistory. Added specifically to sanity-check CFBD's naming
+        // for the 2026 Pac-12 reconstitution before trusting a live run against it.
+        IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(int startYear, bool dryRun = false, CancellationToken token = default);
+
+        // ── Portal coverage check ─────────────────────────────────────────────
+        // Read-only diagnostic — no write, safe to call any time. Reports which
+        // seasons since portal data became available (2021) have zero PortalEntries.
+        Task<PortalCoverageResult> GetPortalCoverageAsync(CancellationToken token = default);
     }
 }

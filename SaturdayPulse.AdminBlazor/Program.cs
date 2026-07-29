@@ -24,6 +24,12 @@ builder.Services.AddHttpClient<AdminApiService>(client =>
     if (!baseUrl.EndsWith('/')) baseUrl += "/";
 
     client.BaseAddress = new Uri(baseUrl);
+
+    // Default HttpClient.Timeout is 100s — nowhere near enough for a 60-year
+    // historical backfill. Streaming endpoints make this less critical than it
+    // used to be (you SEE it's alive instead of it silently timing out), but the
+    // timeout still applies to the full duration of the request, streaming or not.
+    client.Timeout = TimeSpan.FromMinutes(45);
 });
 
 var app = builder.Build();
