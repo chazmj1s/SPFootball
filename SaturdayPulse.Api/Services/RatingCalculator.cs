@@ -18,7 +18,6 @@ namespace SaturdayPulse.Services
     ///   DivisionWeight          — FCS 0.25 / FBS 1.0
     ///   DampenZScore            — sign * Log(1 + |z|)
     ///   ComputeGameZScore       — full per-game Z-score pipeline
-    ///   GetConferenceTier       — P4 / G5 / Independent / Other
     ///   GetDivision             — Sun Belt East/West
     ///   ConferenceDisplayOrder  — standard sort order for display
     ///
@@ -171,33 +170,15 @@ namespace SaturdayPulse.Services
 
         // ── Conference / team classification ──────────────────────────────────────
 
-        /// <summary>
-        /// Returns the competitive tier for a given conference string.
-        /// Handles both abbreviations (SEC, B1G) and full names (Southeastern Conference).
-        /// Uses bidirectional matching — checks if the conference string contains the
-        /// pattern OR the pattern contains the conference string. This handles cases
-        /// where the DB stores full names but callers pass abbreviations and vice versa.
-        /// Team-name overrides handle edge cases (Notre Dame = P4, UConn = G5).
-        /// </summary>
-        public static string GetConferenceTier(string? conference, string? teamName = null)
-            => teamName switch
-            {
-                "Notre Dame" => "P4",
-                "Connecticut" => "G5",
-                _ => conference switch
-                {
-                    "SEC"                => "P4",
-                    "Big Ten"            => "P4",
-                    "Big 12"             => "P4",
-                    "ACC"                => "P4",
-                    "American Athletic"  => "G5",
-                    "Mountain West"      => "G5",
-                    "Sun Belt"           => "G5",
-                    "Mid-American"       => "G5",
-                    "Conference USA"     => "G5",
-                    _                    => "Other"
-                }
-            };
+        // GetConferenceTier (P4/G5/Independent/Other, string-match, year-blind) was
+        // removed as part of the 2026 Pac-12 reconstitution work. It had no year
+        // parameter, so it could never distinguish the old (P4) Pac-12 from the new
+        // (G6) one — the same structural gap that let it miss Pac-12 entirely (no
+        // case for it at all, pre-existing bug independent of the 2026 change) and
+        // let GetTeamHistoryAsync/GetTeamsV2Async/WeeklyRankingsService silently
+        // apply a team's CURRENT conference tier to historical years. All 6 former
+        // callers now use ConferenceTierService (year-aware, DB-driven via
+        // TeamsConferenceHistory + Conferences) instead.
 
         /// <summary>
         /// Maps a Sun Belt team to East or West division.

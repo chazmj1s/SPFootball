@@ -21,38 +21,38 @@ namespace SaturdayPulse.Services
     {
         private readonly IUnitOfWork               _uow;
         private readonly IGameDataService          _gameDataService;
-        private readonly TeamMetricsService        _teamMetrics;
         private readonly RollingAverageService     _rollingAverageService;
         private readonly RosterCapacityService     _rosterCapacityService;
         private readonly ScoreDeltaCalculator      _scoreDeltaCalculator;
         private readonly MatchupHistoryCalculator  _matchupHistoryCalculator;
         private readonly WeeklyRankingsService     _weeklyRankingsService;
         private readonly GamePredictionService     _predictionService;
+        private readonly ConferenceTierService     _tierService;
         private readonly MetricsConfiguration      _config;
         private readonly ILogger<DeveloperService> _logger;
 
         public DeveloperService(
             IUnitOfWork uow,
             IGameDataService gameDataService,
-            TeamMetricsService teamMetrics,
             RollingAverageService rollingAverageService,
             RosterCapacityService rosterCapacityService,
             ScoreDeltaCalculator scoreDeltaCalculator,
             MatchupHistoryCalculator matchupHistoryCalculator,
             WeeklyRankingsService weeklyRankingsService,
             GamePredictionService predictionService,
+            ConferenceTierService tierService,
             IOptions<MetricsConfiguration> config,
             ILogger<DeveloperService> logger)
         {
             _uow                      = uow;
             _gameDataService          = gameDataService;
-            _teamMetrics              = teamMetrics;
             _rollingAverageService    = rollingAverageService;
             _rosterCapacityService    = rosterCapacityService;
             _scoreDeltaCalculator     = scoreDeltaCalculator;
             _matchupHistoryCalculator = matchupHistoryCalculator;
             _weeklyRankingsService    = weeklyRankingsService;
             _predictionService        = predictionService;
+            _tierService              = tierService;
             _config                   = config.Value;
             _logger                   = logger;
         }
@@ -199,40 +199,16 @@ namespace SaturdayPulse.Services
         public Task UpdateTeamRecordsAsync(int? year)
             => _gameDataService.UpdateTeamRecordsAsync(year);
 
-        public Task SetSOSAsync(int? year, int? week)
-            => _teamMetrics.SetSOS(year, week);
-
-        public Task CalculatePowerRatingsAsync(int? year)
-            => _teamMetrics.CalculatePowerRatings(year);
-
-        public Task CalculateRankingsAsync(int targetYear)
-            => _teamMetrics.CalculateRankings(targetYear);
-
-        public async Task RecalculateMetricsAsync(int year, int? week)
-        {
-            await _rollingAverageService.ComputeAndPersistAsync(year, week);
-            await _teamMetrics.SetSOS(year, week);
-            await _teamMetrics.CalculatePowerRatings(year);
-            await _teamMetrics.CalculateRankings(year);
-        }
-
-        public async Task<BackfillResult> BackfillAllMetricsAsync(int? startYear, CancellationToken token)
-        {
-            var allRecords = await _uow.TeamRecords.GetSinceYearWithTeamsAsync(1960, token);
-            var years      = allRecords.Select(tr => tr.Year).Distinct().OrderBy(y => y).ToList();
-
-            if (startYear.HasValue)
-                years = years.Where(y => y >= startYear.Value).ToList();
-
-            foreach (var year in years)
-            {
-                _logger.LogInformation("Processing year {Year}", year);
-                await RecalculateMetricsAsync((int)year, null);
-            }
-
-            return new BackfillResult("Backfill completed successfully.", years.Count,
-                years.Any() ? (int?)years.First() : null);
-        }
+        // SetSOSAsync / CalculatePowerRatingsAsync / CalculateRankingsAsync /
+        // RecalculateMetricsAsync / BackfillAllMetricsAsync removed —
+        // TeamMetricsService deleted entirely. Its setSOS/calculatePowerRatings/
+        // calculateRankings/backfillAllMetrics endpoints had no callers, and
+        // updateWeeklyMetrics's output was silently overwritten by
+        // WeeklyRankingsService.ComputeAndSaveAsync's own upsert one step later
+        // in RunWeeklyRefreshAsync — plus its PowerRating calc used
+        // GetGameParticipantsAsync unfiltered by played status, so unplayed
+        // games counted as 0-0 results whenever it did run. WeeklyRankingsService
+        // is the single source of truth for SOS/PowerRating/Ranking now.
 
         // ── Score Deltas and Rivalries ────────────────────────────────────────────
 
@@ -593,14 +569,15 @@ namespace SaturdayPulse.Services
                 .ToDictionary(x => x.TeamId, x => x.Rank);
 
             var teamsById = fbsTeams.ToDictionary(t => t.TeamId);
-            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
-            string ConfName(Teams t) =>
-                t.ConferenceId.HasValue && confLookup.TryGetValue(t.ConferenceId.Value, out var c)
-                    ? c.Name ?? string.Empty : string.Empty;
+            var tierByTeamId = await _tierService.GetConfDataBatchAsync(
+                teamsById.Keys, year, token);
+            string TierFor(int teamId) =>
+                tierByTeamId.TryGetValue(teamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, teamsById[teamId].TeamName);
 
             var tierRankByTeam = new Dictionary<int, int>();
-            foreach (var tierGroup in orderedByPower.GroupBy(r =>
-                RatingCalculator.GetConferenceTier(ConfName(teamsById[r.TeamId]), teamsById[r.TeamId].TeamName)))
+            foreach (var tierGroup in orderedByPower.GroupBy(r => TierFor(r.TeamId)))
             {
                 int idx = 1;
                 foreach (var r in tierGroup.OrderByDescending(x => x.PowerRating))

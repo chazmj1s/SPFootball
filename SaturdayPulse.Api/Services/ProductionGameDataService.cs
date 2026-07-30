@@ -272,7 +272,6 @@ namespace SaturdayPulse.Services
 
             var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
             confLookup.TryGetValue(team.ConferenceId ?? 0, out var conf);
-            var confName = conf?.Name         ?? string.Empty;
             var confAbbr = conf?.Abbreviation ?? string.Empty;
 
             var cutoffYear = (short)(DateTime.Now.Year - years);
@@ -281,12 +280,25 @@ namespace SaturdayPulse.Services
 
             var allYears    = records.Select(r => r.Year).Distinct().ToList();
             var ranksByYear = new Dictionary<short, int>();
+            var tierByYear  = new Dictionary<short, string>();
 
             foreach (var yr in allYears)
             {
                 var allRanked = await _uow.TeamRecords.GetRankedByYearAsync(yr, token);
                 var idx       = allRanked.FindIndex(tr => tr.TeamID == teamId);
                 if (idx >= 0) ranksByYear[yr] = idx + 1;
+
+                // Year-specific tier, not the team's current conference — a team
+                // that changed conferences (Nebraska Big 12→Big Ten, Texas SWC→
+                // Big 12) must show the tier it actually held in yr, not today's.
+                // Uses GetConfDataBatchAsync directly (not GetConfDataAsync, whose
+                // own internal fallback is a hardcoded "Other") so a missing year
+                // falls back through GetTierStatic like every other call site.
+                var confDataForYear = await _tierService.GetConfDataBatchAsync(
+                    new[] { teamId }, yr, token);
+                tierByYear[yr] = confDataForYear.TryGetValue(teamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, team.TeamName);
             }
 
             var history = records.Select(r => (object)new
@@ -299,7 +311,7 @@ namespace SaturdayPulse.Services
                 BaseSOS     = r.BaseSOS,
                 CombinedSOS = r.CombinedSOS,
                 OverallRank = ranksByYear.GetValueOrDefault(r.Year, 0),
-                Tier        = RatingCalculator.GetConferenceTier(confName, team.TeamName)
+                Tier        = tierByYear.GetValueOrDefault(r.Year, "Other")
             }).ToList();
 
             return new TeamHistoryResult(teamId, team.TeamName, team.Abbreviation ?? team.TeamName, confAbbr, history);
@@ -425,7 +437,7 @@ namespace SaturdayPulse.Services
             Dictionary<int, List<Lines>> linesByGameId,
             Func<int, int> lookupWeek,
             Func<Teams?, string> getConfAbbr,
-            Func<Teams?, string> getConfName)
+            Func<Teams?, string> getTier)
         {
             teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
             teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
@@ -526,13 +538,13 @@ namespace SaturdayPulse.Services
                 HomeName = g.HomeName,
                 HomeId = g.HomeId,
                 HomeConf = getConfAbbr(homeTeam),
-                HomeTier = RatingCalculator.GetConferenceTier(getConfName(homeTeam), g.HomeName),
+                HomeTier = getTier(homeTeam),
                 HomePoints = homePoints,
                 HomeProjScore = projHome,
                 AwayName = g.AwayName,
                 AwayId = g.AwayId,
                 AwayConf = getConfAbbr(awayTeam),
-                AwayTier = RatingCalculator.GetConferenceTier(getConfName(awayTeam), g.AwayName),
+                AwayTier = getTier(awayTeam),
                 AwayPoints = awayPoints,
                 AwayProjScore = projAway,
                 Location = location,

@@ -42,10 +42,10 @@ selected week.
 - Record through the selected week
 - Power Rating — the composite performance score
 - Strength of Schedule (SOS)
-- Conference and tier (P4, G5, Independent)
+- Conference and tier (P4, G6, Independent)
 
 **Filtering:** Use the conference dropdown to narrow the list to a specific conference.
-Use the filter button for quick views like Top 25, P4, or G5.
+Use the filter button for quick views like Top 25, P4, or G6.
 
 **Sorting:** Tap any column header to sort by that metric. Tap again to reverse the order.
 

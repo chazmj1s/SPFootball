@@ -227,27 +227,14 @@ namespace SaturdayPulse.Services
         /// the record itself has no PowerRating yet.
         /// </summary>
         private static double NormalizePowerRating(
-            TeamRecord r, IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear)
+                    TeamRecord r, IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear)
         {
             if (!r.PowerRating.HasValue) return 0.5;
             if (!leagueStatsByYear.TryGetValue(r.Year, out var stats) || stats.StdDev <= 0)
                 return 0.5;
 
-            var z = ((double)r.PowerRating.Value - stats.Mean) / stats.StdDev;
-            return ToUnitScale(z);
+            return RatingScaling.ToUnitScale((double)r.PowerRating.Value, stats.Mean, stats.StdDev);
         }
-
-        /// <summary>
-        /// Clamp a z-score to +-2 std devs and map onto [0,1], centered at 0.5.
-        /// Shared by PowerRating normalization and ZRoster's own blend mapping so both
-        /// terms in any blend are on the identical scale.
-        /// </summary>
-        private static double ToUnitScale(double z)
-        {
-            var clamped = Math.Max(-2.0, Math.Min(2.0, z));
-            return 0.5 + (clamped / 4.0);
-        }
-
         public static decimal ApplyWeights(List<double> values, double[] weights)
         {
             if (values.Count == 0) return 0m;

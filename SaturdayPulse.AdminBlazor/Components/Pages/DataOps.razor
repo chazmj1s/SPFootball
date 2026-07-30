@@ -216,7 +216,12 @@
             await StepAsync("Load Games", () => Api.LoadGamesAsync(_weeklyYear, _weeklyWeek));
             await StepAsync("Load Lines", () => Api.LoadLinesAsync(_weeklyYear, _weeklyWeek));
             await StepAsync("Update Team Records", () => Api.UpdateTeamRecordsAsync(_weeklyYear));
-            await StepAsync("Update Weekly Metrics", () => Api.UpdateWeeklyMetricsAsync(_weeklyYear, _weeklyWeek));
+            // "Update Weekly Metrics" (TeamMetricsService.RecalculateMetricsAsync) removed —
+            // its SOS/PowerRating/Ranking output was silently overwritten by
+            // ComputeWeeklyAsync's step 15 (UpsertFromWeeklyRankingsAsync) one step
+            // later, every week, and its PowerRating calc used GetGameParticipantsAsync
+            // unfiltered by played status — unplayed games counted as 0-0 results in
+            // the z-score average. TeamMetricsService removed entirely; see commit.
             await StepAsync("Compute Weekly Snapshot", () => Api.ComputeWeeklyAsync(_weeklyYear, _weeklyWeek));
             await StepAsync("Rolling Averages", () => Api.CalculateRollingAveragesAsync(_weeklyYear, _weeklyWeek));
             Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);

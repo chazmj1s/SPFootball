@@ -36,17 +36,20 @@ namespace SaturdayPulse.Services
         private readonly MetricsConfiguration   _config;
         private readonly GamePredictionService  _predictionService;
         private readonly RollingAverageService  _rollingAverageService;
+        private readonly ConferenceTierService  _tierService;
 
         public WeeklyRankingsService(
             IUnitOfWork uow,
             GamePredictionService predictionService,
             RollingAverageService rollingAverageService,
+            ConferenceTierService tierService,
             IOptions<MetricsConfiguration> config)
         {
             _uow                   = uow;
             _config                = config.Value;
             _predictionService     = predictionService;
             _rollingAverageService = rollingAverageService;
+            _tierService           = tierService;
         }
 
         /// <summary>
@@ -399,14 +402,14 @@ namespace SaturdayPulse.Services
             });
 
             // ── 11. Overall and tier ranks ────────────────────────────────────────
-            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
-
-            string ConfName(Teams t)
-            {
-                if (t.ConferenceId == null) return string.Empty;
-                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                return conf?.Name ?? string.Empty;
-            }
+            // Year-aware batch lookup — matters for BackfillYearAsync, where a team's
+            // CURRENT conference (the old ConfName/Teams.ConferenceId approach) can
+            // differ from the conference it belonged to in the year being backfilled.
+            var tierByTeamId = await _tierService.GetConfDataBatchAsync(fbsIds, year, token);
+            string TierFor(Teams t) =>
+                tierByTeamId.TryGetValue(t.TeamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, t.TeamName);
 
             var ranked = fbsTeams
                 .Where(t => rankings[t.TeamId].HasValue)
@@ -415,7 +418,7 @@ namespace SaturdayPulse.Services
                 {
                     Team        = t,
                     OverallRank = i + 1,
-                    Tier        = RatingCalculator.GetConferenceTier(ConfName(t), t.TeamName)
+                    Tier        = TierFor(t)
                 })
                 .ToList();
 
