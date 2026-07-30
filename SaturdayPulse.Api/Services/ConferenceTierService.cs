@@ -6,15 +6,18 @@ namespace SaturdayPulse.Services
     /// <summary>
     /// Year-aware conference classification service.
     ///
-    /// Replaces the static string-match in RatingCalculator.GetConferenceTier with
-    /// TeamsConferenceHistory + Conferences lookups (via IUnitOfWork) so that:
+    /// Replaces the old static string-match tier lookups (formerly
+    /// RatingCalculator.GetConferenceTier, plus duplicate hardcoded switches in
+    /// ProjectionAccuracyService and elsewhere — all removed as part of this
+    /// consolidation) with TeamsConferenceHistory + Conferences lookups (via
+    /// IUnitOfWork) so that:
     ///
     ///   1. Conference filters on the mobile UI show historically-correct team lists
     ///      (Nebraska appears under Big 12 in 1998, Big Ten in 2012,
     ///       Texas appears under SWC through 1995, Big 12 from 1996).
     ///
     ///   2. Tier weights in the ratings pipeline reflect actual competitive level
-    ///      for the year being processed — no G5 over-performance leak from
+    ///      for the year being processed — no G6 over-performance leak from
     ///      current-era string matching.
     ///
     /// Repository boundaries
@@ -26,17 +29,28 @@ namespace SaturdayPulse.Services
     /// Tier classification rules
     /// ─────────────────────────
     /// P4    — ConferenceId in the P4 set below (current + historical predecessors)
-    /// G5    — Classification = "fbs" and not P4
+    /// G6    — Classification = "fbs" and not P4
     /// FCS   — Classification = "fcs"
     /// Other — DII, DIII, or no history row found for that year
     ///
     /// Historical P4 predecessor chain
     /// ────────────────────────────────
     ///   Big 6  (207) → Big 7 (210) → Big 8 (214) → Big 12 (4)
-    ///   AAWU   (213) → Pac-8 (216) → Pac-10 (220) → Pac-12 (9)
+    ///   AAWU   (213) → Pac-8 (216) → Pac-10 (220) → Pac-12 (9, 2011–2023 only — see below)
     ///   SWC    (204) — dissolved 1995; members joined Big 12
     ///   Big East (222) — P4 while fbs-classified (1991–2012);
-    ///                    AAC (151) took over football membership in 2013 → G5
+    ///                    AAC (151) took over football membership in 2013 → G6
+    ///   Pac-12 (9) — P4 through 2023 (12/10-team era). Dissolved after the
+    ///                2023 season when most members left for Big Ten/Big 12/ACC;
+    ///                reconstituted for 2026 with a smaller, mid-major membership
+    ///                (confirmed via BuildTeamsConferenceHistory dry-run against
+    ///                live CFBD data — conference name/ID unchanged, just fewer
+    ///                teams). Same ConferenceId (9), so it's handled the same way
+    ///                as the Big East split above rather than as a new ID: G6 for
+    ///                2024 onward. Deliberately keyed to 2023 (the old conference's
+    ///                actual last P4 season), not 2026 (the reconstitution date),
+    ///                so there's no ambiguous gap year where the ID exists but
+    ///                doesn't clearly belong to either era.
     /// </summary>
     public class ConferenceTierService
     {
@@ -55,7 +69,6 @@ namespace SaturdayPulse.Services
             4,   // Big 12            current
             5,   // Big Ten           current
             8,   // SEC               current
-            9,   // Pac-12            2011–2023 (dissolved; members moved to Big 12/Ten)
             204, // SWC               1915–1995
             207, // Big 6             1928–1947
             210, // Big 7             1948–1959
@@ -68,6 +81,12 @@ namespace SaturdayPulse.Services
         // Big East: P4 only through 2012; AAC took over football membership in 2013
         private const int BigEastConferenceId = 222;
         private const int BigEastLastP4Year   = 2012;
+
+        // Pac-12: P4 through its 2023 dissolution. Reconstituted for 2026 under the
+        // same ConferenceId (9) with a smaller, mid-major membership — G6 from 2024
+        // onward. See class-level doc comment for why 2023 (not 2026) is the cutoff.
+        private const int Pac12ConferenceId = 9;
+        private const int Pac12LastP4Year   = 2023;
 
         // ── Conference info tuple ─────────────────────────────────────────────────
 
@@ -163,9 +182,14 @@ namespace SaturdayPulse.Services
 
             // Big East was P4-equivalent while it had FBS football members
             if (conferenceId == BigEastConferenceId)
-                return year <= BigEastLastP4Year ? "P4" : "G5";
+                return year <= BigEastLastP4Year ? "P4" : "G6";
 
-            return P4ConferenceIds.Contains(conferenceId) ? "P4" : "G5";
+            // Pac-12: P4 in its original 2011–2023 run, G6 in its 2024+/reconstituted
+            // form. Same ConferenceId both eras — see class-level doc comment.
+            if (conferenceId == Pac12ConferenceId)
+                return year <= Pac12LastP4Year ? "P4" : "G6";
+
+            return P4ConferenceIds.Contains(conferenceId) ? "P4" : "G6";
         }
 
         // ── Static fallback ───────────────────────────────────────────────────────
@@ -179,18 +203,19 @@ namespace SaturdayPulse.Services
             => teamName switch
             {
                 "Notre Dame"  => "P4",
-                "Connecticut" => "G5",
+                "Connecticut" => "G6",
                 _ => conferenceName switch
                 {
                     "SEC"               => "P4",
                     "Big Ten"           => "P4",
                     "Big 12"            => "P4",
                     "ACC"               => "P4",
-                    "American Athletic" => "G5",
-                    "Mountain West"     => "G5",
-                    "Sun Belt"          => "G5",
-                    "Mid-American"      => "G5",
-                    "Conference USA"    => "G5",
+                    "American Athletic" => "G6",
+                    "Mountain West"     => "G6",
+                    "Sun Belt"          => "G6",
+                    "Mid-American"      => "G6",
+                    "Conference USA"    => "G6",
+                    "Pac-12"            => "G6",
                     _                   => "Other"
                 }
             };

@@ -27,6 +27,7 @@ namespace SaturdayPulse.Services
         private readonly MatchupHistoryCalculator  _matchupHistoryCalculator;
         private readonly WeeklyRankingsService     _weeklyRankingsService;
         private readonly GamePredictionService     _predictionService;
+        private readonly ConferenceTierService     _tierService;
         private readonly MetricsConfiguration      _config;
         private readonly ILogger<DeveloperService> _logger;
 
@@ -39,6 +40,7 @@ namespace SaturdayPulse.Services
             MatchupHistoryCalculator matchupHistoryCalculator,
             WeeklyRankingsService weeklyRankingsService,
             GamePredictionService predictionService,
+            ConferenceTierService tierService,
             IOptions<MetricsConfiguration> config,
             ILogger<DeveloperService> logger)
         {
@@ -50,6 +52,7 @@ namespace SaturdayPulse.Services
             _matchupHistoryCalculator = matchupHistoryCalculator;
             _weeklyRankingsService    = weeklyRankingsService;
             _predictionService        = predictionService;
+            _tierService              = tierService;
             _config                   = config.Value;
             _logger                   = logger;
         }
@@ -566,14 +569,15 @@ namespace SaturdayPulse.Services
                 .ToDictionary(x => x.TeamId, x => x.Rank);
 
             var teamsById = fbsTeams.ToDictionary(t => t.TeamId);
-            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
-            string ConfName(Teams t) =>
-                t.ConferenceId.HasValue && confLookup.TryGetValue(t.ConferenceId.Value, out var c)
-                    ? c.Name ?? string.Empty : string.Empty;
+            var tierByTeamId = await _tierService.GetConfDataBatchAsync(
+                teamsById.Keys, year, token);
+            string TierFor(int teamId) =>
+                tierByTeamId.TryGetValue(teamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, teamsById[teamId].TeamName);
 
             var tierRankByTeam = new Dictionary<int, int>();
-            foreach (var tierGroup in orderedByPower.GroupBy(r =>
-                RatingCalculator.GetConferenceTier(ConfName(teamsById[r.TeamId]), teamsById[r.TeamId].TeamName)))
+            foreach (var tierGroup in orderedByPower.GroupBy(r => TierFor(r.TeamId)))
             {
                 int idx = 1;
                 foreach (var r in tierGroup.OrderByDescending(x => x.PowerRating))

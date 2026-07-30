@@ -295,7 +295,7 @@ namespace SaturdayPulse.Services
                         Tier = tier
                     };
                 })
-                .Where(c => c.Tier is "P4" or "G5")    // FBS only — FCS/DII/DIII are noise
+                .Where(c => c.Tier is "P4" or "G6")    // FBS only — FCS/DII/DIII are noise
                 .OrderBy(c => c.Tier == "P4" ? 0 : 1)  // P4 first
                 .ThenBy(c => c.Name)
                 .ToList();
@@ -444,7 +444,11 @@ namespace SaturdayPulse.Services
                         Conference     = conf?.Name ?? string.Empty,
                         ConferenceAbbr = conf?.Abbreviation ?? string.Empty,
                         Division       = t.Division?.ToUpperInvariant(),
-                        Tier           = RatingCalculator.GetConferenceTier(conf?.Name, t.TeamName)
+                        // "Current teams" listing has no year of its own — DateTime.Now.Year
+                        // matches the same "current" convention GetTeamHistoryAsync uses for
+                        // cutoffYear. ClassifyConference is synchronous, so no batching needed.
+                        Tier           = _tierService.ClassifyConference(
+                                             t.ConferenceId ?? 0, conf?.Classification, DateTime.Now.Year)
                     };
                 })
                 .ToList();
@@ -509,13 +513,6 @@ namespace SaturdayPulse.Services
                 return conf?.Abbreviation ?? string.Empty;
             }
 
-            string GetConfName(Teams? t)
-            {
-                if (t?.ConferenceId == null) return string.Empty;
-                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
-                return conf?.Name ?? string.Empty;
-            }
-
             // ── WeeklyRankings lookup — same shape as GetScheduleV2Async ──────────
             var availableWeeks = (await _uow.WeeklyRankings
                 .GetDistinctYearWeeksAsync(token))
@@ -550,6 +547,17 @@ namespace SaturdayPulse.Services
             var titleGameTeamIds = titleGames
                 .SelectMany(g => new[] { g.HomeId ?? 0, g.AwayId ?? 0 })
                 .Where(id => id > 0).Distinct().ToList();
+
+            // Batched, year-aware tier lookup for the title-game card — replaces the
+            // old year-blind GetConfName + RatingCalculator.GetConferenceTier pair.
+            // BuildTitleGameObject is synchronous, so this must be fetched up front
+            // rather than awaited inside it.
+            var titleGameTierByTeamId = await _tierService.GetConfDataBatchAsync(
+                titleGameTeamIds, targetYear, token);
+            string GetTier(Teams? t) =>
+                t != null && titleGameTierByTeamId.TryGetValue(t.TeamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, t?.TeamName);
 
             var rankingsByWeek = new Dictionary<int, Dictionary<int, WeeklyRanking>>();
             if (titleGameTeamIds.Count > 0)
@@ -588,7 +596,7 @@ namespace SaturdayPulse.Services
                 if (titleGamesByConf.TryGetValue(conf, out var titleGame))
                     gameObj = BuildTitleGameObject(
                         titleGame, teams, allProjections, rankingsByWeek,
-                        linesByGameId, LookupWeek, GetConfAbbr, GetConfName);
+                        linesByGameId, LookupWeek, GetConfAbbr, GetTier);
 
                 enriched.Add(new
                 {

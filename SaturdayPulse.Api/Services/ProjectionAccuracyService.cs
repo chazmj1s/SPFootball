@@ -25,13 +25,18 @@ namespace SaturdayPulse.Services
     ///   VegasTotalBias       — Vegas systematic bias on totals
     ///   ByWeek               — MAE by snapshot week (accuracy improves closer to game)
     ///   ByYear               — year-over-year accuracy trend
-    ///   ByConference         — accuracy by conference tier (P4 / G5 / Independent)
+    ///   ByConference         — accuracy by conference tier (P4 / G6 / Other)
     /// </summary>
     public class ProjectionAccuracyService
     {
         private readonly NCAAContext _context;
+        private readonly ConferenceTierService _tierService;
 
-        public ProjectionAccuracyService(NCAAContext context) => _context = context;
+        public ProjectionAccuracyService(NCAAContext context, ConferenceTierService tierService)
+        {
+            _context     = context;
+            _tierService = tierService;
+        }
 
         public async Task<ProjectionAccuracyResult> ComputeAccuracyAsync(
             int? startYear = null,
@@ -254,21 +259,47 @@ namespace SaturdayPulse.Services
                     );
                 });
 
-            // Load conference tiers for home teams via correct FK join.
-            // Teams.ConferenceId → Conferences.ConferenceId (not Conferences.Id)
-            var teamIds = games
-                .SelectMany(g => new[] { g.HomeId ?? 0 })
-                .Where(id => id > 0).Distinct().ToList();
+            // Load conference tiers for home teams — grouped by year, since games in
+            // this list can span a multi-year range (startYear/endYear) and a team's
+            // tier depends on which conference it belonged to THAT year, not its
+            // current one (same fix applied across the calc-engine tier consumers —
+            // see ConferenceTierService). A single year-blind batch call here would
+            // have applied every team's current-day conference to all of its past
+            // games, e.g. crediting a team's whole history to its post-realignment
+            // conference.
+            //
+            // Fallback for teams missing a TeamsConferenceHistory row for a given
+            // year uses ConferenceTierService.GetTierStatic — the same convention
+            // ProductionGameDataService.V2 already uses — rather than a bare "Other",
+            // so Notre Dame (and similar) still resolve to "P4" here like everywhere
+            // else in the app. This also replaces the old local GetConferenceTier's
+            // distinct "Independent" bucket ("FBS Independents" => "Independent"),
+            // which has no equivalent tier value anywhere else in the codebase;
+            // those teams now land wherever GetTierStatic puts them (P4 for Notre
+            // Dame, Other otherwise). Flagged in case the accuracy report's
+            // ByConference breakdown is expected to keep a dedicated bucket.
+            var allTeamIds = games.Select(g => g.HomeId ?? 0).Where(id => id > 0).Distinct().ToList();
+            var teamNameById = await _context.Teams
+                .Where(t => allTeamIds.Contains(t.TeamId))
+                .ToDictionaryAsync(t => t.TeamId, t => t.TeamName, token);
 
-            var tierByTeam = await _context.Teams
-                .Where(t => teamIds.Contains(t.TeamId))
-                .Join(_context.Conferences,
-                    t => t.ConferenceId,
-                    c => c.ConferenceId,
-                    (t, c) => new { t.TeamId, t.TeamName, c.Name })
-                .ToDictionaryAsync(x => x.TeamId,
-                    x => GetConferenceTier(x.Name, x.TeamName),
-                    token);
+            var tierByTeamYear = new Dictionary<(int TeamId, int Year), string>();
+            foreach (var yearGroup in games.GroupBy(g => g.Year))
+            {
+                var yearTeamIds = yearGroup
+                    .Select(g => g.HomeId ?? 0)
+                    .Where(id => id > 0).Distinct().ToList();
+                if (yearTeamIds.Count == 0) continue;
+
+                var batch = await _tierService.GetConfDataBatchAsync(yearTeamIds, yearGroup.Key, token);
+                foreach (var teamId in yearTeamIds)
+                {
+                    tierByTeamYear[(teamId, yearGroup.Key)] = batch.TryGetValue(teamId, out var cd)
+                        ? cd.Tier
+                        : ConferenceTierService.GetTierStatic(
+                              null, teamNameById.GetValueOrDefault(teamId));
+                }
+            }
 
             return games
                 .Where(g => projByGame.GetValueOrDefault(g.GameId) != null)
@@ -284,7 +315,7 @@ namespace SaturdayPulse.Services
                         HomePoints = g.HomePoints ?? 0,
                         AwayPoints = g.AwayPoints ?? 0,
                         ConferenceTier = g.HomeId.HasValue
-                            ? tierByTeam.GetValueOrDefault(g.HomeId.Value)
+                            ? tierByTeamYear.GetValueOrDefault((g.HomeId.Value, g.Year))
                             : null,
                         BestProjection = projByGame[g.GameId]!,
                         VegasSpread = line.Spread,
@@ -293,31 +324,6 @@ namespace SaturdayPulse.Services
                     };
                 })
                 .ToList();
-        }
-
-        // ── Conference tier mapping ───────────────────────────────────────────────
-        // Uses the conference Name field (which stores abbreviations in this DB)
-        // joined via the correct Conferences.ConferenceId FK.
-
-        private static string GetConferenceTier(string? name, string? teamName = null)
-        {
-            if (teamName?.Equals("Notre Dame", StringComparison.OrdinalIgnoreCase) == true) return "P4";
-            if (teamName?.Equals("Connecticut", StringComparison.OrdinalIgnoreCase) == true) return "G5";
-
-            return name switch
-            {
-                "SEC" => "P4",
-                "Big Ten" => "P4",
-                "Big 12" => "P4",
-                "ACC" => "P4",
-                "American Athletic" => "G5",
-                "Mountain West" => "G5",
-                "Sun Belt" => "G5",
-                "Mid-American" => "G5",
-                "Conference USA" => "G5",
-                "FBS Independents" => "Independent",
-                _ => "Other"
-            };
         }
 
         public async Task<PortalAccuracyResult> ComputePortalAccuracyAsync(

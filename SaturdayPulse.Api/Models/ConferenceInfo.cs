@@ -9,6 +9,6 @@ namespace SaturdayPulse.Models
     {
         public string Name         { get; set; } = string.Empty;  // "Southwest", "Big 12", "Pac-10"
         public string Abbreviation { get; set; } = string.Empty;  // "SWC", "B12", "PAC"
-        public string Tier         { get; set; } = string.Empty;  // "P4", "G5"
+        public string Tier         { get; set; } = string.Empty;  // "P4", "G6"
     }
 }
