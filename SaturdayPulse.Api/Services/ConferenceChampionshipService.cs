@@ -42,7 +42,7 @@ namespace SaturdayPulse.Services
         // NULL means unknown / not ranked (stubs out requirements we can't compute)
         public int? CfpRanking      { get; set; }
         public int? ApRanking       { get; set; }
-        public int? SportSourceRating { get; set; } // Big 12 / Mountain West tiebreaker
+        public int? SportSourceRating { get; set; } // Big 12 / Mountain West / Pac-12 tiebreaker
 
         public double ConferenceWinPct =>
             (ConferenceWins + ConferenceLosses) > 0
@@ -101,17 +101,27 @@ namespace SaturdayPulse.Services
 
     /// <summary>
     /// Calculates which teams qualify for each FBS conference championship game
-    /// based on the official tiebreaker rules for each conference (2025 season).
+    /// based on the official tiebreaker rules for each conference (2025 season,
+    /// plus the reconstituted 2026 Pac-12).
     ///
     /// STUB REQUIREMENTS (cannot be computed from internal data alone):
     ///   - CFP Selection Committee rankings
     ///   - AP Poll rankings
     ///   - Coaches Poll rankings
-    ///   - SportSource Analytics rating score (Big 12 / Mountain West final tiebreaker)
+    ///   - SportSource Analytics rating score (Big 12 / Mountain West / Pac-12
+    ///     final tiebreaker)
     ///   - Nationally ranked metrics composite (Mountain West multi-team tiebreaker)
     ///
     /// These are accepted as nullable inputs on ConferenceStanding and are noted
     /// in ChampionshipQualificationResult.StubsApplied when used.
+    ///
+    /// NOTE ON Pac-12 "next-highest common opponent": the reconstituted Pac-12
+    /// plays a full 7-game round-robin among its 8 members, so every remaining
+    /// conference member is, by definition, a common opponent. That tiebreaker
+    /// step is implemented by walking down the standings and comparing each
+    /// tied team's recorded W/L result against each opponent in turn — no
+    /// separate "common opponent subset" computation is needed the way it
+    /// would be for an unbalanced-schedule conference like the Big 12.
     /// </summary>
     public class ConferenceChampionshipService
     {
@@ -136,6 +146,7 @@ namespace SaturdayPulse.Services
                 "MAC"          => GetTopTwo_MAC(standings),
                 "C-USA"        => GetTopTwo_CUSA(standings),
                 "Sun Belt"     => GetDivisionWinners_SunBelt(standings),
+                "Pac-12"       => GetTopTwo_Pac12(standings),
                 _              => GetTopTwo_Generic(standings, conference)
             };
         }
@@ -441,7 +452,127 @@ namespace SaturdayPulse.Services
             return result;
         }
 
-        
+        // ── Group of Six: Pac-12 (reconstituted 2026) ────────────────────────
+
+        /// <summary>
+        /// Pac-12 (2026 reconstitution): 8 members, full 7-game round-robin —
+        /// every team plays every other team, so there is no "common opponent"
+        /// subset to compute; every remaining conference member is automatically
+        /// a common opponent. Top 2 by conference win percentage.
+        ///
+        /// Two-way tiebreaker: Head-to-head →
+        /// record vs. next-highest common opponent (proceeding downward
+        /// through the standings) → strength of conference schedule →
+        /// total regular-season wins (max 1 FCS win) →
+        /// [STUB: SportSource Analytics rating] → coin toss.
+        ///
+        /// Multi-team (3+) tiebreaker: Cumulative head-to-head record among
+        /// the tied teams → record vs. common conference opponents →
+        /// record vs. next-highest common opponent → strength of conference
+        /// schedule → [STUB: SportSource Analytics rating] → coin toss.
+        /// Per the official protocol, once the field narrows to exactly two
+        /// teams at any step, the sequence reverts to the two-way tiebreaker
+        /// (implemented below as a dynamic pool-size check, not a hard branch,
+        /// so this happens automatically at whatever step the narrowing occurs).
+        /// </summary>
+        private ChampionshipQualificationResult GetTopTwo_Pac12(
+            List<ConferenceStanding> standings)
+        {
+            var result = new ChampionshipQualificationResult
+            {
+                Conference = "Pac-12",
+                Format     = "Top 2 by conference record (full round-robin)"
+            };
+
+            var sorted = standings.OrderByDescending(t => t.ConferenceWinPct).ToList();
+            var log    = result.TiebreakerLog;
+
+            // `sorted` is passed as the full-standings reference on every call so
+            // "next-highest common opponent" always walks the true overall
+            // standings, not whatever subset remains after Qualifier1 is pulled.
+            var q1 = ResolveTopSpot_Pac12(sorted, sorted, log, result.StubsApplied, 1);
+            var remaining = sorted.Where(t => t != q1).ToList();
+            var q2 = ResolveTopSpot_Pac12(remaining, sorted, log, result.StubsApplied, 2);
+
+            result.Qualifier1 = q1;
+            result.Qualifier2 = q2;
+            result.Qualifier1Method = "Conference record";
+            result.Qualifier2Method = "Conference record";
+            result.Contenders = GetContenders(standings, q1, q2);
+            return result;
+        }
+
+        /// <summary>
+        /// Pac-12-specific tiebreaker resolver. Distinct from the shared
+        /// <see cref="ResolveTopSpot"/> engine because the Pac-12's official
+        /// step order and step set genuinely differ between 2-way and 3+ team
+        /// ties (e.g. "record vs. common opponents" only applies at 3+;
+        /// "total wins" only applies at 2-way), rather than one fixed sequence
+        /// used for both.
+        /// </summary>
+        private ConferenceStanding ResolveTopSpot_Pac12(
+            List<ConferenceStanding> sorted,
+            List<ConferenceStanding> fullStandings,
+            List<string> log,
+            List<string> stubs,
+            int spot)
+        {
+            if (!sorted.Any()) return null;
+
+            var best = sorted.First();
+            var pool = sorted.Where(t => t.ConferenceWinPct == best.ConferenceWinPct).ToList();
+
+            if (pool.Count == 1)
+            {
+                log.Add($"Spot {spot}: {best.TeamName} leads outright ({best.ConferenceWins}-{best.ConferenceLosses})");
+                return pool[0];
+            }
+
+            log.Add($"Spot {spot}: {pool.Count}-way tie at {best.ConferenceWinPct:P0} — applying Pac-12 tiebreakers");
+
+            // Step (both paths): head-to-head. For a 2-way tie this reduces to
+            // the direct result of the single game between the two teams; for
+            // 3+ it's cumulative round-robin record strictly among the tied
+            // teams. Same underlying computation either way.
+            pool = NarrowByCumulativeHeadToHead(pool, log, spot);
+            if (pool.Count == 1) return pool[0];
+
+            // Multi-team only: record against common conference opponents.
+            // Skipped once the pool has already narrowed to 2 (two-way path
+            // doesn't have this step).
+            if (pool.Count > 2)
+            {
+                pool = NarrowByMetric(pool, t => t.CommonOpponentWinPct, "Common opponent WP", log, spot);
+                if (pool.Count == 1) return pool[0];
+            }
+
+            // Both paths: record vs. next-highest common opponent, walking
+            // down the standings. Full round-robin ⇒ every remaining team is
+            // a common opponent, so no subset filtering is needed first.
+            pool = NarrowByNextHighestCommonOpponent(pool, fullStandings, log, spot);
+            if (pool.Count == 1) return pool[0];
+
+            // Both paths: strength of conference schedule.
+            pool = NarrowByMetric(pool, t => t.ConferenceOpponentWinPct, "Conf opponent WP / SOS", log, spot);
+            if (pool.Count == 1) return pool[0];
+
+            // Two-way only: total regular-season wins (max 1 FCS win counted —
+            // assumed already reflected in OverallWins upstream). Only runs
+            // once the pool is down to exactly 2, whether it started there or
+            // narrowed there from a 3+ tie above.
+            if (pool.Count == 2)
+            {
+                pool = NarrowByMetric(pool, t => (double)t.OverallWins, "Total wins (max 1 FCS)", log, spot);
+                if (pool.Count == 1) return pool[0];
+            }
+
+            // Both paths: SportSource Analytics rating (final data-driven step).
+            pool = NarrowBySportSource(pool, log, stubs, spot);
+            if (pool.Count == 1) return pool[0];
+
+            log.Add($"Spot {spot}: All Pac-12 tiebreakers exhausted — coin toss among {pool.Count} team(s)");
+            return pool[new Random().Next(pool.Count)];
+        }
 
         // ── Generic fallback ─────────────────────────────────────────────────
 
@@ -671,6 +802,156 @@ namespace SaturdayPulse.Services
             stubs.Add($"Spot {spot}: External ranking tiebreaker required but rankings not available — random used");
             log.Add($"  Spot {spot} TB5 (External ranking): STUB — rankings unavailable");
             return null;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // PAC-12 TIEBREAKER ENGINE — narrowing helpers
+        //
+        // These differ from the Break* helpers above in shape: instead of
+        // returning a single winner-or-null, they return the narrowed pool of
+        // still-tied teams (which may be 1 team = resolved, or 2+ = proceed to
+        // the next step). This is what lets ResolveTopSpot_Pac12 check
+        // pool.Count after each step to decide whether a 3+ tie has reverted
+        // to a 2-team tie.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Generic "narrow to the leaders by this metric" step, used for the
+        /// Pac-12's common-opponent WP, SOS, and total-wins steps (all of which
+        /// are plain field/metric comparisons with no special data shape).
+        /// </summary>
+        private List<ConferenceStanding> NarrowByMetric(
+            List<ConferenceStanding> pool,
+            Func<ConferenceStanding, double> metric,
+            string stepLabel,
+            List<string> log,
+            int spot)
+        {
+            var best = pool.Max(metric);
+            var leaders = pool.Where(t => metric(t) == best).ToList();
+
+            log.Add(leaders.Count < pool.Count
+                ? $"  Spot {spot} ({stepLabel}): narrowed to {leaders.Count} team(s) at {best:P1}"
+                : $"  Spot {spot} ({stepLabel}): no separation ({best:P1})");
+
+            return leaders;
+        }
+
+        /// <summary>
+        /// Head-to-head step for the Pac-12 pipeline. For a 2-team pool this is
+        /// just the direct result of the single game between them; for 3+ it's
+        /// win pct in round-robin games played strictly among the current pool.
+        /// Both cases fall out of the same computation since, for n=2, "games
+        /// among the pool" is just the one game between those two teams.
+        /// </summary>
+        private List<ConferenceStanding> NarrowByCumulativeHeadToHead(
+            List<ConferenceStanding> pool, List<string> log, int spot)
+        {
+            var poolIds = pool.Select(t => t.TeamId).ToHashSet();
+
+            var records = pool.Select(t => new
+            {
+                Team = t,
+                Wins = t.HeadToHeadResults.Count(kvp => poolIds.Contains(kvp.Key) && kvp.Value),
+                Losses = t.HeadToHeadResults.Count(kvp => poolIds.Contains(kvp.Key) && !kvp.Value)
+            }).ToList();
+
+            double WinPct(int w, int l) => (w + l) > 0 ? (double)w / (w + l) : 0.0;
+
+            var best = records.Max(r => WinPct(r.Wins, r.Losses));
+            var leaders = records.Where(r => WinPct(r.Wins, r.Losses) == best)
+                                  .Select(r => r.Team)
+                                  .ToList();
+
+            log.Add(leaders.Count < pool.Count
+                ? $"  Spot {spot} (H2H among tied): narrowed to {leaders.Count} team(s) at {best:P0}"
+                : $"  Spot {spot} (H2H among tied): no separation ({best:P0})");
+
+            return leaders;
+        }
+
+        /// <summary>
+        /// "Record against the next-highest common opponent, proceeding
+        /// downward through the standings." Because the Pac-12 plays a full
+        /// round-robin, every non-tied conference member is automatically a
+        /// common opponent, so this just walks the standings from the top,
+        /// comparing each tied team's recorded W/L result against that specific
+        /// opponent, and narrows the pool to whichever team(s) won that game
+        /// (assuming a split result — if everyone in the pool got the same
+        /// result against that opponent, there's no separation and it moves to
+        /// the next opponent down).
+        /// </summary>
+        private List<ConferenceStanding> NarrowByNextHighestCommonOpponent(
+            List<ConferenceStanding> pool,
+            List<ConferenceStanding> fullStandings,
+            List<string> log,
+            int spot)
+        {
+            var startingCount = pool.Count;
+            var excludedIds = pool.Select(t => t.TeamId).ToHashSet();
+            var opponentsInOrder = fullStandings
+                .Where(t => !excludedIds.Contains(t.TeamId))
+                .OrderByDescending(t => t.ConferenceWinPct)
+                .ToList();
+
+            foreach (var opponent in opponentsInOrder)
+            {
+                var results = pool.Select(t => new
+                {
+                    Team = t,
+                    Result = t.HeadToHeadResults.TryGetValue(opponent.TeamId, out bool won)
+                        ? (bool?)won
+                        : null
+                }).ToList();
+
+                // Need a recorded result for every team in the pool to compare fairly.
+                if (results.Any(r => r.Result == null)) continue;
+
+                var winners = results.Where(r => r.Result == true).Select(r => r.Team).ToList();
+
+                if (winners.Count > 0 && winners.Count < pool.Count)
+                {
+                    log.Add($"  Spot {spot} (Next-highest common opp): narrowed to {winners.Count} team(s) via result vs {opponent.TeamName}");
+                    pool = winners;
+                    if (pool.Count == 1) return pool;
+                }
+                // else: every team in the pool got the same result vs this
+                // opponent (all won or all lost) — no separation, try the next
+                // team down the standings.
+            }
+
+            log.Add(pool.Count < startingCount
+                ? $"  Spot {spot} (Next-highest common opp): stopped at {pool.Count} team(s), standings exhausted"
+                : $"  Spot {spot} (Next-highest common opp): no separation found through the standings");
+
+            return pool;
+        }
+
+        /// <summary>
+        /// SportSource Analytics rating step. Lower rating = better, matching
+        /// the convention already used for Big 12 / Mountain West. Stubs out
+        /// (and leaves the pool unchanged) if any tied team is missing a rating.
+        /// </summary>
+        private List<ConferenceStanding> NarrowBySportSource(
+            List<ConferenceStanding> pool, List<string> log, List<string> stubs, int spot)
+        {
+            var withRating = pool.Where(t => t.SportSourceRating.HasValue).ToList();
+
+            if (withRating.Count != pool.Count)
+            {
+                stubs.Add($"Spot {spot}: SportSource Analytics tiebreaker required but rating unavailable for one or more tied teams");
+                log.Add($"  Spot {spot} (SportSource): STUB — rating unavailable for all tied teams");
+                return pool;
+            }
+
+            var best = withRating.Min(t => t.SportSourceRating!.Value); // lower = better
+            var leaders = withRating.Where(t => t.SportSourceRating == best).ToList();
+
+            log.Add(leaders.Count < pool.Count
+                ? $"  Spot {spot} (SportSource): narrowed to {leaders.Count} team(s) at rating {best}"
+                : $"  Spot {spot} (SportSource): no separation at rating {best}");
+
+            return leaders;
         }
 
         private static List<ContenderInfo> GetContenders(

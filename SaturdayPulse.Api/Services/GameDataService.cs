@@ -22,6 +22,52 @@ namespace SaturdayPulse.Services
         // Resolved once and reused — named client carries the bearer token
         private HttpClient CfbdClient => _httpClientFactory.CreateClient("cfbd");
 
+        /// <summary>
+        /// Builds a (Name, Classification) → ConferenceId lookup from the
+        /// Conferences table. Name alone isn't a safe key — several conference
+        /// names are reused across eras/levels (e.g. "Southern" fbs vs fcs,
+        /// "Western Athletic" fbs vs fcs, "Southland" fbs vs fcs, "Missouri
+        /// Valley" fbs/fbs) — so a plain ToDictionary(c => c.Name) throws
+        /// ArgumentException on the second matching row. Uses TryAdd instead
+        /// so an unexpected future collision logs instead of crashing whoever
+        /// called this. Shared by LoadTeamsAsync, BuildTeamsConferenceHistoryAsync,
+        /// and BuildTeamsConferenceHistoryStreamAsync — all three do the same
+        /// CFBD-conference-name → ConferenceId resolution and previously each
+        /// had their own copy of this exact bug.
+        /// </summary>
+        private async Task<Dictionary<(string Name, string Classification), int>> BuildConferenceLookupAsync(
+            string callerLabel, CancellationToken token)
+        {
+            var lookup = new Dictionary<(string Name, string Classification), int>(
+                new NameClassificationComparer());
+
+            foreach (var c in await _uow.Conferences.GetAllAsync(token))
+            {
+                var key = (c.Name ?? string.Empty, c.Classification ?? string.Empty);
+                if (!lookup.TryAdd(key, c.ConferenceId))
+                {
+                    Console.WriteLine($"{callerLabel}: conference lookup collision on Name='{key.Item1}', Classification='{key.Item2}' — ConferenceId {c.ConferenceId} ignored in favor of {lookup[key]}");
+                }
+            }
+
+            return lookup;
+        }
+
+        /// <summary>
+        /// Resolves a CFBD-reported conference name + classification against a
+        /// lookup built by <see cref="BuildConferenceLookupAsync"/>.
+        /// </summary>
+        private static bool TryResolveConferenceId(
+            Dictionary<(string Name, string Classification), int> lookup,
+            string? conferenceName,
+            string? classification,
+            out int confId)
+        {
+            confId = 0;
+            return conferenceName != null &&
+                   lookup.TryGetValue((conferenceName, classification ?? string.Empty), out confId);
+        }
+
         #region CFBD V2 — Load Methods
 
 
@@ -337,9 +383,12 @@ namespace SaturdayPulse.Services
             var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
             var changes = 0;
 
-            // Build conference name → ConferenceId lookup once
-            var confByName = (await _uow.Conferences.GetAllAsync(token))
-                .ToDictionary(c => c.Name, c => c.ConferenceId, StringComparer.OrdinalIgnoreCase);
+            // See BuildConferenceLookupAsync — Name alone isn't a safe key for
+            // conference resolution, several names are reused across eras/levels.
+            var confLookup = await BuildConferenceLookupAsync(nameof(BuildTeamsConferenceHistoryAsync), token);
+
+            bool TryResolveConference(CfbdTeamV2Dto dto, out int confId) =>
+                TryResolveConferenceId(confLookup, dto.Conference, dto.Classification, out confId);
 
             for (var year = startYear; year <= currentYear; year++)
             {
@@ -360,16 +409,16 @@ namespace SaturdayPulse.Services
                     .Where(d => string.Equals(d.Classification, "fbs", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-                foreach (var dto in fbsDtos.Where(d => d.Conference == null || !confByName.ContainsKey(d.Conference)))
+                foreach (var dto in fbsDtos.Where(d => !TryResolveConference(d, out _)))
                     Console.WriteLine($"BuildTeamsConferenceHistoryAsync: unmatched conference '{dto.Conference ?? "null"}' for team '{dto.School}' in {year}");
 
                 fbsDtos = fbsDtos
-                    .Where(d => d.Conference != null && confByName.ContainsKey(d.Conference))
+                    .Where(d => TryResolveConference(d, out _))
                     .ToList();
 
                 foreach (var dto in fbsDtos)
                 {
-                    var confId = confByName[dto.Conference!];
+                    TryResolveConference(dto, out var confId);
 
                     // Load this team's full history to find the open row
                     var history = await _uow.TeamsConferenceHistory.GetByTeamIdAsync(dto.Id, token);
@@ -433,8 +482,12 @@ namespace SaturdayPulse.Services
         {
             var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
 
-            var confByName = (await _uow.Conferences.GetAllAsync(token))
-                .ToDictionary(c => c.Name, c => c.ConferenceId, StringComparer.OrdinalIgnoreCase);
+            // See BuildConferenceLookupAsync — Name alone isn't a safe key for
+            // conference resolution, several names are reused across eras/levels.
+            var confLookup = await BuildConferenceLookupAsync(nameof(BuildTeamsConferenceHistoryStreamAsync), token);
+
+            bool TryResolveConference(CfbdTeamV2Dto dto, out int confId) =>
+                TryResolveConferenceId(confLookup, dto.Conference, dto.Classification, out confId);
 
             for (var year = startYear; year <= currentYear; year++)
             {
@@ -463,17 +516,17 @@ namespace SaturdayPulse.Services
                         .ToList();
 
                     unmatched = fbsDtos
-                        .Where(d => d.Conference == null || !confByName.ContainsKey(d.Conference))
+                        .Where(d => !TryResolveConference(d, out _))
                         .Select(d => $"{d.School} → '{d.Conference ?? "null"}'")
                         .ToList();
 
                     fbsDtos = fbsDtos
-                        .Where(d => d.Conference != null && confByName.ContainsKey(d.Conference))
+                        .Where(d => TryResolveConference(d, out _))
                         .ToList();
 
                     foreach (var dto in fbsDtos)
                     {
-                        var confId = confByName[dto.Conference!];
+                        TryResolveConference(dto, out var confId);
 
                         var history = await _uow.TeamsConferenceHistory.GetByTeamIdAsync(dto.Id, token);
                         var openRow = history.FirstOrDefault(h => h.EndYear == null);
@@ -790,9 +843,9 @@ namespace SaturdayPulse.Services
             var dtos = await response.Content
                 .ReadFromJsonAsync<List<CfbdTeamV2Dto>>(cancellationToken: token) ?? [];
 
-            // Build conference lookup by name for FK resolution
-            var conferenceLookup = (await _uow.Conferences.GetAllAsync(token))
-                .ToDictionary(c => c.Name, c => c.ConferenceId, StringComparer.OrdinalIgnoreCase);
+            // See BuildConferenceLookupAsync — Name alone isn't a safe key for
+            // conference resolution, several names are reused across eras/levels.
+            var conferenceLookup = await BuildConferenceLookupAsync(nameof(LoadTeamsAsync), token);
 
             var teams = dtos.Select(d => new Teams
             {
@@ -802,8 +855,9 @@ namespace SaturdayPulse.Services
                 Abbreviation = d.Abbreviation,
                 Alias        = d.AlternateNames != null ? string.Join(",", d.AlternateNames) : null,
                 Division     = d.Classification,
-                ConferenceId = d.Conference != null && conferenceLookup.TryGetValue(d.Conference, out var confId)
-                               ? confId : null,
+                ConferenceId = TryResolveConferenceId(conferenceLookup, d.Conference, d.Classification, out var confId)
+                               ? confId
+                               : null,
                 ShortName    = null  // not in /teams endpoint
             }).ToList();
 
@@ -1176,6 +1230,28 @@ namespace SaturdayPulse.Services
                     Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Case-insensitive comparer for the (Name, Classification) composite key
+        /// used in LoadTeamsAsync to resolve a team's conference. Name alone
+        /// isn't unique — several conference names are reused across eras/levels
+        /// (e.g. "Southern" fbs vs fcs, "Western Athletic" fbs vs fcs,
+        /// "Southland" fbs vs fcs) — but Name + Classification is unique for
+        /// every row in Conferences once entirely-pre-1965 duplicate entries
+        /// (MVIAA, Big 6, Big 7, Pacific Coast Conference, Border, Skyline,
+        /// Mountain State) have been removed.
+        /// </summary>
+        private sealed class NameClassificationComparer : IEqualityComparer<(string Name, string Classification)>
+        {
+            public bool Equals((string Name, string Classification) x, (string Name, string Classification) y) =>
+                string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.Classification, y.Classification, StringComparison.OrdinalIgnoreCase);
+
+            public int GetHashCode((string Name, string Classification) obj) =>
+                HashCode.Combine(
+                    obj.Name?.ToUpperInvariant(),
+                    obj.Classification?.ToUpperInvariant());
         }
     }
 }
