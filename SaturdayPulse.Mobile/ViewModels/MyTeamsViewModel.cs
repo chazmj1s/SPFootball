@@ -45,6 +45,7 @@ namespace SaturdayPulse.ViewModels
         private readonly EntitlementService            _entitlementService;
 
         private ObservableRangeCollection<MyTeamsGameRow> _selectedTeamGames = new();
+        private ObservableRangeCollection<MyTeamsGameRow> _selectedTeamPostseasonGames = new();
         private int             _selectedTeamId;
         private TeamRanking?    _selectedTeamRanking;
         private bool            _isBusy;
@@ -79,6 +80,8 @@ namespace SaturdayPulse.ViewModels
             });
 
             RefreshCommand = new Command(() => _ = LoadForYearOrWeekChangeAsync(forceReload: true));
+
+            TogglePostseasonCommand = new Command(() => IsPostseasonExpanded = !IsPostseasonExpanded);
 
             // Tapping a game sets the week selector to that game's week —
             // _navState is shared with MainViewModel, so this has the exact
@@ -201,6 +204,29 @@ namespace SaturdayPulse.ViewModels
             private set { _selectedTeamGames = value; OnPropertyChanged(); }
         }
 
+        public ObservableRangeCollection<MyTeamsGameRow> SelectedTeamPostseasonGames
+        {
+            get => _selectedTeamPostseasonGames;
+            private set { _selectedTeamPostseasonGames = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Gates the collapsible postseason section — only shown once the
+        /// selected team actually has postseason games loaded for this year.</summary>
+        public bool HasPostseasonGames => SelectedTeamPostseasonGames.Count > 0;
+
+        private bool _isPostseasonExpanded = true;
+        public bool IsPostseasonExpanded
+        {
+            get => _isPostseasonExpanded;
+            set
+            {
+                _isPostseasonExpanded = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PostseasonExpandIcon));
+            }
+        }
+        public string PostseasonExpandIcon => IsPostseasonExpanded ? "▲" : "▼";
+
         public ObservableCollection<TeamChipItem> Chips { get; } = new();
 
         // ── Bindable properties ───────────────────────────────────────────
@@ -288,6 +314,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleRivalryNotesCommand  { get; }
         public ICommand TogglePersonalGameCommand  { get; }
         public ICommand SeasonPassCommand          { get; }
+        public ICommand TogglePostseasonCommand    { get; }
         // ToggleFollowCommand is inherited from BaseViewModel — already
         // pattern-matches int (GameCardTemplate hearts) and TeamRanking
         // (TeamCardTemplate heart).
@@ -360,18 +387,71 @@ namespace SaturdayPulse.ViewModels
             SelectedTeamRanking = _rankingsCache.AllRankings
                 .FirstOrDefault(r => r.TeamID == SelectedTeamId);
 
-            var rows = _gameCache.AllGames
+            var teamGames = _gameCache.AllGames
                 .Where(g => g.AwayId == SelectedTeamId || g.HomeId == SelectedTeamId)
                 .OrderBy(g => g.Week)
-                .Select(BuildGameRow)
                 .ToList();
 
-            SelectedTeamGames.ReplaceRange(rows);
+            // Two independently-filtered views of the same source list — regular
+            // season gets bye-week rows inserted (see InsertByeWeeks), postseason
+            // does not (bowl/playoff week gaps aren't byes). SelectedTeamRanking's
+            // Rec/ProjectedRecord total is untouched by this split — it's a
+            // separate, server-computed value that counts all games, same as before.
+            var regularRows = teamGames
+                .Where(g => string.Equals(g.SeasonType, "regular", StringComparison.OrdinalIgnoreCase))
+                .Select(BuildGameRow)
+                .ToList();
+            regularRows = InsertByeWeeks(regularRows);
+            SelectedTeamGames.ReplaceRange(regularRows);
+
+            var postseasonRows = teamGames
+                .Where(g => !string.Equals(g.SeasonType, "regular", StringComparison.OrdinalIgnoreCase))
+                .Select(BuildGameRow)
+                .ToList();
+            SelectedTeamPostseasonGames.ReplaceRange(postseasonRows);
+            OnPropertyChanged(nameof(HasPostseasonGames));
 
             StatusMessage = SelectedTeamRanking is null
                 ? "No ranking data for this team/week yet."
                 : string.Empty;
         }
+
+        /// <summary>
+        /// Fills any gap in the selected team's week sequence with a synthetic
+        /// Bye Week row (Game = null — see MyTeamsGameRow.IsByeWeek). Purely a
+        /// display concern for this schedule list: it doesn't touch _gameCache
+        /// or anything the Rec/ProjectedRecord total is computed from, since
+        /// that's a separate, server-computed value (PowerRankingRowResponse.
+        /// ProjectedWins/Losses) that never sees this list at all.
+        ///
+        /// Only fills interior gaps (between the first and last game on the
+        /// schedule) — a gap before the first game or after the last isn't a
+        /// bye, it's just outside the season.
+        /// </summary>
+        private List<MyTeamsGameRow> InsertByeWeeks(List<MyTeamsGameRow> rows)
+        {
+            if (rows.Count < 2) return rows;
+
+            var result = new List<MyTeamsGameRow>(rows.Count);
+            for (int i = 0; i < rows.Count; i++)
+            {
+                result.Add(rows[i]);
+
+                if (i == rows.Count - 1) continue;
+
+                for (int missingWeek = rows[i].Week + 1; missingWeek < rows[i + 1].Week; missingWeek++)
+                    result.Add(BuildByeWeekRow(missingWeek));
+            }
+
+            return result;
+        }
+
+        private MyTeamsGameRow BuildByeWeekRow(int week) => new()
+        {
+            Game           = null,
+            Week           = week,
+            IsSelectedWeek = week == _navState.SelectedWeek
+        };
 
         /// <summary>
         /// Resolves a GameResult into the selected team's perspective —
@@ -388,13 +468,17 @@ namespace SaturdayPulse.ViewModels
             // Raw HomePoints/AwayPoints (not the pre-formatted Display*Score
             // strings, which append a projection in parens) so this is a
             // clean numeric comparison from the selected team's perspective.
+            // Unplayed games fall back to HomeProjScore/AwayProjScore so the
+            // (W)/(L) badge shows a projected result instead of staying blank
+            // until the game is actually played.
             var resultLetter = string.Empty;
-            if (g.IsPlayed)
-            {
-                var myScore  = teamIsHome ? g.HomePoints : g.AwayPoints;
-                var oppScore = teamIsHome ? g.AwayPoints : g.HomePoints;
-                resultLetter = myScore > oppScore ? "(W)" : myScore < oppScore ? "(L)" : "(T)";
-            }
+            var myScore  = g.IsPlayed
+                ? teamIsHome ? g.HomePoints : g.AwayPoints
+                : teamIsHome ? g.HomeProjScore : g.AwayProjScore;
+            var oppScore = g.IsPlayed
+                ? teamIsHome ? g.AwayPoints : g.HomePoints
+                : teamIsHome ? g.AwayProjScore : g.HomeProjScore;
+            resultLetter = myScore > oppScore ? "(W)" : myScore < oppScore ? "(L)" : "(T)";
 
             return new MyTeamsGameRow
             {
@@ -573,7 +657,13 @@ namespace SaturdayPulse.ViewModels
     /// </summary>
     public class MyTeamsGameRow
     {
-        public GameResult Game               { get; init; } = null!;
+        /// <summary>
+        /// Null for a synthetic Bye Week row (see MyTeamsViewModel.InsertByeWeeks) —
+        /// null is the deliberate signal, not an omission. Any code branching on
+        /// played/unplayed/real data should check this (or IsByeWeek below) first.
+        /// </summary>
+        public GameResult? Game               { get; init; }
+        public bool         IsByeWeek          => Game == null;
         public int         Week               { get; init; }
         public string      DateShort          { get; init; } = string.Empty;
         public string      AtPrefix           { get; init; } = string.Empty; // "@ " or "vs "

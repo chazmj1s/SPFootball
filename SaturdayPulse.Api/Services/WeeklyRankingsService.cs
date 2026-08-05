@@ -238,6 +238,31 @@ namespace SaturdayPulse.Services
                    games.Average(g => (double)(g.AwayPoints ?? 0))) / 2.0
                 : 28.0;
 
+            // Ranking = winPct × (1 + PowerRating) is genuinely 0/undefined for
+            // any team with zero wins — not just week 1 of a new season, but
+            // also a team on a winless in-season stretch (0-1, 0-2, 0-3...).
+            // Treating that 0 as "this team has 0 strength" silently makes such
+            // a team look talent-blind for the margin/z-score calc below.
+            //
+            // PowerRating, unlike Ranking, updates from Z-scores every week
+            // regardless of win/loss outcome — it's the signal that actually
+            // exists before (or without) any wins. Reconstructing an effective
+            // Ranking as if the team were exactly .500 — 0.5 * (1 + PowerRating)
+            // — keeps the result in the same numeric range real Ranking values
+            // occupy (the bucket table's StrengthDifferential is calibrated
+            // against that range), while still reflecting real, per-week-updating
+            // separation instead of a frozen fallback.
+            //
+            // Falls back to the raw preseason SeedRating (already on the
+            // Ranking scale, not the PowerRating scale) only when there's no
+            // prior WeeklyRankings row at all to read a PowerRating from.
+            decimal ResolveStrength(int teamId, WeeklyRanking? prior)
+            {
+                if (prior != null && prior.Ranking > 0m) return (decimal)prior.Ranking;
+                if (prior?.PowerRating != null) return 0.5m * (1m + prior.PowerRating.Value);
+                return seedByTeamId.TryGetValue(teamId, out var seed) ? seed : 0m;
+            }
+
             var withZScores = gameParticipants.Select(gp =>
             {
                 // Get pregame rankings from prior week snapshot.
@@ -245,8 +270,8 @@ namespace SaturdayPulse.Services
                 priorByTeamId.TryGetValue(gp.TeamId,     out var teamPrior);
                 priorByTeamId.TryGetValue(gp.OpponentId, out var oppPrior);
 
-                var teamStrength = RatingCalculator.ExpandStrength(teamPrior?.Ranking ?? 0m);
-                var oppStrength  = RatingCalculator.ExpandStrength(oppPrior?.Ranking  ?? 0m);
+                var teamStrength = RatingCalculator.ExpandStrength(ResolveStrength(gp.TeamId,     teamPrior));
+                var oppStrength  = RatingCalculator.ExpandStrength(ResolveStrength(gp.OpponentId, oppPrior));
 
                 // Differential from team's perspective — positive means team is stronger.
                 var rawDiff   = teamStrength - oppStrength;
@@ -303,12 +328,7 @@ namespace SaturdayPulse.Services
                 bool oppIsFcs = string.Equals(gp.OpponentDivision, "fcs",
                                     StringComparison.OrdinalIgnoreCase);
                 if (!oppIsFcs)
-                {
-                    if (oppPrior != null && oppPrior.Ranking > 0m)
-                        oppPregameStrength = (decimal)oppPrior.Ranking;
-                    else if (seedByTeamId.TryGetValue(gp.OpponentId, out var seed))
-                        oppPregameStrength = seed;
-                }
+                    oppPregameStrength = ResolveStrength(gp.OpponentId, oppPrior);
 
                 return new
                 {

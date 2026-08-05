@@ -25,6 +25,15 @@ public class TeamRanking : INotifyPropertyChanged
     public byte Wins { get; set; }
     public byte Losses { get; set; }
 
+    /// <summary>
+    /// Real wins/losses so far, plus predicted W/L for each remaining game on
+    /// the schedule (rolled up server-side from the existing Projections
+    /// snapshot). Added 2026-08 for the Rankings/MyTeam season-projection
+    /// feature — see ProjectedRecord below for the display string.
+    /// </summary>
+    public byte ProjectedWins { get; set; }
+    public byte ProjectedLosses { get; set; }
+
     public int OverallRank { get; set; }
     public int TierRank { get; set; }
 
@@ -83,6 +92,20 @@ public class TeamRanking : INotifyPropertyChanged
     // =========================================================
 
     public string Record => $"{Wins}-{Losses}";
+
+    /// <summary>Real record so far plus predicted W/L for remaining games.</summary>
+    public string ProjectedRecord => $"{ProjectedWins}-{ProjectedLosses}";
+
+    /// <summary>
+    /// Actual record, prefixed with the projected full-season record in
+    /// parentheses — e.g. "(10-3) 0-0" at preseason. Collapses to plain
+    /// "10-3" once ProjectedWins/Losses matches Wins/Losses (no remaining
+    /// games left to project, so the parenthetical would be redundant).
+    /// </summary>
+    public string RecordWithProjection =>
+        (ProjectedWins != Wins || ProjectedLosses != Losses)
+            ? $"({ProjectedRecord}) {Record}"
+            : Record;
 
     public string DisplayRank =>
         Ranking?.ToString() ?? "N/A";

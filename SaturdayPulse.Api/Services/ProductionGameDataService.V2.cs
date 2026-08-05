@@ -711,7 +711,7 @@ namespace SaturdayPulse.Services
                             projMyScore  = isHome ? pred.PredictedTeamScore     : pred.PredictedOpponentScore;
                             projOppScore = isHome ? pred.PredictedOpponentScore  : pred.PredictedTeamScore;
                             confidence   = pred.Confidence ?? "Unknown";
-                            projWin      = projMyScore >= projOppScore;
+                            projWin      = isHome ? pred.IsTeamProjectedWinner : !pred.IsTeamProjectedWinner;
                         }
                         else { projWin = isHome; }   // home default
 
@@ -873,7 +873,7 @@ namespace SaturdayPulse.Services
             {
                 if (allProjections.TryGetValue(g.GameId, out var pred))
                 {
-                    bool homeWins = pred.PredictedTeamScore >= pred.PredictedOpponentScore;
+                    bool homeWins = pred.IsTeamProjectedWinner;
                     return homeWins
                         ? (WinnerId: g.HomeId, LoserId: g.AwayId, GameId: g.GameId)
                         : (WinnerId: g.AwayId, LoserId: g.HomeId, GameId: g.GameId);
@@ -988,7 +988,7 @@ namespace SaturdayPulse.Services
 
                 if (throughWeek.HasValue)
                 {
-                    var lookupWeek = Math.Max(0, throughWeek.Value - 1);
+                    var lookupWeek = Math.Max(0, throughWeek.Value);
                     var weekly = await _uow.WeeklyRankings.GetByYearAndWeekAsync(
                         targetYear, lookupWeek, token);
 
@@ -1003,6 +1003,10 @@ namespace SaturdayPulse.Services
                     var historyByTeam = historicalRecords
                         .GroupBy(tr => tr.TeamID)
                         .ToDictionary(g => g.Key, g => g.OrderBy(r => r.Year).ToList());
+
+                    var projGames = await _uow.Games.GetByYearAsync(targetYear, token);
+                    var projProjections = await _projectionCache.GetAllProjections(targetYear, token);
+                    var projRecordByTeam = BuildProjectedRecordRollup(projGames, projProjections, throughWeek);
 
                     var sample = currentRecords.FirstOrDefault();
                     Debug.WriteLine($"Sample TrendRating: {sample?.TrendRating}, Pedigree: {sample?.PedigreeRating}, Seed: {sample?.SeedRating}");
@@ -1019,6 +1023,7 @@ namespace SaturdayPulse.Services
                             history ??= [];
 
                             var conf = ConfData(wr.TeamID, t?.TeamName);
+                            projRecordByTeam.TryGetValue(wr.TeamID, out var projWL);
 
                             return new PowerRankingRowResponse
                             {
@@ -1035,6 +1040,8 @@ namespace SaturdayPulse.Services
                                 Year = (int)wr.Year,
                                 Wins = wr.Wins,
                                 Losses = wr.Losses,
+                                ProjectedWins = wr.Wins + projWL.Wins,
+                                ProjectedLosses = wr.Losses + projWL.Losses,
                                 BaseSOS = (double?)wr.BaseSOS,
                                 CombinedSOS = (double?)wr.CombinedSOS,
                                 AvgPointsScored = (double?)wr.AvgPointsScored,
@@ -1062,6 +1069,10 @@ namespace SaturdayPulse.Services
                 {
                     var teamRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(targetYear, token);
                     var ranked = teamRecords.Where(tr => tr.Ranking.HasValue).ToList();
+
+                    var projGames = await _uow.Games.GetByYearAsync(targetYear, token);
+                    var projProjections = await _projectionCache.GetAllProjections(targetYear, token);
+                    var projRecordByTeam = BuildProjectedRecordRollup(projGames, projProjections, null);
 
                     var withTiers = ranked
                         .Select(tr =>
@@ -1094,22 +1105,29 @@ namespace SaturdayPulse.Services
                     }
 
                     var rankings = withOverallRank
-                        .Select(t => new PowerRankingRowResponse
+                        .Select(t =>
                         {
-                            TeamID = t.TeamRecord.TeamID,
-                            TeamName = t.Team?.TeamName ?? t.TeamRecord.Teams?.TeamName,
-                            Conference = t.Conf.Name,
-                            ConferenceAbbr = t.Conf.Abbreviation,
-                            Division = t.Team?.Division,
-                            Tier = t.Conf.Tier,
-                            OverallRank = t.OverallRank,
-                            TierRank = tierRankLookup[t.TeamRecord.TeamID],
-                            Ranking = (double?)t.TeamRecord.Ranking,
-                            Year = t.TeamRecord.Year,
-                            Wins = t.TeamRecord.Wins,
-                            Losses = t.TeamRecord.Losses,
-                            BaseSOS = (double?)t.TeamRecord.BaseSOS,
-                            CombinedSOS = (double?)t.TeamRecord.CombinedSOS
+                            projRecordByTeam.TryGetValue(t.TeamRecord.TeamID, out var projWL);
+
+                            return new PowerRankingRowResponse
+                            {
+                                TeamID = t.TeamRecord.TeamID,
+                                TeamName = t.Team?.TeamName ?? t.TeamRecord.Teams?.TeamName,
+                                Conference = t.Conf.Name,
+                                ConferenceAbbr = t.Conf.Abbreviation,
+                                Division = t.Team?.Division,
+                                Tier = t.Conf.Tier,
+                                OverallRank = t.OverallRank,
+                                TierRank = tierRankLookup[t.TeamRecord.TeamID],
+                                Ranking = (double?)t.TeamRecord.Ranking,
+                                Year = t.TeamRecord.Year,
+                                Wins = t.TeamRecord.Wins,
+                                Losses = t.TeamRecord.Losses,
+                                BaseSOS = (double?)t.TeamRecord.BaseSOS,
+                                CombinedSOS = (double?)t.TeamRecord.CombinedSOS,
+                                ProjectedWins = t.TeamRecord.Wins + projWL.Wins,
+                                ProjectedLosses = t.TeamRecord.Losses + projWL.Losses
+                            };
                         }).ToList();
 
                     return new PowerRankingsResult(false, rankings);
@@ -1444,6 +1462,58 @@ namespace SaturdayPulse.Services
         }
 
         // ── Private helpers ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Rolls up a projected win/loss total for every team appearing in
+        /// <paramref name="games"/>: games already reflected in the caller's
+        /// baseline are skipped; every remaining game gets a predicted W/L from
+        /// the existing Projections snapshot (home team's score is always
+        /// PredictedTeamScore, per the cache convention used throughout this
+        /// file), added on top of the caller's real record.
+        ///
+        /// afterWeek == null  → baseline is "already played" (current/live view).
+        /// afterWeek.HasValue → baseline is "Week &lt;= afterWeek" (historical
+        ///                      weekly view) — later games are always projected,
+        ///                      even if they've since actually been played, since
+        ///                      this reconstructs what was knowable as of that week.
+        ///
+        /// Ties default to a home win via the same ">=" convention already used
+        /// in BuildProjectedConferenceStandingsV2Async / GetProjectedStandingsV2Async.
+        /// This is a known placeholder — see the Sandbox tie-breaker work.
+        /// </summary>
+        private static Dictionary<int, (int Wins, int Losses)> BuildProjectedRecordRollup(
+            List<Games> games,
+            Dictionary<int, GamePrediction> projections,
+            int? afterWeek)
+        {
+            var result = new Dictionary<int, (int Wins, int Losses)>();
+
+            void Add(int teamId, bool won)
+            {
+                result.TryGetValue(teamId, out var wl);
+                result[teamId] = won ? (wl.Wins + 1, wl.Losses) : (wl.Wins, wl.Losses + 1);
+            }
+
+            foreach (var g in games)
+            {
+                if (!g.HomeId.HasValue || !g.AwayId.HasValue) continue;
+
+                bool countedInBaseline = afterWeek.HasValue
+                    ? g.Week <= afterWeek.Value
+                    : (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0;
+
+                if (countedInBaseline) continue;
+
+                bool homeWins = projections.TryGetValue(g.GameId, out var pred)
+                    ? pred.IsTeamProjectedWinner
+                    : true; // home default — matches GetProjectedStandingsV2Async's fallback
+
+                Add(g.HomeId.Value, homeWins);
+                Add(g.AwayId.Value, !homeWins);
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// V2 version of EnrichHeadToHead — operates on Games (home/away) instead of Game (winner/loser).

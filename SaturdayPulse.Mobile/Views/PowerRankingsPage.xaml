@@ -18,7 +18,7 @@
     <Grid Grid.Row="0"
           Padding="4,3"
           BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}"
-          ColumnDefinitions="44,22,*,55,70,60">
+          ColumnDefinitions="44,22,*,90,70,60">
 
       <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
@@ -66,7 +66,7 @@
 
       <!-- ── Main row ── -->
       <Grid Padding="4,3"
-            ColumnDefinitions="44,22,*,55,70,60"
+            ColumnDefinitions="44,22,*,90,70,60"
             BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
         <!-- Rank badge -->
@@ -104,7 +104,7 @@
                  FontSize="10" Opacity="0.6" LineBreakMode="TailTruncation"/>
         </VerticalStackLayout>
 
-        <Label Grid.Column="3" Text="{Binding Record}"
+        <Label Grid.Column="3" Text="{Binding RecordWithProjection}"
                FontSize="11" VerticalOptions="Center"/>
         <Label Grid.Column="4" Text="{Binding DisplayRank}"
                FontSize="11" FontAttributes="Bold" VerticalOptions="Center"/>

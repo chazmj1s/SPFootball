@@ -1,4 +1,4 @@
-﻿public class PowerRankingRowResponse
+public class PowerRankingRowResponse
 {
     public int TeamID { get; set; }
 
@@ -18,6 +18,16 @@
 
     public int Wins { get; set; }
     public int Losses { get; set; }
+
+    /// <summary>
+    /// Real wins/losses so far, plus predicted W/L for each remaining game on
+    /// the schedule (from the existing Projections snapshot). See
+    /// ProductionGameDataService.V2.GetPowerRankingsV2Async /
+    /// BuildProjectedRecordRollup. Added 2026-08 for the Rankings/MyTeam
+    /// season-projection feature.
+    /// </summary>
+    public int ProjectedWins { get; set; }
+    public int ProjectedLosses { get; set; }
 
     public double? BaseSOS { get; set; }
     public double? CombinedSOS { get; set; }
