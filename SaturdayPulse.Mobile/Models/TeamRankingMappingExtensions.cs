@@ -22,6 +22,8 @@ namespace SaturdayPulse.Models
                 Year             = dto.Year,
                 Wins             = dto.Wins,
                 Losses           = dto.Losses,
+                ProjectedWins    = dto.ProjectedWins,
+                ProjectedLosses  = dto.ProjectedLosses,
                 OverallRank      = dto.OverallRank,
                 TierRank         = dto.TierRank,
                 Ranking          = dto.Ranking.HasValue ? (decimal?)Convert.ToDecimal(dto.Ranking) : null,

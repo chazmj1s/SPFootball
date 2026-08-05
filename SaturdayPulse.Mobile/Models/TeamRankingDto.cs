@@ -17,6 +17,15 @@ namespace SaturdayPulse.Models
         public int     Year             { get; set; }
         public byte    Wins             { get; set; }
         public byte    Losses           { get; set; }
+
+        /// <summary>
+        /// Real wins/losses so far, plus predicted W/L for each remaining game
+        /// on the schedule. Mirrors PowerRankingRowResponse.ProjectedWins/Losses.
+        /// Added 2026-08 for the Rankings/MyTeam season-projection feature.
+        /// </summary>
+        public byte    ProjectedWins    { get; set; }
+        public byte    ProjectedLosses  { get; set; }
+
         public int     OverallRank      { get; set; }
         public int     TierRank         { get; set; }
         public double? Ranking          { get; set; }

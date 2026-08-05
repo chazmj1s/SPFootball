@@ -61,6 +61,7 @@ builder.Services.AddScoped<ConferenceTierService>();
 builder.Services.AddScoped<RosterCapacityService>();
 builder.Services.AddScoped<UserProfileService>();
 
+
 // Content management (About/Privacy/Terms/etc.) — same Scoped lifetime as
 // every other *Service above, since it goes through IUnitOfWork the same way.
 builder.Services.AddScoped<ContentService>();

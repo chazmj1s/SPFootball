@@ -74,6 +74,25 @@ namespace SaturdayPulse.Contracts.Responses
         public string WinProbabilityDisplay         => $"{WinProbability:P0}";
         public string OpponentWinProbabilityDisplay => $"{OpponentWinProbability:P0}";
 
+        /// <summary>
+        /// The single source of truth for "who wins" this prediction — decided
+        /// from the continuous WinProbability (equivalently, the sign of
+        /// ExpectedMargin), never from the rounded PredictedTeamScore/
+        /// PredictedOpponentScore. Rounded display scores can land exactly equal
+        /// (e.g. 24-24) even when the underlying model has a clear, meaningfully
+        /// nonzero lean — that's a Math.Round artifact on the display scores, not
+        /// a genuine coin-flip prediction. Ties at exactly 0.5 (ExpectedMargin
+        /// exactly 0) break to true, matching the historical ">=" convention used
+        /// at every call site this replaces.
+        ///
+        /// Every consumer that needs a discrete W/L from a prediction — projected-
+        /// record rollups, projected standings, future Sandbox bracket seeding —
+        /// should use this instead of comparing scores. See
+        /// ProductionGameDataService.V2's BuildProjectedRecordRollup /
+        /// GetProjectedStandingsV2Async / BuildProjectedConferenceStandingsV2Async.
+        /// </summary>
+        public bool IsTeamProjectedWinner => WinProbability >= 0.5;
+
         public string PredictionSummary =>
             $"{TeamName} {PredictedTeamScore:F1} {LocationDisplay} {OpponentName} {PredictedOpponentScore:F1} " +
             $"(±{MarginOfError:F1}, {Confidence} confidence, {WinProbabilityDisplay})";
