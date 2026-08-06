@@ -37,6 +37,7 @@ namespace SaturdayPulse.Models
                 IsPlayed      = dto.IsPlayed,
                 ActualOU      = dto.ActualOU,
                 ProjOU        = dto.ProjOU,
+                ProjMargin    = dto.ProjMargin,
 
                 HomeStats     = dto.HomeStats?.ToGameTeamStats(),
                 AwayStats     = dto.AwayStats?.ToGameTeamStats(),

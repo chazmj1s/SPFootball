@@ -38,7 +38,8 @@ namespace SaturdayPulse.Models
         public char    Location  { get; set; }   // 'H' = has home team, 'N' = neutral
         public bool    IsPlayed  { get; set; }
         public int     ActualOU  { get; set; }
-        public double? ProjOU    { get; set; }
+        public double? ProjOU { get; set; }
+        public double? ProjMargin { get; set; }
 
         // ── Derived: who won ──────────────────────────────────────────────
         public bool HomeIsWinner => IsPlayed && HomePoints >= AwayPoints;
@@ -68,10 +69,10 @@ namespace SaturdayPulse.Models
             : $"({ProjHomeScore})";
 
         public int    ActualMargin      => AwayPoints - HomePoints;
-        public string DisplayProjMargin => HasProjection
-            ? $"{Math.Round((AwayProjScore!.Value - HomeProjScore!.Value) * 2, MidpointRounding.AwayFromZero) / 2:F1}" : "–";
+        public string DisplayProjMargin => ProjMargin.HasValue
+            ? $"{Math.Round((ProjMargin!.Value) * 2) / 2:F1}" : "–";
         public string DisplayProjOU     => ProjOU.HasValue
-            ? $"{(int)Math.Round(ProjOU.Value * 2, MidpointRounding.AwayFromZero) / 2:F1}" : "–";
+            ? $"{(int)Math.Round(ProjOU.Value * 2) / 2:F1}" : "–";
 
         public string DisplayMargin => IsPlayed
             ? $"Spread: {ActualMargin} ({DisplayProjMargin})"

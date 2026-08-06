@@ -55,7 +55,7 @@ namespace SaturdayPulse.Services
                 return (string.Empty, ConferenceTierService.GetTierStatic(null, teamName));
             }
 
-            var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
+            var allProjections = await _projectionCache.GetAllPregameProjections(targetYear, token);
 
             // Rivalry Notes — fetched once, same batch-fetch pattern as
             // allProjections/rankingsByWeek below, not queried per-game.
@@ -121,13 +121,15 @@ namespace SaturdayPulse.Services
                 char location = g.NeutralSite == true ? 'N' : 'H';
                 bool homeWon = homePoints >= awayPoints;
 
-                double? projHome = null, projAway = null;
+                double? projHome = null, projAway = null, projMargin = null;
                 if (allProjections.TryGetValue(g.GameId, out var pred))
                 {
                     projHome = Math.Max(0, Math.Round(pred.PredictedTeamScore, 1));
                     projAway = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
+                    projMargin = Math.Round(pred.ExpectedMargin, 1);
                 }
 
+                
                 var projOU = projHome.HasValue && projAway.HasValue
                     ? (double?)Math.Round(projHome.Value + projAway.Value, 1) : null;
 
@@ -238,6 +240,7 @@ namespace SaturdayPulse.Services
                     IsPlayed = isPlayed,
                     ActualOU = actualOU,
                     ProjOU = projOU,
+                    ProjMargin = projMargin,
                     SeasonType = g.SeasonType,
                     HomeStats = homeStats,
                     AwayStats = awayStats,
@@ -1283,7 +1286,7 @@ namespace SaturdayPulse.Services
                 .OrderBy(g => g.Week)
                 .ToList();
 
-            var allProjections = await _projectionCache.GetAllProjections(year, token);
+            var allProjections = await _projectionCache.GetAllPregameProjections(year, token);
 
             // Rivalry Notes — same batch-fetch pattern as GetScheduleV2Async.
             var allRivalries = await _uow.Lookups.GetMatchupHistoriesAsync(token);
@@ -1404,7 +1407,7 @@ namespace SaturdayPulse.Services
                 return (string.Empty, ConferenceTierService.GetTierStatic(null, teamName));
             }
 
-            var allProjections = await _projectionCache.GetAllProjections(targetYear, token);
+            var allProjections = await _projectionCache.GetAllPregameProjections(targetYear, token);
 
             var results = games.Select(g =>
             {

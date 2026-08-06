@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Data;
 using SaturdayPulse.Models;
@@ -28,6 +29,10 @@ namespace SaturdayPulse.Repositories
                    .Where(p => p.Year == year && p.Week == week)
                    .ToListAsync(token);
 
+        public Task<Projection> GetById(int gameId, CancellationToken token = default)
+            => _ctx.Projections
+                   .FirstOrDefaultAsync(p => p.GameId == gameId, token);        
+
         // ── Writes ────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -35,8 +40,7 @@ namespace SaturdayPulse.Repositories
         /// Batched in groups of 50 to stay under SQLite's default 999-parameter limit
         /// (each row uses 8 parameters → 50 × 8 = 400, comfortably within limit).
         /// </summary>
-        public async Task UpsertManyAsync(
-            IEnumerable<Projection> projections, CancellationToken token = default)
+        public async Task UpsertManyAsync(IEnumerable<Projection> projections, CancellationToken token = default)
         {
             const int batchSize = 50;
             var batch = new List<Projection>(batchSize);
@@ -62,34 +66,30 @@ namespace SaturdayPulse.Repositories
             List<Projection> batch, CancellationToken token)
         {
             var valueClauses = new List<string>(batch.Count);
-            var parameters   = new List<object>(batch.Count * 8);
-            int i            = 0;
 
             foreach (var p in batch)
             {
+                // Decimals explicitly formatted with InvariantCulture — plain string
+                // interpolation uses the current thread's culture, and a comma-decimal
+                // locale would render e.g. PredictedSpread=2.5 as "2,5", breaking the
+                // SQL (comma is the VALUES separator) rather than just being wrong.
+                // Ints are culture-safe as-is.
+                var spread = p.PredictedSpread.ToString(CultureInfo.InvariantCulture);
+                var total = p.PredictedTotal.ToString(CultureInfo.InvariantCulture);
+                var winProb = p.HomeWinProbability.ToString(CultureInfo.InvariantCulture);
+
                 valueClauses.Add(
-                    $"({{{i}}},{{{i+1}}},{{{i+2}}},{{{i+3}}},{{{i+4}}},{{{i+5}}},{{{i+6}}},{{{i+7}}})");
-
-                parameters.Add(p.GameId);
-                parameters.Add(p.Year);
-                parameters.Add(p.Week);
-                parameters.Add(p.HomeTeamId);
-                parameters.Add(p.AwayTeamId);
-                parameters.Add(p.PredictedSpread);
-                parameters.Add(p.PredictedTotal);
-                parameters.Add(p.HomeWinProbability);
-
-                i += 8;
+                    $"({p.GameId},{p.Year},{p.Week},{p.HomeTeamId},{p.AwayTeamId},{spread},{total},{winProb},{p.HomePoints},{p.AwayPoints})");
             }
 
             var sql = $@"
 INSERT OR REPLACE INTO Projections
     (GameId, Year, Week, HomeTeamId, AwayTeamId,
-     PredictedSpread, PredictedTotal, HomeWinProbability)
+     PredictedSpread, PredictedTotal, HomeWinProbability, HomePoints, AwayPoints)
 VALUES
     {string.Join(",\n    ", valueClauses)};";
 
-            await _ctx.Database.ExecuteSqlRawAsync(sql, parameters.ToArray(), token);
+            await _ctx.Database.ExecuteSqlRawAsync(sql, token);
         }
     }
 }
