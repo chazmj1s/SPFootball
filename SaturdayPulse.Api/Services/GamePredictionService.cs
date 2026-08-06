@@ -245,12 +245,29 @@ namespace SaturdayPulse.Services
         /// everything we know as of week 0" — and applies to every matchup in the
         /// batch, since they're all rated off the same K=4-blended snapshot of team
         /// strength for that week.
+        ///
+        /// `useWeekAsLive` (default false) distinguishes two calling patterns that
+        /// share this method but need different rating lookups underneath:
+        ///
+        ///   false — asOfWeek HASN'T been played/graded yet; asOfWeek's own
+        ///   WeeklyRankings row doesn't exist. Ratings fall back to the most recent
+        ///   completed week (asOfWeek - 1). Used by ComputeAndSaveAsync step 2b
+        ///   (substituting projected scores for this week's still-unplayed games).
+        ///
+        ///   true — asOfWeek IS a completed, already-persisted WeeklyRankings
+        ///   snapshot (a just-finished live week, or a historical backfill snapshot),
+        ///   and ratings should be read directly from asOfWeek itself rather than
+        ///   stepped back one. Required by ComputeAndSaveAsync step 17 and
+        ///   DeveloperService.BackfillProjectionsStreamAsync — both intend "project
+        ///   remaining games using the snapshot we just computed," and previously got
+        ///   asOfWeek - 1 instead (Finding #1 fix).
         /// </summary>
         public async Task<List<GamePrediction>> PredictMatchups(
-            int year, int asOfWeek, List<MatchupRequest> matchups, CancellationToken token = default)
+            int year, int asOfWeek, List<MatchupRequest> matchups,
+            CancellationToken token = default, bool useWeekAsLive = false)
         {
             var teams        = await _uow.Teams.GetDictionaryByNameAsync(token);
-            var recordsById  = await GetRatingsForWeekAsync(year, asOfWeek, token);
+            var recordsById  = await GetRatingsForWeekAsync(year, asOfWeek, token, useWeekAsLive);
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
             var allDifferentials = await GetAllDifferentialsAsync(token);
@@ -327,15 +344,64 @@ namespace SaturdayPulse.Services
             int gameId, int year, int week,
             int homeTeamId, int awayTeamId)
         {
-            var homeSpread = prediction.Location == 'H'
-                ? prediction.ExpectedMargin
-                : -prediction.ExpectedMargin;
+            // Raw predicted scores, mapped from team/opponent perspective to
+            // home/away — same Location mapping the win-probability logic below
+            // already uses.
+            var homePointsRaw = prediction.Location == 'H'
+                ? prediction.PredictedTeamScore
+                : prediction.PredictedOpponentScore;
+            var awayPointsRaw = prediction.Location == 'H'
+                ? prediction.PredictedOpponentScore
+                : prediction.PredictedTeamScore;
 
-            var total = prediction.PredictedTeamScore + prediction.PredictedOpponentScore;
+            var homePoints = (int)Math.Round(homePointsRaw, MidpointRounding.AwayFromZero);
+            var awayPoints = (int)Math.Round(awayPointsRaw, MidpointRounding.AwayFromZero);
+
+            // A tie is never a genuine model prediction — FBS games can't end
+            // tied (OT rules). It's a Math.Round collision between two distinct
+            // continuous scores that happened to land on the same integer.
+            // Break it using IsTeamProjectedWinner — GamePrediction's own
+            // documented source of truth for "who wins," derived from continuous
+            // WinProbability rather than rounded scores, and already this
+            // codebase's standard for projected-record/standings rollups (see
+            // GamePrediction.IsTeamProjectedWinner remarks).
+            if (homePoints == awayPoints)
+            {
+                bool teamIsHome = prediction.Location == 'H';
+                bool homeWins   = teamIsHome
+                    ? prediction.IsTeamProjectedWinner
+                    : !prediction.IsTeamProjectedWinner;
+
+                if (homeWins) homePoints++; else awayPoints++;
+            }
 
             var homeWinProb = prediction.Location == 'H'
                 ? prediction.WinProbability
                 : prediction.OpponentWinProbability;
+
+            // Spread: rounded to the nearest tenth — matches the precision of
+            // the real Vegas lines feed elsewhere in the app (VegasLines/Lines:
+            // e.g. -2.8, -35.8, -39.0), not a half-point "avoid a push"
+            // convention. Neither derived from homePoints - awayPoints (two
+            // already-rounded integers can only ever land on a whole number —
+            // the original complaint: every spread displaying as X.0) nor from
+            // homePointsRaw - awayPointsRaw (PredictedTeamScore/
+            // PredictedOpponentScore are a reliability-weighted BLEND, see
+            // class remarks: total anchored on the AvgScoreDifferential
+            // bucket's own AverageTotalPoints, corroborated by real PPG/PAG —
+            // their difference isn't guaranteed to equal the model's actual
+            // computed margin). Source is ExpectedMargin instead — the real
+            // value (RatingCalculator.GetSmoothedExpectedMargin against
+            // AvgScoreDifferential.AverageMargin, then HFA/rivalry-adjusted),
+            // team-perspective like WinProbability, flipped to home/away the
+            // same way homeWinProb is right above. Also deliberately NOT
+            // affected by the tie-break above: that's purely a display-integer
+            // artifact (two distinct continuous scores colliding on the same
+            // rounded integer), not a real ~0 differential — ExpectedMargin
+            // itself is untouched by it and rounds to 0.0 correctly in a
+            // genuine pick-'em case.
+            var rawSpread = prediction.Location == 'H' ? prediction.ExpectedMargin : -prediction.ExpectedMargin;
+            var spread    = Math.Round(rawSpread, 1);
 
             return new Projection
             {
@@ -344,8 +410,12 @@ namespace SaturdayPulse.Services
                 Week               = week,
                 HomeTeamId         = homeTeamId,
                 AwayTeamId         = awayTeamId,
-                PredictedSpread    = (decimal)Math.Round(homeSpread,  1),
-                PredictedTotal     = (decimal)Math.Round(total,       1),
+                HomePoints         = homePoints,
+                AwayPoints         = awayPoints,
+                PredictedSpread    = (decimal)spread,
+                // Total still derived from the tie-broken integer scores —
+                // O/U is fine as a whole number, unlike spread.
+                PredictedTotal     = homePoints + awayPoints,
                 HomeWinProbability = (decimal)Math.Round(homeWinProb, 4)
             };
         }
@@ -418,10 +488,13 @@ namespace SaturdayPulse.Services
         /// FCS placeholder handling, AvgPointsScored/AvgPointsAllowed mapping, and
         /// ZRoster folding are all handled inside GetBlendedRatingsForWeekAsync
         /// itself now — nothing left to do in this wrapper.
+        ///
+        /// useWeekAsLive passes through unchanged — see PredictMatchups remarks and
+        /// GetBlendedRatingsForWeekAsync remarks for what it controls (Finding #1 fix).
         /// </summary>
         private Task<Dictionary<int, TeamRecord>> GetRatingsForWeekAsync(
-            int year, int week, CancellationToken token)
-            => _blendedRating.GetBlendedRatingsForWeekAsync(year, week, token);
+            int year, int week, CancellationToken token, bool useWeekAsLive = false)
+            => _blendedRating.GetBlendedRatingsForWeekAsync(year, week, token, useWeekAsLive);
 
         // ── Core prediction ───────────────────────────────────────────────────────
 

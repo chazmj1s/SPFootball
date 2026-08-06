@@ -91,8 +91,8 @@ namespace SaturdayPulse.Services
         public static double ApplyHomeField(
             double expected, bool isHomeTeam, bool isNeutral, double homeFieldAdvantage)
         {
+            if (isNeutral) return expected;
             if (isHomeTeam) return expected + homeFieldAdvantage;
-            if (isNeutral)  return expected;
             return expected - homeFieldAdvantage;
         }
 

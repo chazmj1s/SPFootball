@@ -10,11 +10,20 @@ namespace SaturdayPulse.Services
     /// Computes and persists per-week power ranking snapshots into WeeklyRankings.
     ///
     /// Single source of truth pipeline:
-    ///   Steps 1-13 : compute all metrics in memory
+    ///   Step 2     : simulate and persist a Projection for every game from
+    ///                `week` through end of season, unconditionally — including
+    ///                already-played games (needed so a historical backfill of
+    ///                an already-completed season still gets a "predicted vs
+    ///                actual" pregame projection for every game; real-vs-
+    ///                projected resolution happens in step 3, not here). Keyed
+    ///                at each game's own native week — Option C: a game gets at
+    ///                most one Projection row, ever, locked at its own turn.
+    ///   Steps 3-13 : compute all metrics in memory, reading real-or-projected
+    ///                results through `week` via ResolvedGameResults (real
+    ///                Games result always wins over a Projection when both exist)
     ///   Step 14    : write WeeklyRankings snapshot (authoritative)
     ///   Step 15    : UpsertFromWeeklyRankingsAsync → TeamRecords synced from WR
     ///   Step 16    : RollingAverageService → Seed/Trend/Pedigree (skippable for backfill)
-    ///   Step 17    : write Projections for remaining unplayed games
     ///
     /// Z-score pipeline now uses AvgScoreDifferential (replaces AvgScoreDelta):
     ///   - Expected margin derived from ExpandStrength(prior week Ranking) differential
@@ -23,8 +32,12 @@ namespace SaturdayPulse.Services
     ///
     /// For years with unplayed games (e.g. a future season), projected scores are
     /// substituted for missing actuals so the full pipeline can run meaningfully.
-    /// Synthetic scores are never written to the Games table.
-    /// WeeklyRankings and TeamRecords are overwritten by actuals as the season progresses.
+    /// Synthetic scores are never written to the Games table — they're persisted
+    /// to Projections only, and resolved against real Games via the
+    /// ResolvedGameResults view. WeeklyRankings and TeamRecords are overwritten by
+    /// actuals as the season progresses, since the entire table can be rebuilt
+    /// from scratch at any time — WeeklyRankings itself doesn't track or care
+    /// whether a given week's numbers came from real or projected results.
     ///
     /// Season bootstrap: call DeveloperService.InitializeSeasonAsync before running
     /// the first week of a new season. This creates a week 0 snapshot from the prior
@@ -89,29 +102,66 @@ namespace SaturdayPulse.Services
                 .Where(tr => tr.SeedRating.HasValue)
                 .ToDictionary(tr => tr.TeamID, tr => tr.SeedRating!.Value);
 
-            // ── 2. Played games through this week ─────────────────────────────────
-            var games = await _uow.Games.GetPlayedGamesByYearAndWeekAsync(year, week, token);
-
-            // ── 2a. Load all games for the year — used in steps 2b and 17 ─────────
+            // ── 2. Decide/refresh every game from `week` through end of season ─────
+            //
+            // REBUILT (Option C) — replaces the old steps 2b + 17, which did the
+            // same underlying job (predict games that haven't happened) at two
+            // different scopes and offsets: 2b substituted only THIS week's
+            // still-unplayed games, transiently — never persisted, thrown away at
+            // the end of this method. 17 separately projected only the REMAINING
+            // season (g.Week > week), persisted, but keyed at the current run's
+            // week rather than each game's own week — a game accumulated a new
+            // row on every single weekly run, an intentional "one snapshot per
+            // as-of-week" design that's been replaced.
+            //
+            // New design: every game from `week` through the end of the season
+            // gets (re)decided in ONE pass, off ONE rating snapshot — the most
+            // recent LOCKED week (useWeekAsLive: false, the default — this
+            // week's own WeeklyRankings row doesn't exist yet; it's what THIS run
+            // is about to build below, in step 3). Each prediction is persisted
+            // keyed at THAT GAME'S OWN native week, not the current run's week.
+            // Under this scheme a game gets at most ONE Projection row, ever:
+            // every run where week <= that game's own week includes it and
+            // overwrites the same row; once the game's own week has passed, no
+            // future run's g.Week >= week filter includes it again, so the row
+            // made at its own turn is permanently locked. That single write both
+            // decides THIS week's own game (for step 3 below to read back
+            // immediately, via ResolvedGameResults) and refreshes every future
+            // week's projection in the same pass.
             var allYearGames = await _uow.Games.GetByYearAsync(year, token);
             var teamsDict    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
 
-            // ── 2b. Substitute projected scores for unplayed games ────────────────
-            var unplayedThisWeek = allYearGames
-                .Where(g => g.Week <= week &&
-                            (g.HomePoints ?? 0) == 0 &&
-                            (g.AwayPoints ?? 0) == 0 &&
+            // Note: deliberately NOT gated on "unplayed" (HomePoints/AwayPoints
+            // == 0). g.Week >= week alone is what makes the lock work — once
+            // `week` passes a game's own native week, no future run's filter
+            // includes it again, regardless of whether Games has a real score
+            // by then. Generating a projection and USING one are separate
+            // concerns: ResolvedGameResults already prefers the real Games
+            // result over a Projection whenever both exist, so writing a
+            // projection for an already-played game costs nothing for live
+            // calc correctness — and it's required for a historical backfill
+            // (e.g. a fully-completed past season, where every game already
+            // has a real score from the very first run): without this, the
+            // old "only unplayed" gate meant gamesToProject was permanently
+            // empty for such a season and no pregame projection ever got
+            // written at all, breaking "predicted vs actual" display for
+            // every already-played game.
+            var gamesToProject = allYearGames
+                .Where(g => g.Week >= week &&
                             g.HomeId.HasValue && g.AwayId.HasValue &&
                             teamsDict.ContainsKey(g.HomeId.Value) &&
                             teamsDict.ContainsKey(g.AwayId.Value))
                 .ToList();
 
-            if (unplayedThisWeek.Count > 0)
+            if (gamesToProject.Count > 0)
             {
+                // Brand-new season, week 1, before any TeamRecords exist yet for
+                // `year` — fall back to last year's so the rating blend has
+                // something to anchor from. Same guard the old step 2b used.
                 var currentYearRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
                 var predictionYear     = currentYearRecords.Any() ? year : year - 1;
 
-                var matchupRequests = unplayedThisWeek
+                var matchupRequests = gamesToProject
                     .Select(g => new MatchupRequest
                     {
                         TeamName     = teamsDict[g.HomeId!.Value].TeamName,
@@ -121,51 +171,64 @@ namespace SaturdayPulse.Services
                     })
                     .ToList();
 
+                // useWeekAsLive: false (default) — none of these games have
+                // happened yet as of this run; rating source is the most recent
+                // LOCKED week, exactly like the old PredictMatchup / step-2b
+                // pattern. Finding #1's useWeekAsLive: true no longer has a
+                // caller under this design — the only place that used it (old
+                // step 17) is what this block replaces.
                 var predictions = await _predictionService.PredictMatchups(
                     predictionYear, week, matchupRequests, token);
 
-                foreach (var g in unplayedThisWeek)
+                var projectionsToWrite = new List<Projection>(gamesToProject.Count);
+
+                foreach (var g in gamesToProject)
                 {
-                    var homeName = teamsDict[g.HomeId!.Value].TeamName;
-                    var awayName = teamsDict[g.AwayId!.Value].TeamName;
+                    if (!g.HomeId.HasValue || !g.AwayId.HasValue) continue;
+                    if (!teamsDict.TryGetValue(g.HomeId.Value, out var homeTeam)) continue;
+                    if (!teamsDict.TryGetValue(g.AwayId.Value, out var awayTeam)) continue;
 
                     var pred = predictions.FirstOrDefault(p =>
-                        p.TeamName     == homeName &&
-                        p.OpponentName == awayName &&
+                        p.TeamName     == homeTeam.TeamName &&
+                        p.OpponentName == awayTeam.TeamName &&
                         p.Week         == g.Week);
 
                     if (pred == null) continue;
 
-                    var homePoints = (int)Math.Round(pred.PredictedTeamScore);
-                    var awayPoints = (int)Math.Round(pred.PredictedOpponentScore);
-
-                    if (homePoints == 0 && awayPoints == 0) homePoints = 14;
-
-                    games.Add(new Games
-                    {
-                        GameId      = g.GameId,
-                        HomeId      = g.HomeId,
-                        AwayId      = g.AwayId,
-                        HomeName    = g.HomeName,
-                        AwayName    = g.AwayName,
-                        HomePoints  = homePoints,
-                        AwayPoints  = awayPoints,
-                        NeutralSite = g.NeutralSite,
-                        Week        = g.Week,
-                        Year        = g.Year
-                    });
+                    // Week: g.Week — the game's OWN native week, not the current
+                    // run's week. This is what makes the lock work; see remarks
+                    // above. Tie-breaking, integer scores, and spread/total
+                    // consistency are all handled inside BuildProjection now —
+                    // no separate 0-0 guard needed here like the old step 2b had.
+                    projectionsToWrite.Add(GamePredictionService.BuildProjection(
+                        prediction: pred,
+                        gameId:     g.GameId,
+                        year:       year,
+                        week:       g.Week,
+                        homeTeamId: g.HomeId.Value,
+                        awayTeamId: g.AwayId.Value));
                 }
+
+                await _uow.Projections.UpsertManyAsync(projectionsToWrite, token);
             }
+
+            // Resolved (real-or-projected) results through `week`, for this
+            // team's cumulative history. Replaces the old Games-only fetch +
+            // transient substitution — reads straight from ResolvedGameResults
+            // (real result if played, else the locked Projection row — see
+            // ResolvedGameResult remarks), and already includes the rows just
+            // written above for this week's own games.
+            var resolvedGames = await _uow.ResolvedGameResults.GetByYearThroughWeekAsync(year, week, token);
 
             // ── 3. Raw stats per team [wins, losses, pf, pa] ──────────────────────
             var rawStats = fbsTeams.ToDictionary(t => t.TeamId, _ => new int[4]);
 
-            foreach (var g in games)
+            foreach (var g in resolvedGames)
             {
                 var homeId   = g.HomeId ?? 0;
                 var awayId   = g.AwayId ?? 0;
-                var homePts  = g.HomePoints ?? 0;
-                var awayPts  = g.AwayPoints ?? 0;
+                var homePts  = g.HomePoints;
+                var awayPts  = g.AwayPoints;
                 bool homeWon = homePts >= awayPts;
 
                 if (rawStats.TryGetValue(homeId, out var hs))
@@ -186,16 +249,16 @@ namespace SaturdayPulse.Services
             // ── 4. Game-participant rows (home + away perspective) ─────────────────
             var teamById = allTeams.ToDictionary(t => t.TeamId);
 
-            var gameParticipants = games
+            var gameParticipants = resolvedGames
                 .Where(g => fbsIds.Contains(g.HomeId ?? 0) || fbsIds.Contains(g.AwayId ?? 0))
                 .SelectMany(g =>
                 {
                     var homeId  = g.HomeId ?? 0;
                     var awayId  = g.AwayId ?? 0;
-                    var homePts = g.HomePoints ?? 0;
-                    var awayPts = g.AwayPoints ?? 0;
-                    var neutral = g.NeutralSite == true;
-                    var week    = g.Week;
+                    var homePts = g.HomePoints;
+                    var awayPts = g.AwayPoints;
+                    var neutral = g.NeutralSite;
+                    var gWeek   = g.Week;
                     return new[]
                     {
                         new GameParticipant
@@ -208,7 +271,7 @@ namespace SaturdayPulse.Services
                             OpponentPoints   = awayPts,
                             Location         = neutral ? 'N' : 'H',
                             IsHomeTeam       = true,
-                            Week             = week
+                            Week             = gWeek
                         },
                         new GameParticipant
                         {
@@ -220,7 +283,7 @@ namespace SaturdayPulse.Services
                             OpponentPoints   = homePts,
                             Location         = neutral ? 'N' : 'A',
                             IsHomeTeam       = false,
-                            Week             = week
+                            Week             = gWeek
                         }
                     };
                 })
@@ -233,9 +296,9 @@ namespace SaturdayPulse.Services
             // — consistent with how the table was built in BuildAvgScoreDifferentialsAsync.
             // Falls back to raw win-pct differential if no prior ranking exists (week 1).
             var hfa = _config.HomeFieldAdvantage;
-            double leagueAvgScore = games.Count > 0
-                ? (games.Average(g => (double)(g.HomePoints ?? 0)) +
-                   games.Average(g => (double)(g.AwayPoints ?? 0))) / 2.0
+            double leagueAvgScore = resolvedGames.Count > 0
+                ? (resolvedGames.Average(g => (double)g.HomePoints) +
+                   resolvedGames.Average(g => (double)g.AwayPoints)) / 2.0
                 : 28.0;
 
             // Ranking = winPct × (1 + PowerRating) is genuinely 0/undefined for
@@ -551,61 +614,6 @@ namespace SaturdayPulse.Services
                 await _rollingAverageService.ComputeAndPersistAsync(year, week, token);
 
             await _uow.SaveChangesAsync(token);
-
-            // ── 17. Compute and persist projections for remaining unplayed games ───
-            var remainingGames = allYearGames
-                .Where(g => g.Week > week &&
-                            (g.HomePoints ?? 0) == 0 &&
-                            (g.AwayPoints ?? 0) == 0)
-                .ToList();
-
-            var matchupRequestsStep17 = remainingGames
-                .Where(g => g.HomeId.HasValue && g.AwayId.HasValue &&
-                            teamsDict.ContainsKey(g.HomeId.Value) &&
-                            teamsDict.ContainsKey(g.AwayId.Value))
-                .Select(g => new MatchupRequest
-                {
-                    TeamName     = teamsDict[g.HomeId!.Value].TeamName,
-                    OpponentName = teamsDict[g.AwayId!.Value].TeamName,
-                    Location     = g.NeutralSite == true ? 'N' : 'H',
-                    Week         = g.Week
-                })
-                .ToList();
-
-            if (matchupRequestsStep17.Count > 0)
-            {
-                var predictions = await _predictionService.PredictMatchups(year, week, matchupRequestsStep17, token);
-                var projections = new List<Projection>(remainingGames.Count);
-
-                foreach (var g in remainingGames)
-                {
-                    if (!g.HomeId.HasValue || !g.AwayId.HasValue) continue;
-                    if (!teamsDict.TryGetValue(g.HomeId.Value,  out var homeTeam)) continue;
-                    if (!teamsDict.TryGetValue(g.AwayId.Value,  out var awayTeam)) continue;
-
-                    var pred = predictions.FirstOrDefault(p =>
-                        p.TeamName     == homeTeam.TeamName &&
-                        p.OpponentName == awayTeam.TeamName &&
-                        p.Week         == g.Week);
-
-                    if (pred == null) continue;
-
-                    // week: week — the as-of week THIS ComputeAndSaveAsync call is
-                    // computing (P_Week), not the target game's own week (g.Week).
-                    // Multiple rows per GameId across different weekly runs is
-                    // intentional — the UI selects a week and shows every remaining
-                    // game's projection as computed at that point in the season.
-                    projections.Add(GamePredictionService.BuildProjection(
-                        prediction: pred,
-                        gameId:     g.GameId,
-                        year:       year,
-                        week:       week,
-                        homeTeamId: g.HomeId.Value,
-                        awayTeamId: g.AwayId.Value));
-                }
-
-                await _uow.Projections.UpsertManyAsync(projections, token);
-            }
         }
 
         /// <summary>

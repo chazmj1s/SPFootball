@@ -18,6 +18,12 @@ namespace SaturdayPulse.Contracts
         ITeamsConferenceHistoryRepository TeamsConferenceHistory { get; }
         IPortalRepository Portal { get; }
 
+        /// <summary>
+        /// Real-or-projected resolved game results — see ResolvedGameResult
+        /// remarks. Backed by the ResolvedGameResults DB view; read-only.
+        /// </summary>
+        IResolvedGameResultRepository ResolvedGameResults { get; }
+
         // ── Roster Capacity Modifier repositories ─────────────────────────────
         IRosterPlayerRepository RosterPlayers { get; }
         IPlayerStatRepository   PlayerStats   { get; }

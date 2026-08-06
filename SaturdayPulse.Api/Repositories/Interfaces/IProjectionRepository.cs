@@ -1,3 +1,4 @@
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Contracts
@@ -18,6 +19,7 @@ namespace SaturdayPulse.Contracts
         Task<List<Projection>> GetByYearAndWeekAsync(
             int year, int week, CancellationToken token = default);
 
+        Task<Projection> GetById(int gameId, CancellationToken token = default);
         /// <summary>
         /// Upserts a batch of projections.
         /// Matches on the unique key (GameId, Year, Week).

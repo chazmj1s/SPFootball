@@ -33,7 +33,8 @@ namespace SaturdayPulse.Models
         public char    Location  { get; set; }
         public bool    IsPlayed  { get; set; }
         public int     ActualOU  { get; set; }
-        public double? ProjOU    { get; set; }
+        public double? ProjOU { get; set; }
+        public double? ProjMargin { get; set; }
 
         // Nested stats — deserialized as raw objects, mapped separately
         public GameTeamStatsDto? HomeStats    { get; set; }

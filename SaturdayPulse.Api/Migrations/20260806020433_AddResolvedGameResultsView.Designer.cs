@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260806020433_AddResolvedGameResultsView")]
+    partial class AddResolvedGameResultsView
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -660,9 +663,6 @@ namespace SaturdayPulse.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsProjected")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("NeutralSite")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Week")

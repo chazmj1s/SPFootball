@@ -924,8 +924,12 @@ namespace SaturdayPulse.Services
                 // own week. Multiple rows per GameId across different snapshotWeek
                 // passes is intentional: it's how the UI shows "what we projected this
                 // game as of week N" for whichever week is selected.
+                // useWeekAsLive: true — snapshotWeek is an already-persisted,
+                // completed WeeklyRankings snapshot from history. We want ratings read
+                // from snapshotWeek directly, not stepped back to snapshotWeek-1
+                // (Finding #1 fix).
                 var predictions = await _predictionService.PredictMatchups(
-                    snapshotYear, snapshotWeek, matchupRequests, token);
+                    snapshotYear, snapshotWeek, matchupRequests, token, useWeekAsLive: true);
 
                 var projections = new List<Projection>(remainingGames.Count);
 

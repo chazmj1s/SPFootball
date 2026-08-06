@@ -15,9 +15,40 @@ namespace SaturdayPulse.Services
     /// from within a Singleton lifetime.
     ///
     /// Cache is keyed by year and invalidated when year changes.
-    /// For each game, picks the freshest projection snapshot strictly before
-    /// the game's own week. Week 0 snapshots (created by InitializeSeasonAsync)
-    /// provide projections for week 1 games since 0 &lt; 1.
+    ///
+    /// Two distinct caches, built together in the same pass:
+    ///   GetAllProjections        — current, forward-looking best guess for
+    ///                              games NOT YET PLAYED only. For standings /
+    ///                              championship-qualifier simulation, which
+    ///                              needs to project the remaining season, not
+    ///                              re-litigate games that are already decided.
+    ///   GetAllPregameProjections — the pregame projection for EVERY game this
+    ///                              year, played or not — read straight from
+    ///                              Projections, not resolved against Games.
+    ///                              For "predicted vs actual" display (Schedule,
+    ///                              My Teams, Postseason), where a played
+    ///                              game's ORIGINAL pregame prediction is wanted
+    ///                              alongside its real result, not superseded
+    ///                              by it. Under the current calc design a game
+    ///                              has at most one Projection row ever — it's
+    ///                              written once, at the game's own native
+    ///                              week, and never touched again once the game
+    ///                              is marked played — so this is safe to read
+    ///                              unconditionally with no "which snapshot"
+    ///                              logic, same as GetAllProjections.
+    ///
+    /// REBUILT — GetAllProjections was selecting "freshest projection snapshot
+    /// strictly before the game's own week" (p.Week &lt; gameWeek), a leftover
+    /// from when a game could have multiple Projection rows, one per as-of
+    /// week. Under the current calc design a game has at most one Projection
+    /// row ever, so p.Week &lt; gameWeek was never true for any game, and this
+    /// cache built to permanently empty with no error. Now reads straight from
+    /// ResolvedGameResults (the view backing IUnitOfWork.ResolvedGameResults),
+    /// which already resolves real-vs-projected with no per-consumer "which
+    /// snapshot" logic needed. Also reads HomePoints/AwayPoints directly
+    /// instead of reconstructing scores from PredictedTotal/PredictedSpread —
+    /// same rounding-consistency reasoning as GamePredictionService.
+    /// BuildProjection.
     /// </summary>
     public class ProjectionCacheService
     {
@@ -26,6 +57,7 @@ namespace SaturdayPulse.Services
         private readonly SemaphoreSlim                    _lock = new(1, 1);
         private          int?                             _cachedYear;
         private          Dictionary<int, GamePrediction>  _cache = new();
+        private          Dictionary<int, GamePrediction>  _pregameCache = new();
 
         public ProjectionCacheService(IServiceScopeFactory scopeFactory)
             => _scopeFactory = scopeFactory;
@@ -45,13 +77,30 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
-        /// Returns projections for all games in the season.
+        /// Returns projections for games NOT YET PLAYED this season — see
+        /// class remarks. For "predicted vs actual" display that needs a
+        /// projection even for already-played games, use
+        /// GetAllPregameProjections instead.
         /// </summary>
         public async Task<Dictionary<int, GamePrediction>> GetAllProjections(
             int year, CancellationToken token = default)
         {
             await EnsureCacheAsync(year, token);
             return _cache;
+        }
+
+        /// <summary>
+        /// Returns the pregame projection for every game this season, played
+        /// or not — see class remarks. Use for schedule/My Teams/postseason
+        /// display ("predicted vs actual"). For forward-looking simulation
+        /// (standings, championship qualifiers), use GetAllProjections instead
+        /// — that one deliberately excludes already-decided games.
+        /// </summary>
+        public async Task<Dictionary<int, GamePrediction>> GetAllPregameProjections(
+            int year, CancellationToken token = default)
+        {
+            await EnsureCacheAsync(year, token);
+            return _pregameCache;
         }
 
         /// <summary>
@@ -73,28 +122,47 @@ namespace SaturdayPulse.Services
 
                 var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-                var games = await uow.Games.GetByYearAsync(year, token);
-                var gameWeekById = games
-                    .Where(g => g.GameId > 0)
-                    .ToDictionary(g => g.GameId, g => g.Week);
+                var resolved = await uow.ResolvedGameResults.GetByYearAsync(year, token);
+                var allRawProjections = await uow.Projections.GetByYearAsync(year, token);
+                var projectionByGameId = allRawProjections.ToDictionary(p => p.GameId);
 
-                var allProjections = await uow.Projections.GetByYearAsync(year, token);
+                // Only unplayed games need a "projection" entry — a played game's
+                // real result is read straight from Games elsewhere, not from this
+                // cache. One row per game, guaranteed by the view itself, so no
+                // grouping/ordering to pick "the right" row.
+                var newCache = resolved
+                    .Where(r => r.IsProjected)
+                    .ToDictionary(
+                        r => r.GameId,
+                        r => new GamePrediction
+                        {
+                            GameId = r.GameId,
+                            Week = r.Week,
+                            PredictedTeamScore = r.HomePoints,
+                            PredictedOpponentScore = r.AwayPoints,
+                            ExpectedMargin = projectionByGameId.TryGetValue(r.GameId, out var proj)
+                                                    ? (double)proj.PredictedSpread : 0
+                        });
 
-                var newCache = allProjections
-                    .Where(p => gameWeekById.TryGetValue(p.GameId, out var gameWeek)
-                                && p.Week < gameWeek)
-                    .GroupBy(p => p.GameId)
-                    .Select(g => g.OrderByDescending(p => p.Week).First())
+                // Pregame: every game's locked Projection row, unconditionally —
+                // read straight from Projections, not resolved against Games, so
+                // a played game's original pregame prediction survives here even
+                // though it's excluded from newCache above. Same one-row-per-game
+                // guarantee as above, so no grouping/ordering needed.
+                var newPregameCache = allRawProjections
                     .ToDictionary(
                         p => p.GameId,
                         p => new GamePrediction
                         {
-                            PredictedTeamScore = (double)(p.PredictedTotal + p.PredictedSpread) / 2.0,
-                            PredictedOpponentScore = (double)(p.PredictedTotal - p.PredictedSpread) / 2.0,
-                            ExpectedMargin = (double)p.PredictedSpread
+                            GameId                 = p.GameId,
+                            Week                   = p.Week,
+                            PredictedTeamScore     = p.HomePoints,
+                            PredictedOpponentScore = p.AwayPoints,
+                            ExpectedMargin         = (double)p.PredictedSpread
                         });
 
                 _cache = newCache;
+                _pregameCache = newPregameCache;
                 _cachedYear = year;
             }
             finally

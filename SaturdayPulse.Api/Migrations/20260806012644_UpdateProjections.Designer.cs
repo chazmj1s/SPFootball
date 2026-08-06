@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260806012644_UpdateProjections")]
+    partial class UpdateProjections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -640,40 +643,6 @@ namespace SaturdayPulse.Api.Migrations
                     b.HasIndex("AthleteId", "Year");
 
                     b.ToTable("RecruitPlayers");
-                });
-
-            modelBuilder.Entity("SaturdayPulse.Models.ResolvedGameResult", b =>
-                {
-                    b.Property<int?>("AwayId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("AwayPoints")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("GameId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("HomeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("HomePoints")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsProjected")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("NeutralSite")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Week")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("INTEGER");
-
-                    b.ToTable((string)null);
-
-                    b.ToView("ResolvedGameResults", (string)null);
                 });
 
             modelBuilder.Entity("SaturdayPulse.Models.RosterPlayer", b =>

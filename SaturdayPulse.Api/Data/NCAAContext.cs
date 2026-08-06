@@ -18,6 +18,14 @@ namespace SaturdayPulse.Data
         public DbSet<Projection>            Projections             { get; set; } = null!;
         public DbSet<PortalEntry>           PortalEntries           { get; set; }
 
+        /// <summary>
+        /// Keyless entity backed by the ResolvedGameResults view (migration
+        /// AddResolvedGameResultsView) — real result if the game's been played,
+        /// otherwise its locked Projection row. Read-only; see
+        /// ResolvedGameResult.cs remarks.
+        /// </summary>
+        public DbSet<ResolvedGameResult>    ResolvedGameResults     { get; set; } = null!;
+
         // Roster Capacity Modifier tables — PK/index config lives on the entities themselves
         // via [PrimaryKey]/[Index] attributes (see RosterPlayer.cs, PlayerStat.cs, CoachRecord.cs,
         // RecruitPlayer.cs), same pattern as PortalEntry above. Nothing needed in OnModelCreating
@@ -84,6 +92,13 @@ namespace SaturdayPulse.Data
                 .HasIndex(t => new { t.TeamId, t.StartYear })
                 .IsUnique()
                 .HasDatabaseName("UQ_TeamsConferenceHistory_TeamId_StartYear");
+
+            // --- ResolvedGameResults (view) ---
+            // Keyless — a view row has no natural single-column key, and this
+            // is read-only anyway (see ResolvedGameResult.cs remarks).
+            modelBuilder.Entity<ResolvedGameResult>()
+                .HasNoKey()
+                .ToView("ResolvedGameResults");
 
             // --- UserProfile ---
             // Handle is case-insensitive unique — SQLite NOCASE collation
