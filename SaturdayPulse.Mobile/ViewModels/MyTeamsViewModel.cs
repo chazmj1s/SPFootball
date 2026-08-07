@@ -457,7 +457,7 @@ namespace SaturdayPulse.ViewModels
         /// Resolves a GameResult into the selected team's perspective —
         /// opponent name/id/follow-state, "my score" vs "their score", short
         /// date. SpreadLine/OULine reuse Game.DisplayMargin/DisplayOU as-is
-        /// (already fully-formatted strings, e.g. "Spread: -7 (-2.5)").
+        /// (already fully-formatted strings, e.g. "Margin: -7 (-2.5)").
         /// </summary>
         private MyTeamsGameRow BuildGameRow(GameResult g)
         {

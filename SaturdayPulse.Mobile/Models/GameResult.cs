@@ -68,15 +68,15 @@ namespace SaturdayPulse.Models
             ? $"{HomeScore} ({ProjHomeScore})"
             : $"({ProjHomeScore})";
 
-        public int    ActualMargin      => AwayPoints - HomePoints;
+        public int    ActualMargin      => HomePoints - AwayPoints;
         public string DisplayProjMargin => ProjMargin.HasValue
-            ? $"{Math.Round((ProjMargin!.Value) * 2) / 2:F1}" : "–";
+            ? $"{Math.Round(ProjMargin.Value, 1)}" : "–";
         public string DisplayProjOU     => ProjOU.HasValue
-            ? $"{(int)Math.Round(ProjOU.Value * 2) / 2:F1}" : "–";
+            ? $"{Math.Round(ProjOU.Value, 1)}" : "–";
 
         public string DisplayMargin => IsPlayed
-            ? $"Spread: {ActualMargin} ({DisplayProjMargin})"
-            : $"Spread: ({DisplayProjMargin})";
+            ? $"Margin: {ActualMargin} ({DisplayProjMargin})"
+            : $"Margin: ({DisplayProjMargin})";
         public string DisplayOU => IsPlayed
             ? $"O/U: {ActualOU} ({DisplayProjOU})"
             : $"O/U: ({DisplayProjOU})";

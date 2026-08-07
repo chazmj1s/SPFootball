@@ -130,8 +130,8 @@ public class AdminApiService(HttpClient http)
     public Task<JsonElement> BackfillWeeklyRankingsAsync(int? startYear = null, CancellationToken ct = default) =>
         PostAsync("developer/backfillWeeklyRankings", Query(("startYear", startYear)), ct);
 
-    public Task<JsonElement> BackfillProjectionsAsync(int? startYear = null, CancellationToken ct = default) =>
-        PostAsync("developer/backfillProjections", Query(("startYear", startYear)), ct);
+    // BackfillProjectionsAsync removed — endpoint no longer exists, see
+    // DeveloperController/DeveloperService for why.
 
     // ── Metrics Rebuild — streaming (metrics-rebuild console) ────────────────
     // Same endpoints/params as above where a non-streaming route still exists
@@ -156,8 +156,9 @@ public class AdminApiService(HttpClient http)
     public IAsyncEnumerable<ProgressUpdate> BackfillWeeklyRankingsStreamAsync(int? startYear = null, CancellationToken ct = default) =>
         PostStreamAsync("developer/backfillWeeklyRankings", Query(("startYear", startYear)), ct);
 
-    public IAsyncEnumerable<ProgressUpdate> BackfillProjectionsStreamAsync(int? startYear = null, CancellationToken ct = default) =>
-        PostStreamAsync("developer/backfillProjections", Query(("startYear", startYear)), ct);
+    // BackfillProjectionsStreamAsync removed — Option C in
+    // WeeklyRankingsService.ComputeAndSaveAsync fully covers Projections
+    // population now via BackfillWeeklyRankingsStreamAsync's per-week calls.
 
     // ── Portal coverage check ─────────────────────────────────────────────
     public async Task<PortalCoverageDto?> GetPortalCoverageAsync(CancellationToken ct = default) =>

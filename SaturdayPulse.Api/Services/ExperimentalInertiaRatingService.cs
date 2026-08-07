@@ -47,7 +47,7 @@ namespace SaturdayPulse.Services
         /// every team's rating is anchor+live blended by gamesPlayed weight.
         /// </summary>
         public async Task<Dictionary<int, TeamRecord>> GetBlendedRatingsForWeekAsync(
-            int year, int week, CancellationToken token = default, bool useWeekAsLive = false)
+            int year, int week, CancellationToken token = default)
         {
             // No week-0 (or prior-year) snapshot fetch here, deliberately. The anchor
             // comes entirely from TeamRecord.TrendRating / TeamRecord.ZRoster via
@@ -65,15 +65,18 @@ namespace SaturdayPulse.Services
             // prior-year Wins/Losses. Worth checking WeeklyRankingsService's season-init
             // path directly before assuming; don't want to misattribute a second time.
 
-            // Live source: most recent available snapshot up to week-1 — UNLESS the
-            // caller already has final, already-persisted data for `week` itself (a
-            // just-written WeeklyRankings snapshot from this week's ComputeAndSaveAsync
-            // run, or a historical backfill snapshot) and wants that week used directly
-            // rather than stepped back one. useWeekAsLive distinguishes "week hasn't
-            // happened/been graded yet" (false — the historical default) from "week is
-            // a completed, real snapshot" (true). See GamePredictionService.PredictMatchups
-            // remarks for the two calling patterns this flag exists to separate.
-            int liveWeek = useWeekAsLive ? Math.Max(week, 0) : Math.Max(week - 1, 0);
+            // Live source: most recent available snapshot up to week-1. This method
+            // previously accepted a `useWeekAsLive` flag so a caller with already-
+            // persisted data for `week` itself (a just-written WeeklyRankings
+            // snapshot from this week's ComputeAndSaveAsync run, or a historical
+            // backfill snapshot) could use that week directly instead of stepping
+            // back one. Removed — confirmed via solution-wide Find All References
+            // that no caller anywhere passed true once DeveloperService.
+            // BackfillProjectionsStreamAsync was deleted (its two originating
+            // callers, that method and ComputeAndSaveAsync's old step 17, are both
+            // gone now — see GamePredictionService.PredictMatchups remarks for the
+            // full history). Always steps back one week.
+            int liveWeek = Math.Max(week - 1, 0);
             var liveSnapshot = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, liveWeek, token);
             var liveByTeam = liveSnapshot.ToDictionary(wr => wr.TeamID);
 

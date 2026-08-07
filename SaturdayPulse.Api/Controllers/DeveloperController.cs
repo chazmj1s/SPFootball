@@ -729,28 +729,11 @@ namespace SaturdayPulse.Controllers
             CancellationToken token) =>
             developerService.BackfillWeeklyRankingsStreamAsync(startYear, token);
 
-        /// <summary>
-        /// Backfills the Projections table for every year/week combination in the database,
-        /// starting from 1965 (or the provided startYear).
-        ///
-        /// For each week snapshot, projects all remaining regular-season games
-        /// using the ratings that existed at that point in time (i.e. the WeeklyRankings
-        /// power ratings for that year/week, not current ratings).
-        ///
-        /// Long-running — expect several minutes for a full 61-year backfill.
-        /// Safe to re-run; rows are upserted on (GameId, Year, Week).
-        ///
-        /// Example: POST /api/developer/backfillProjections
-        /// Example: POST /api/developer/backfillProjections?startYear=2010
-        /// </summary>
-        /// <summary>Streaming — yields one ProgressUpdate per year.</summary>
-        [HttpPost("backfillProjections")]
-        [Tags("Analytics and Diagnostics")]
-        public IAsyncEnumerable<ProgressUpdate> BackfillProjections(
-            [FromQuery] int? startYear,
-            CancellationToken token) =>
-            developerService.BackfillProjectionsStreamAsync(startYear, token);
-
+        // backfillProjections endpoint removed — BackfillProjectionsStreamAsync
+        // (old multi-snapshot-per-game Projections design, upserted on
+        // (GameId, Year, Week)) is superseded by Option C in
+        // WeeklyRankingsService.ComputeAndSaveAsync, which locks at most one
+        // Projection row per GameId. Fully covered by backfillWeeklyRankings now.
 
         /// <summary>
         /// Computes and saves WeeklyRankings for a specific year/week, or backfills an entire year.
