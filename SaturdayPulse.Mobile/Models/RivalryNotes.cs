@@ -34,7 +34,7 @@ namespace SaturdayPulse.Models
             get
             {
                 var rounded = Math.Round(AverageSpread * 2, MidpointRounding.AwayFromZero) / 2;
-                return $"Average Spread: {rounded:F1}";
+                return $"Average Margin: {rounded:F1}";
             }
         }
 

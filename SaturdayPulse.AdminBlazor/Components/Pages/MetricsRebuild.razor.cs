@@ -127,11 +127,12 @@ namespace SaturdayPulse.AdminBlazor.Components.Pages
                     Label = "Analytics",
                     Ops =
                     [
-                        new RebuildOp
-                        {
-                            Key = "projections", Label = "Backfill Projections", Year = y, EstimateMinutes = 40,
-                            StreamCall = (year, _, ct) => Api.BackfillProjectionsStreamAsync(year, ct)
-                        },
+                        // "Backfill Projections" removed — Option C in
+                        // WeeklyRankingsService.ComputeAndSaveAsync now writes
+                        // Projections as a side effect of Backfill Weekly Rankings
+                        // (Rankings tier, above). Running this separately would have
+                        // written stale-shape rows into a table that now assumes at
+                        // most one locked Projection row per game.
                         new RebuildOp
                         {
                             Key = "scoreDiffs", Label = "Score Differentials", Year = y, EstimateMinutes = 3,

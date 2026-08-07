@@ -246,28 +246,28 @@ namespace SaturdayPulse.Services
         /// batch, since they're all rated off the same K=4-blended snapshot of team
         /// strength for that week.
         ///
-        /// `useWeekAsLive` (default false) distinguishes two calling patterns that
-        /// share this method but need different rating lookups underneath:
+        /// Ratings are always read from the most recent COMPLETED week (asOfWeek - 1)
+        /// — asOfWeek's own WeeklyRankings row doesn't exist yet at prediction time.
         ///
-        ///   false — asOfWeek HASN'T been played/graded yet; asOfWeek's own
-        ///   WeeklyRankings row doesn't exist. Ratings fall back to the most recent
-        ///   completed week (asOfWeek - 1). Used by ComputeAndSaveAsync step 2b
-        ///   (substituting projected scores for this week's still-unplayed games).
-        ///
-        ///   true — asOfWeek IS a completed, already-persisted WeeklyRankings
-        ///   snapshot (a just-finished live week, or a historical backfill snapshot),
-        ///   and ratings should be read directly from asOfWeek itself rather than
-        ///   stepped back one. Required by ComputeAndSaveAsync step 17 and
-        ///   DeveloperService.BackfillProjectionsStreamAsync — both intend "project
-        ///   remaining games using the snapshot we just computed," and previously got
-        ///   asOfWeek - 1 instead (Finding #1 fix).
+        /// Previously took a `useWeekAsLive` flag to instead read ratings from
+        /// asOfWeek directly (for callers whose asOfWeek was itself an already-
+        /// completed, already-persisted snapshot — a just-finished live week or a
+        /// historical backfill snapshot). That flag's only two callers
+        /// (ComputeAndSaveAsync step 17, and DeveloperService.BackfillProjections-
+        /// StreamAsync) have both been removed/replaced (step 17 by Option C;
+        /// BackfillProjectionsStreamAsync deleted as redundant with
+        /// BackfillWeeklyRankings — confirmed via solution-wide Find All References,
+        /// zero remaining callers passed true). Removed here rather than left dead.
+        /// If a future caller needs the asOfWeek-is-already-live behavior again,
+        /// reintroduce the flag rather than guessing — see git history for the
+        /// removed branch.
         /// </summary>
         public async Task<List<GamePrediction>> PredictMatchups(
             int year, int asOfWeek, List<MatchupRequest> matchups,
-            CancellationToken token = default, bool useWeekAsLive = false)
+            CancellationToken token = default)
         {
             var teams        = await _uow.Teams.GetDictionaryByNameAsync(token);
-            var recordsById  = await GetRatingsForWeekAsync(year, asOfWeek, token, useWeekAsLive);
+            var recordsById  = await GetRatingsForWeekAsync(year, asOfWeek, token);
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
             var allDifferentials = await GetAllDifferentialsAsync(token);
@@ -489,12 +489,14 @@ namespace SaturdayPulse.Services
         /// ZRoster folding are all handled inside GetBlendedRatingsForWeekAsync
         /// itself now — nothing left to do in this wrapper.
         ///
-        /// useWeekAsLive passes through unchanged — see PredictMatchups remarks and
-        /// GetBlendedRatingsForWeekAsync remarks for what it controls (Finding #1 fix).
+        /// useWeekAsLive removed (was passed through unchanged) — confirmed via
+        /// solution-wide Find All References that no caller anywhere passed true
+        /// once BackfillProjectionsStreamAsync was deleted. See PredictMatchups
+        /// remarks for the removal rationale (Finding #1 fix history).
         /// </summary>
         private Task<Dictionary<int, TeamRecord>> GetRatingsForWeekAsync(
-            int year, int week, CancellationToken token, bool useWeekAsLive = false)
-            => _blendedRating.GetBlendedRatingsForWeekAsync(year, week, token, useWeekAsLive);
+            int year, int week, CancellationToken token)
+            => _blendedRating.GetBlendedRatingsForWeekAsync(year, week, token);
 
         // ── Core prediction ───────────────────────────────────────────────────────
 

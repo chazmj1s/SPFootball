@@ -1010,6 +1010,7 @@ namespace SaturdayPulse.Services
                     var projGames = await _uow.Games.GetByYearAsync(targetYear, token);
                     var projProjections = await _projectionCache.GetAllProjections(targetYear, token);
                     var projRecordByTeam = BuildProjectedRecordRollup(projGames, projProjections, throughWeek);
+                    var actualRecordByTeam = BuildActualRecordRollup(projGames, throughWeek);
 
                     var sample = currentRecords.FirstOrDefault();
                     Debug.WriteLine($"Sample TrendRating: {sample?.TrendRating}, Pedigree: {sample?.PedigreeRating}, Seed: {sample?.SeedRating}");
@@ -1027,6 +1028,7 @@ namespace SaturdayPulse.Services
 
                             var conf = ConfData(wr.TeamID, t?.TeamName);
                             projRecordByTeam.TryGetValue(wr.TeamID, out var projWL);
+                            actualRecordByTeam.TryGetValue(wr.TeamID, out var actualWL);
 
                             return new PowerRankingRowResponse
                             {
@@ -1041,10 +1043,10 @@ namespace SaturdayPulse.Services
                                 Ranking = (double?)wr.Ranking,
                                 PowerRating = (double?)wr.PowerRating,
                                 Year = (int)wr.Year,
-                                Wins = wr.Wins,
-                                Losses = wr.Losses,
-                                ProjectedWins = wr.Wins + projWL.Wins,
-                                ProjectedLosses = wr.Losses + projWL.Losses,
+                                Wins = actualWL.Wins,
+                                Losses = actualWL.Losses,
+                                ProjectedWins = actualWL.Wins + projWL.Wins,
+                                ProjectedLosses = actualWL.Losses + projWL.Losses,
                                 BaseSOS = (double?)wr.BaseSOS,
                                 CombinedSOS = (double?)wr.CombinedSOS,
                                 AvgPointsScored = (double?)wr.AvgPointsScored,
@@ -1076,6 +1078,7 @@ namespace SaturdayPulse.Services
                     var projGames = await _uow.Games.GetByYearAsync(targetYear, token);
                     var projProjections = await _projectionCache.GetAllProjections(targetYear, token);
                     var projRecordByTeam = BuildProjectedRecordRollup(projGames, projProjections, null);
+                    var actualRecordByTeam = BuildActualRecordRollup(projGames, null);
 
                     var withTiers = ranked
                         .Select(tr =>
@@ -1111,6 +1114,7 @@ namespace SaturdayPulse.Services
                         .Select(t =>
                         {
                             projRecordByTeam.TryGetValue(t.TeamRecord.TeamID, out var projWL);
+                            actualRecordByTeam.TryGetValue(t.TeamRecord.TeamID, out var actualWL);
 
                             return new PowerRankingRowResponse
                             {
@@ -1124,12 +1128,12 @@ namespace SaturdayPulse.Services
                                 TierRank = tierRankLookup[t.TeamRecord.TeamID],
                                 Ranking = (double?)t.TeamRecord.Ranking,
                                 Year = t.TeamRecord.Year,
-                                Wins = t.TeamRecord.Wins,
-                                Losses = t.TeamRecord.Losses,
+                                Wins = actualWL.Wins,
+                                Losses = actualWL.Losses,
                                 BaseSOS = (double?)t.TeamRecord.BaseSOS,
                                 CombinedSOS = (double?)t.TeamRecord.CombinedSOS,
-                                ProjectedWins = t.TeamRecord.Wins + projWL.Wins,
-                                ProjectedLosses = t.TeamRecord.Losses + projWL.Losses
+                                ProjectedWins = actualWL.Wins + projWL.Wins,
+                                ProjectedLosses = actualWL.Losses + projWL.Losses
                             };
                         }).ToList();
 
@@ -1501,9 +1505,14 @@ namespace SaturdayPulse.Services
             {
                 if (!g.HomeId.HasValue || !g.AwayId.HasValue) continue;
 
-                bool countedInBaseline = afterWeek.HasValue
-                    ? g.Week <= afterWeek.Value
-                    : (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0;
+                bool isPlayed = (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0;
+
+                // "Already accounted for by Actual" requires BOTH that the game was
+                // really played AND that it falls at/before the as-of cutoff. A game
+                // at week <= afterWeek that was never actually played must NOT be
+                // treated as baseline — it needs to fall through to projection below,
+                // or it disappears from both Actual and Projected entirely.
+                bool countedInBaseline = isPlayed && (!afterWeek.HasValue || g.Week <= afterWeek.Value);
 
                 if (countedInBaseline) continue;
 
@@ -1513,6 +1522,45 @@ namespace SaturdayPulse.Services
 
                 Add(g.HomeId.Value, homeWins);
                 Add(g.AwayId.Value, !homeWins);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Rolls up ACTUAL wins/losses only — a game counts here only if it has
+        /// really been played (HomePoints/AwayPoints populated), unlike
+        /// WeeklyRankings.Wins/Losses and TeamRecords.Wins/Losses, which both bake
+        /// in projected results for unplayed games regardless of game status.
+        ///
+        /// throughWeek: when supplied, only played games at or before this week
+        ///              count (matches the semantics of BuildProjectedRecordRollup's
+        ///              afterWeek). When null, all played games in the season count.
+        /// </summary>
+        private static Dictionary<int, (int Wins, int Losses)> BuildActualRecordRollup(
+            List<Games> games,
+            int? throughWeek)
+        {
+            var result = new Dictionary<int, (int Wins, int Losses)>();
+
+            void Add(int teamId, bool won)
+            {
+                result.TryGetValue(teamId, out var wl);
+                result[teamId] = won ? (wl.Wins + 1, wl.Losses) : (wl.Wins, wl.Losses + 1);
+            }
+
+            foreach (var g in games)
+            {
+                if (!g.HomeId.HasValue || !g.AwayId.HasValue) continue;
+
+                bool isPlayed = (g.HomePoints ?? 0) > 0 || (g.AwayPoints ?? 0) > 0;
+                if (!isPlayed) continue;
+
+                if (throughWeek.HasValue && g.Week > throughWeek.Value) continue;
+
+                bool homeWon = (g.HomePoints ?? 0) > (g.AwayPoints ?? 0);
+                Add(g.HomeId.Value, homeWon);
+                Add(g.AwayId.Value, !homeWon);
             }
 
             return result;
