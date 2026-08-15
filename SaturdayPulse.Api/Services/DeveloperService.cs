@@ -19,12 +19,18 @@ namespace SaturdayPulse.Services
     /// </summary>
     public class DeveloperService
     {
+        // Points/game shift per 1.0 std dev of year-over-year roster talent change,
+        // applied in InitializeSeasonAsync to seedRows' AvgScored/AvgAllowed before
+        // those feed the scoring-based OffensiveZScore/DefensiveZScore computation.
+        private const double RosterZScoreToPointsFactor = 4.0;
+
         private readonly IUnitOfWork               _uow;
         private readonly IGameDataService          _gameDataService;
         private readonly RollingAverageService     _rollingAverageService;
         private readonly RosterCapacityService     _rosterCapacityService;
         private readonly ScoreDeltaCalculator      _scoreDeltaCalculator;
         private readonly MatchupHistoryCalculator  _matchupHistoryCalculator;
+        private readonly TierDiscountCalculator    _tierDiscountCalculator;
         private readonly WeeklyRankingsService     _weeklyRankingsService;
         private readonly GamePredictionService     _predictionService;
         private readonly ConferenceTierService     _tierService;
@@ -38,6 +44,7 @@ namespace SaturdayPulse.Services
             RosterCapacityService rosterCapacityService,
             ScoreDeltaCalculator scoreDeltaCalculator,
             MatchupHistoryCalculator matchupHistoryCalculator,
+            TierDiscountCalculator tierDiscountCalculator,
             WeeklyRankingsService weeklyRankingsService,
             GamePredictionService predictionService,
             ConferenceTierService tierService,
@@ -50,6 +57,7 @@ namespace SaturdayPulse.Services
             _rosterCapacityService    = rosterCapacityService;
             _scoreDeltaCalculator     = scoreDeltaCalculator;
             _matchupHistoryCalculator = matchupHistoryCalculator;
+            _tierDiscountCalculator   = tierDiscountCalculator;
             _weeklyRankingsService    = weeklyRankingsService;
             _predictionService        = predictionService;
             _tierService              = tierService;
@@ -240,6 +248,39 @@ namespace SaturdayPulse.Services
         }
 
         // ── Analytics and Diagnostics ─────────────────────────────────────────────
+
+        /// <summary>
+        /// Method B — MOV Variance Test (two-parameter). Diagnostic-only: computes and
+        /// returns the fit without persisting anything. throughYear lets a caller test
+        /// "as of a past season" behavior; omit for the live default (everything played
+        /// so far). See TierDiscountCalculator's remarks for the full methodology.
+        /// </summary>
+        public Task<TierDiscountAnalysisResult> CalculateTierDiscountAsync(
+            int startYear = 1965, int? throughYear = null, CancellationToken token = default)
+            => _tierDiscountCalculator.CalculateAsync(startYear, throughYear, token);
+
+        /// <summary>
+        /// Computes and persists a new TierDiscountCoefficients row for `season`, using
+        /// only games played through season - 1. Intended to run BEFORE
+        /// InitializeSeason in RunSeasonSetupAsync. Returns null (no row persisted) if
+        /// there's no usable data for that season yet — see
+        /// TierDiscountCalculator.ComputeAndPersistCoefficientsAsync remarks.
+        /// </summary>
+        public Task<TierDiscountCoefficient?> ComputeTierDiscountCoefficientsAsync(
+            int season, int startYear = 1965, CancellationToken token = default)
+            => _tierDiscountCalculator.ComputeAndPersistCoefficientsAsync(season, startYear, token);
+
+        /// <summary>
+        /// Backfills TierDiscountCoefficients for every season from startSeason through
+        /// the most recent season with played data (or throughSeason, if given).
+        /// Returns (Persisted, Skipped) — Skipped seasons had no usable prior-year data
+        /// (expected for the earliest seasons of a full historical backfill, not an
+        /// error).
+        /// </summary>
+        public Task<(int Persisted, int Skipped)> ComputeTierDiscountCoefficientsBulkAsync(
+            int startSeason, int? throughSeason = null, int startYear = 1965, CancellationToken token = default)
+            => _tierDiscountCalculator.ComputeAndPersistCoefficientsBulkAsync(startSeason, throughSeason, startYear, token);
+
 
         public async Task<AnalyticsResult> GetAnalyticsAsync(int? startYear, int? endYear, CancellationToken token)
         {
@@ -559,6 +600,32 @@ namespace SaturdayPulse.Services
                     : (r.TeamId, leagueMeanScored, leagueMeanAllowed, r.PowerRating, r.HasHistory))
                 .ToList();
 
+            // Roster-composite adjustment: shift each team's weighted-history baseline
+            // AvgPointsScored/AvgPointsAllowed by the year-over-year CHANGE in roster
+            // talent (RosterCapacityService's Offensive/Defensive talent Z-score,
+            // season vs season-1) — NOT the absolute roster Z-score itself. Research
+            // puts 1.0 std dev of roster talent change at roughly 3.5–4.5 points/game
+            // of offensive or defensive output; RosterZScoreToPointsFactor uses 4.0.
+            // Defense is sign-flipped to match the existing defZ convention below
+            // (allowing FEWER points than the delta implies is the improvement).
+            // Teams with no usable prior-season roster Z (new to FBS, or the ZRoster
+            // pipeline hasn't run for year-1) are absent from rosterZDeltas and are
+            // left with their unadjusted weighted-history baseline rather than a
+            // guessed delta.
+            var rosterZDeltas = await _rosterCapacityService.GetRosterZScoreDeltasAsync(year, token);
+
+            seedRows = seedRows
+                .Select(r =>
+                {
+                    if (!rosterZDeltas.TryGetValue(r.TeamId, out var delta)) return r;
+
+                    var adjustedScored = r.AvgScored + (decimal)(delta.OffensiveDelta * RosterZScoreToPointsFactor);
+                    var adjustedAllowed = r.AvgAllowed - (decimal)(delta.DefensiveDelta * RosterZScoreToPointsFactor);
+
+                    return (r.TeamId, adjustedScored, adjustedAllowed, r.PowerRating, r.HasHistory);
+                })
+                .ToList();
+
             // Ordinal ranks — based on the new week-0 PowerRating, NOT the (intentionally
             // undefined, zeroed) Ranking field. Ranking has no meaning before any games
             // are played (it's WinPct-based); PowerRating is the only week-0 quality
@@ -583,6 +650,86 @@ namespace SaturdayPulse.Services
                 foreach (var r in tierGroup.OrderByDescending(x => x.PowerRating))
                     tierRankByTeam[r.TeamId] = idx++;
             }
+
+            // ── Week-0 BaseSOS/SubSOS/CombinedSOS ───────────────────────────────────
+            //
+            // Same formula and same RatingCalculator.ResolveStrength fallback
+            // WeeklyRankingsService.ComputeAndSaveAsync uses for every other week —
+            // moved to RatingCalculator so both places can call it. At week 0 there
+            // is no `prior` WeeklyRankings row for anyone (nothing's been computed
+            // yet this year, and last year's values are deliberately not carried
+            // forward — see the Ranking=0m note below), so every ResolveStrength
+            // call here passes prior:null and collapses to tier 3 (raw SeedRating) —
+            // that's the correct, intended preseason behavior, not a special case
+            // that needs separate handling.
+            //
+            // Opponent set is the FULL season schedule (ResolvedGameResults.
+            // GetByYearAsync — real result if played, else the locked Projection),
+            // not just games "through week 0" (which would be empty and force
+            // BaseSOS/SubSOS to 0 for everyone regardless of schedule strength).
+            var seedByTeamId = currentYearTeamRecords.Values
+                .Where(tr => tr.SeedRating.HasValue)
+                .ToDictionary(tr => tr.TeamID, tr => tr.SeedRating!.Value);
+
+            var fbsIds = fbsTeams.Select(t => t.TeamId).ToHashSet();
+            var fullSeasonGames = await _uow.ResolvedGameResults.GetByYearAsync(year, token);
+
+            var sosParticipants = fullSeasonGames
+                .Where(g => fbsIds.Contains(g.HomeId ?? 0) || fbsIds.Contains(g.AwayId ?? 0))
+                .SelectMany(g =>
+                {
+                    var homeId = g.HomeId ?? 0;
+                    var awayId = g.AwayId ?? 0;
+                    return new[]
+                    {
+                        new
+                        {
+                            TeamId           = homeId,
+                            OpponentId       = awayId,
+                            OpponentDivision = teamsById.TryGetValue(awayId, out var at)
+                                ? at.Division : "fbs"
+                        },
+                        new
+                        {
+                            TeamId           = awayId,
+                            OpponentId       = homeId,
+                            OpponentDivision = teamsById.TryGetValue(homeId, out var ht)
+                                ? ht.Division : "fbs"
+                        }
+                    };
+                })
+                .Select(p =>
+                {
+                    bool oppIsFcs = string.Equals(p.OpponentDivision, "fcs",
+                                        StringComparison.OrdinalIgnoreCase);
+                    decimal oppPregameStrength = oppIsFcs
+                        ? 0m
+                        : RatingCalculator.ResolveStrength(p.OpponentId, null, seedByTeamId);
+
+                    return new
+                    {
+                        p.TeamId,
+                        p.OpponentId,
+                        DivWeight   = RatingCalculator.DivisionWeight(p.OpponentDivision),
+                        OppStrength = (double)oppPregameStrength
+                    };
+                })
+                .ToList();
+
+            var baseSOS = sosParticipants
+                .GroupBy(x => x.TeamId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
+                    ? Math.Round(
+                        g.Sum(x => x.OppStrength * x.DivWeight) / g.Sum(x => x.DivWeight), 4)
+                    : 0.0);
+
+            var subSOS = sosParticipants
+                .GroupBy(x => x.TeamId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
+                    ? Math.Round(
+                        g.Sum(x => baseSOS.GetValueOrDefault(x.OpponentId, 0.0) * x.DivWeight) /
+                        g.Sum(x => x.DivWeight), 4)
+                    : 0.0);
 
             // Offensive/Defensive Z-scores — cross-sectional z-score of the new week-0
             // AvgPointsScored/AvgPointsAllowed across THIS week-0 cohort. Not carried
@@ -640,6 +787,10 @@ namespace SaturdayPulse.Services
                 {
                     wr.PowerRating = r.PowerRating;
                     wr.Ranking = 0m; // intentionally undefined pre-season, per Charlie
+                    wr.BaseSOS = (decimal)baseSOS.GetValueOrDefault(r.TeamId, 0.0);
+                    wr.SubSOS = (decimal)subSOS.GetValueOrDefault(r.TeamId, 0.0);
+                    wr.CombinedSOS = (decimal)Math.Round(
+                        (2 * (double)wr.BaseSOS + 3 * (double)wr.SubSOS) / 5.0, 4);
                     wr.OverallRank = overallRankByTeam.GetValueOrDefault(r.TeamId, 0);
                     wr.TierRank = tierRankByTeam.GetValueOrDefault(r.TeamId, 0);
                     wr.AvgPointsScored = r.AvgScored;
@@ -655,8 +806,15 @@ namespace SaturdayPulse.Services
                     // SeedRating/TrendRating/PedigreeRating/ZRoster deliberately
                     // untouched — already correctly set by RollingAverageService
                     // (Pass 2) and the separate roster-capacity pipeline respectively.
+                    // TeamRecord.OffensiveZScore/DefensiveZScore ARE written here —
+                    // TeamRecord is a season rollup of WeeklyRanking, so it must carry
+                    // the same scoring-based Week-0 offense/defense Z as wr above.
                     tr.PowerRating = r.PowerRating;
                     tr.Ranking = 0m;
+                    tr.BaseSOS = (decimal)baseSOS.GetValueOrDefault(r.TeamId, 0.0);
+                    tr.SubSOS = (decimal)subSOS.GetValueOrDefault(r.TeamId, 0.0);
+                    tr.CombinedSOS = (decimal)Math.Round(
+                        (2 * (double)tr.BaseSOS + 3 * (double)tr.SubSOS) / 5.0, 4);
                     tr.AvgPointsScored = r.AvgScored;
                     tr.AvgPointsAllowed = r.AvgAllowed;
                     tr.OffensiveZScore = offZByTeam.GetValueOrDefault(r.TeamId, 0m);

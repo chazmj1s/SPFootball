@@ -158,26 +158,39 @@ namespace SaturdayPulse.Services
                 double blendedUnit = _ratingBlending.BlendUnit(anchorUnit, liveUnit, gamesPlayed);
                 double blendedPowerRating = RatingScaling.FromUnitScale(blendedUnit, liveMean, liveStdDev);
 
+                // Ranking — was a raw, unblended pass-through from `live.Ranking`
+                // (Finding #5: the K=4 smoothing above only ever reached PowerRating,
+                // never the field CalculatePrediction's margin calc actually reads).
+                // Same 2-tier logic RatingCalculator.ResolveStrength already uses
+                // elsewhere, but tier 2 now reads the BLENDED PowerRating just
+                // computed above instead of raw live.PowerRating — so Ranking
+                // inherits the same smoothing PowerRating already gets. Tier 1
+                // (real live.Ranking) still wins whenever a genuine in-season
+                // value exists; only the estimate used when it doesn't (week 0/1,
+                // or any week with thin live data) changes. No third SeedRating
+                // fallback needed here — unlike ResolveStrength's other call
+                // sites, blendedPowerRating is never null by construction (liveUnit
+                // already falls back to anchorUnit above when there's no live data),
+                // so tier 2 always resolves.
+                decimal blendedRanking = live != null && live.Ranking > 0m
+                    ? (decimal)live.Ranking
+                    : 0.5m * (1m + (decimal)blendedPowerRating);
+
                 result[teamRecord.TeamID] = new TeamRecord
                 {
-                    TeamID           = teamRecord.TeamID,
-                    Year             = (short)year,
-                    Wins             = live?.Wins ?? 0,
-                    Losses           = live?.Losses ?? 0,
-                    PointsFor        = live?.PointsFor ?? 0,
-                    PointsAgainst    = live?.PointsAgainst ?? 0,
-                    PowerRating      = (decimal)Math.Round(blendedPowerRating, 4),
-                    Ranking          = live?.Ranking,
-                    CombinedSOS      = live?.CombinedSOS,
-                    BaseSOS          = live?.BaseSOS,
-                    SubSOS           = live?.SubSOS,
-                    // Live snapshot's AvgPointsScored/Allowed once real games exist;
-                    // falls back to the team's own TeamRecord value (InitializeSeasonAsync's
-                    // weighted-historical week-0 seed) rather than 0 when there's no live
-                    // snapshot yet.
-                    AvgPointsScored  = live?.AvgPointsScored  ?? teamRecord.AvgPointsScored,
+                    TeamID = teamRecord.TeamID,
+                    Year = (short)year,
+                    Wins = live?.Wins ?? 0,
+                    Losses = live?.Losses ?? 0,
+                    PointsFor = live?.PointsFor ?? 0,
+                    PointsAgainst = live?.PointsAgainst ?? 0,
+                    PowerRating = (decimal)Math.Round(blendedPowerRating, 4),
+                    Ranking = blendedRanking,
+                    CombinedSOS = live?.CombinedSOS,
+                    BaseSOS = live?.BaseSOS,
+                    SubSOS = live?.SubSOS,
+                    AvgPointsScored = live?.AvgPointsScored ?? teamRecord.AvgPointsScored,
                     AvgPointsAllowed = live?.AvgPointsAllowed ?? teamRecord.AvgPointsAllowed
-                    // ZRoster deliberately left null — see class remarks.
                 };
             }
 

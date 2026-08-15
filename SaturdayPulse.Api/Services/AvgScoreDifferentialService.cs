@@ -63,6 +63,20 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// Same as GetExpectedDistribution(double, double), but takes a pre-loaded
+        /// bucket set instead of fetching from the DB — for callers making many calls
+        /// in a tight loop (e.g. TierDiscountCalculator's grid search), where a
+        /// per-call DB round-trip would be prohibitive. Delegates to the exact same
+        /// InterpolateDistribution logic as every other overload — no behavior change.
+        /// </summary>
+        public ExpectedGameDistribution GetExpectedDistribution(
+            double teamStrength, double opponentStrength, List<AvgScoreDifferential> buckets)
+        {
+            var differential = (decimal)GetStrengthDifferential(teamStrength, opponentStrength);
+            return InterpolateDistribution(buckets, differential);
+        }
+
+        /// <summary>
         /// Linearly interpolates AverageMargin, StdDevMargin, and AverageTotalPoints
         /// between the two buckets bracketing the given differential. Falls back to a
         /// single bucket when the differential lands exactly on a grid point, or when

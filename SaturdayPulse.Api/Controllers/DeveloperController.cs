@@ -655,6 +655,92 @@ namespace SaturdayPulse.Controllers
         }
 
         /// <summary>
+        /// Method B — MOV Variance Test (two-parameter). Returns the fit without
+        /// persisting anything — pass throughYear to test "as of a past season"
+        /// behavior, or omit for the live default (everything played so far).
+        /// Example: GET /api/developer/tierDiscountAnalysis?startYear=1965
+        /// </summary>
+        [HttpGet("tierDiscountAnalysis")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> GetTierDiscountAnalysis(
+            [FromQuery] int startYear = 1965,
+            [FromQuery] int? throughYear = null,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.CalculateTierDiscountAsync(startYear, throughYear, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error generating tier discount analysis");
+                return StatusCode(500, "An error occurred while generating the tier discount analysis.");
+            }
+        }
+
+        /// <summary>
+        /// Computes and persists a new TierDiscountCoefficients row for `season`,
+        /// using only games played through season - 1. Intended to run BEFORE
+        /// Initialize Season in the Season Setup sequence. Returns a 200 with a
+        /// "skipped" message (not an error) if there's no usable prior-year data yet.
+        /// Example: POST /api/developer/computeTierDiscountCoefficients?season=2026
+        /// </summary>
+        [HttpPost("computeTierDiscountCoefficients")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> ComputeTierDiscountCoefficients(
+            [FromQuery] int season,
+            [FromQuery] int startYear = 1965,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var coefficient = await developerService.ComputeTierDiscountCoefficientsAsync(season, startYear, token);
+                if (coefficient == null)
+                {
+                    return Ok(new { message = $"Skipped season {season} — no usable prior-year data yet.", persisted = false });
+                }
+                return Ok(new { message = $"Tier discount coefficients computed and persisted for season {season}.", persisted = true, coefficient });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing tier discount coefficients");
+                return StatusCode(500, "An error occurred while computing tier discount coefficients.");
+            }
+        }
+
+        /// <summary>
+        /// Backfills TierDiscountCoefficients for every season from startSeason
+        /// through the most recent season with played data (or throughSeason, if
+        /// given).
+        /// Example: POST /api/developer/computeTierDiscountCoefficientsBulk?startSeason=1965
+        /// </summary>
+        [HttpPost("computeTierDiscountCoefficientsBulk")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> ComputeTierDiscountCoefficientsBulk(
+            [FromQuery] int startSeason,
+            [FromQuery] int? throughSeason = null,
+            [FromQuery] int startYear = 1965,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var (persisted, skipped) = await developerService.ComputeTierDiscountCoefficientsBulkAsync(startSeason, throughSeason, startYear, token);
+                return Ok(new
+                {
+                    message = $"Tier discount coefficients backfilled — {persisted} season(s) persisted, {skipped} skipped (no usable prior-year data).",
+                    persisted,
+                    skipped
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error backfilling tier discount coefficients");
+                return StatusCode(500, "An error occurred while backfilling tier discount coefficients.");
+            }
+        }
+
+        /// <summary>
         /// Shows detailed game-by-game analysis for a specific team.
         /// Example: GET /api/developer/analyzeTeamGames?teamId=110&year=2024
         /// </summary>

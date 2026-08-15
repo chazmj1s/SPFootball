@@ -46,25 +46,24 @@ namespace SaturdayPulse.Contracts
 
     public class CfbdRecruitPlayerDto
     {
-        [JsonPropertyName("id")] public string Id { get; set; }
+        [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
         [JsonPropertyName("athleteId")] public string? AthleteId { get; set; }
-        [JsonPropertyName("recruitType")] public string RecruitType { get; set; }
+        [JsonPropertyName("recruitType")] public string RecruitType { get; set; } = string.Empty;
         [JsonPropertyName("year")] public int Year { get; set; }
         [JsonPropertyName("ranking")] public int? Ranking { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
         [JsonPropertyName("school")] public string? School { get; set; }
         [JsonPropertyName("committedTo")] public string? CommittedTo { get; set; }
-        [JsonPropertyName("position")] public string Position { get; set; }
+        [JsonPropertyName("position")] public string Position { get; set; } = string.Empty;
         [JsonPropertyName("height")] public double? Height { get; set; }
         [JsonPropertyName("weight")] public int? Weight { get; set; }
-        [JsonPropertyName("stars")] public int Stars { get; set; }
-        [JsonPropertyName("rating")] public double Rating { get; set; }
+        [JsonPropertyName("stars")] public int? Stars { get; set; }
+        [JsonPropertyName("rating")] public double? Rating { get; set; }
         [JsonPropertyName("city")] public string? City { get; set; }
         [JsonPropertyName("stateProvince")] public string? StateProvince { get; set; }
         [JsonPropertyName("country")] public string? Country { get; set; }
         [JsonPropertyName("hometownInfo")] public CfbdHometownInfoDto? HometownInfo { get; set; }
     }
-
     public class CfbdHometownInfoDto
     {
         [JsonPropertyName("latitude")] public double? Latitude { get; set; }
