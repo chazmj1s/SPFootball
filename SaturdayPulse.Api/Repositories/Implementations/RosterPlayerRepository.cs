@@ -59,7 +59,7 @@ namespace SaturdayPulse.Repositories.Implementations
             // simply won't match anything below, which is correct: they fall through to
             // the 0.70 unrated floor at compute time rather than raising an error here.
             var recruitRatings = await _context.RecruitPlayers
-                .Where(r => r.Year == season && r.AthleteId != null)
+                .Where(r => r.AthleteId != null)
                 .Select(r => new { r.AthleteId, r.Rating })
                 .ToListAsync(token);
 

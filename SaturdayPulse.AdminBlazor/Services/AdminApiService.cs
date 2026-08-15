@@ -77,6 +77,12 @@ public class AdminApiService(HttpClient http)
     public Task<JsonElement> ComputePortalMetricsAsync(int season, CancellationToken ct = default) =>
         PostAsync("developer/computePortalMetrics", Query(("season", season)), ct);
 
+    public Task<JsonElement> ComputeTierDiscountCoefficientsAsync(int season, int startYear = 1965, CancellationToken ct = default) =>
+        PostAsync("developer/computeTierDiscountCoefficients", Query(("season", season), ("startYear", startYear)), ct);
+
+    public Task<JsonElement> ComputeTierDiscountCoefficientsBulkAsync(int startSeason, int? throughSeason = null, int startYear = 1965, CancellationToken ct = default) =>
+        PostAsync("developer/computeTierDiscountCoefficientsBulk", Query(("startSeason", startSeason), ("throughSeason", throughSeason), ("startYear", startYear)), ct);
+
     // ── Roster Capacity ────────────────────────────────────────────
     // New in this admin console — no Angular equivalent existed. Mirrors the
     // "Roster Capacity" endpoint region added to DeveloperController.cs.

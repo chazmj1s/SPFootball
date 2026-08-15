@@ -96,6 +96,22 @@ namespace SaturdayPulse.Services
             return expected - homeFieldAdvantage;
         }
 
+        // ── Opponent pregame strength resolution ────────────────────────────────
+
+        /// <summary>
+        /// Resolves a team's pregame strength for use as an opponent-strength input
+        /// to SOS. Three-tier fallback: real prior-week Ranking → PowerRating-derived
+        /// estimate → raw preseason SeedRating (already on the Ranking scale, not the
+        /// PowerRating scale) when no prior WeeklyRankings row exists at all — e.g.
+        /// week 0 of a new season, where `prior` is always null by design.
+        /// </summary>
+        public static decimal ResolveStrength(int teamId, WeeklyRanking? prior, IReadOnlyDictionary<int, decimal> seedByTeamId)
+        {
+            if (prior != null && prior.Ranking > 0m) return (decimal)prior.Ranking;
+            if (prior?.PowerRating != null) return 0.5m * (1m + prior.PowerRating.Value);
+            return seedByTeamId.TryGetValue(teamId, out var seed) ? seed : 0m;
+        }
+
         // ── Rivalry variance (metrics pipeline — UNTOUCHED) ─────────────────────────
 
         /// <summary>
@@ -158,7 +174,7 @@ namespace SaturdayPulse.Services
         // ── Division weighting ────────────────────────────────────────────────────
 
         public static double DivisionWeight(string? opponentDivision)
-            => opponentDivision == "FCS" ? 0.25 : 1.0;
+            => opponentDivision?.ToUpper() == "FCS" ? 0.25 : 1.0;
 
         // ── Z-score dampening ─────────────────────────────────────────────────────
 

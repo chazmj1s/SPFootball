@@ -1018,6 +1018,17 @@ namespace SaturdayPulse.Services
                 })
                 .ToList();
 
+            // CFBD returned real data, but none of it matched an FBS team name — most
+            // likely Teams.Division wasn't reliably "fbs" for the full team set at this
+            // moment, or a CFBD team-name string drifted. Refuse rather than wipe the
+            // existing season's rows with nothing to replace them.
+            if (rosterPlayers.Count == 0)
+            {
+                Console.WriteLine($"LoadRosterCapacityRosterAsync: CFBD returned {dtos.Count} rows for {season} " +
+                                   $"but 0 matched an FBS team name — refusing to overwrite existing data.");
+                return 0;
+            }
+
             var duplicates = rosterPlayers
                 .GroupBy(r => r.PlayerId)
                 .Where(g => g.Count() > 1)
@@ -1025,7 +1036,7 @@ namespace SaturdayPulse.Services
                 .ToList();
 
             await _uow.RosterPlayers.UpsertSeasonAsync(season, rosterPlayers, token);
-            await _uow.SaveChangesAsync(token);
+            var writes = await _uow.SaveChangesAsync(token);
 
             Console.WriteLine($"LoadRosterCapacityRosterAsync: upserted {rosterPlayers.Count} roster rows for {season}");
             return rosterPlayers.Count;
@@ -1135,6 +1146,7 @@ namespace SaturdayPulse.Services
             var response = await CfbdClient.GetAsync($"recruiting/players?year={year}", token);
             response.EnsureSuccessStatusCode();
 
+            var content = await response.Content.ReadAsStringAsync();
             var dtos = await response.Content
                 .ReadFromJsonAsync<List<CfbdRecruitPlayerDto>>(cancellationToken: token) ?? [];
 
@@ -1155,8 +1167,8 @@ namespace SaturdayPulse.Services
                     Position = d.Position ?? "UNK",
                     Height = d.Height,
                     Weight = d.Weight,
-                    Stars = d.Stars,
-                    Rating = d.Rating,
+                    Stars = d.Stars ?? 0,
+                    Rating = d.Rating ?? 0.0,
                     City = d.City,
                     StateProvince = d.StateProvince,
                     Country = d.Country,

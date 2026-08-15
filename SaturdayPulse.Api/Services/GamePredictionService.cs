@@ -344,13 +344,19 @@ namespace SaturdayPulse.Services
             int gameId, int year, int week,
             int homeTeamId, int awayTeamId)
         {
-            // Raw predicted scores, mapped from team/opponent perspective to
-            // home/away — same Location mapping the win-probability logic below
-            // already uses.
-            var homePointsRaw = prediction.Location == 'H'
+            // Team-perspective → home/away mapping. Location is 'H' for a normal
+            // home game and 'N' for neutral site — TeamName is always the actual
+            // home team in both cases (see MatchupRequest construction in
+            // WeeklyRankingsService/RatingComparisonService). Only 'A' means the
+            // "team" in this GamePrediction is actually the away side. Using
+            // "!= 'A'" instead of "== 'H'" fixes the neutral-site flip: previously
+            // Location == 'N' fell into the away branch on all four mappings below.
+            bool teamIsHomeSide = prediction.Location != 'A';
+
+            var homePointsRaw = teamIsHomeSide
                 ? prediction.PredictedTeamScore
                 : prediction.PredictedOpponentScore;
-            var awayPointsRaw = prediction.Location == 'H'
+            var awayPointsRaw = teamIsHomeSide
                 ? prediction.PredictedOpponentScore
                 : prediction.PredictedTeamScore;
 
@@ -367,7 +373,7 @@ namespace SaturdayPulse.Services
             // GamePrediction.IsTeamProjectedWinner remarks).
             if (homePoints == awayPoints)
             {
-                bool teamIsHome = prediction.Location == 'H';
+                bool teamIsHome = teamIsHomeSide;
                 bool homeWins   = teamIsHome
                     ? prediction.IsTeamProjectedWinner
                     : !prediction.IsTeamProjectedWinner;
@@ -375,7 +381,7 @@ namespace SaturdayPulse.Services
                 if (homeWins) homePoints++; else awayPoints++;
             }
 
-            var homeWinProb = prediction.Location == 'H'
+            var homeWinProb = teamIsHomeSide
                 ? prediction.WinProbability
                 : prediction.OpponentWinProbability;
 
@@ -400,7 +406,7 @@ namespace SaturdayPulse.Services
             // rounded integer), not a real ~0 differential — ExpectedMargin
             // itself is untouched by it and rounds to 0.0 correctly in a
             // genuine pick-'em case.
-            var rawSpread = prediction.Location == 'H' ? prediction.ExpectedMargin : -prediction.ExpectedMargin;
+            var rawSpread = teamIsHomeSide ? prediction.ExpectedMargin : -prediction.ExpectedMargin;
             var spread    = Math.Round(rawSpread, 1);
 
             return new Projection

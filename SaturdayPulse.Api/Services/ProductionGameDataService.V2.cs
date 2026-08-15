@@ -827,8 +827,7 @@ namespace SaturdayPulse.Services
 
             return confStandings
                 .Where(s => !string.IsNullOrEmpty(s.Conference)
-                         && s.Conference != "IND"
-                         && s.Conference != "Pac-12")
+                         && s.Conference != "IND")
                 .GroupBy(s => s.Conference)
                 .ToDictionary(g => g.Key, g => g.ToList());
         }
@@ -956,8 +955,7 @@ namespace SaturdayPulse.Services
 
             return confStandings
                 .Where(s => !string.IsNullOrEmpty(s.Conference)
-                         && s.Conference != "IND"
-                         && s.Conference != "Pac-12")
+                         && s.Conference != "IND")
                 .GroupBy(s => s.Conference)
                 .ToDictionary(g => g.Key, g => g.ToList());
         }

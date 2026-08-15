@@ -30,6 +30,13 @@ namespace SaturdayPulse.Contracts
         ICoachRecordRepository  CoachRecords  { get; }
         IRecruitPlayerRepository RecruitPlayers { get; }
 
+        /// <summary>
+        /// G6/P4 discount coefficients (WinDifferentialDiscount, CaliberGapPoints) —
+        /// see TierDiscountCoefficient remarks. Append-only, one or more rows per
+        /// season; use GetLatestBySeasonAsync for live consumption.
+        /// </summary>
+        ITierDiscountCoefficientRepository TierDiscountCoefficients { get; }
+
         // ── User management / entitlement repositories ────────────────────────
         IUserProfileRepository UserProfiles { get; }
         IUserContactInfoRepository UserContactInfo { get; }

@@ -319,13 +319,6 @@ namespace SaturdayPulse.Services
             // Falls back to the raw preseason SeedRating (already on the
             // Ranking scale, not the PowerRating scale) only when there's no
             // prior WeeklyRankings row at all to read a PowerRating from.
-            decimal ResolveStrength(int teamId, WeeklyRanking? prior)
-            {
-                if (prior != null && prior.Ranking > 0m) return (decimal)prior.Ranking;
-                if (prior?.PowerRating != null) return 0.5m * (1m + prior.PowerRating.Value);
-                return seedByTeamId.TryGetValue(teamId, out var seed) ? seed : 0m;
-            }
-
             var withZScores = gameParticipants.Select(gp =>
             {
                 // Get pregame rankings from prior week snapshot.
@@ -333,9 +326,8 @@ namespace SaturdayPulse.Services
                 priorByTeamId.TryGetValue(gp.TeamId,     out var teamPrior);
                 priorByTeamId.TryGetValue(gp.OpponentId, out var oppPrior);
 
-                var teamStrength = RatingCalculator.ExpandStrength(ResolveStrength(gp.TeamId,     teamPrior));
-                var oppStrength  = RatingCalculator.ExpandStrength(ResolveStrength(gp.OpponentId, oppPrior));
-
+                var teamStrength = RatingCalculator.ExpandStrength(RatingCalculator.ResolveStrength(gp.TeamId, teamPrior, seedByTeamId));
+                var oppStrength = RatingCalculator.ExpandStrength(RatingCalculator.ResolveStrength(gp.OpponentId, oppPrior, seedByTeamId));
                 // Differential from team's perspective — positive means team is stronger.
                 var rawDiff   = teamStrength - oppStrength;
                 var clampedDiff = Math.Max(-3.0m, Math.Min(3.0m, rawDiff));
@@ -391,7 +383,7 @@ namespace SaturdayPulse.Services
                 bool oppIsFcs = string.Equals(gp.OpponentDivision, "fcs",
                                     StringComparison.OrdinalIgnoreCase);
                 if (!oppIsFcs)
-                    oppPregameStrength = ResolveStrength(gp.OpponentId, oppPrior);
+                    oppPregameStrength = RatingCalculator.ResolveStrength(gp.OpponentId, oppPrior, seedByTeamId);
 
                 return new
                 {
@@ -402,6 +394,70 @@ namespace SaturdayPulse.Services
                     OppStrength = (double)oppPregameStrength
                 };
             }).ToList();
+
+            // ── 6. Full-season opponent set for SOS ────────────────────────────────
+            //
+            // BaseSOS/SubSOS now reflect the team's FULL schedule, not just games
+            // played/locked through this week — consistent with how projected
+            // Wins/Losses are already tracked as a blend of played games and
+            // projections elsewhere (BuildActualRecordRollup/BuildProjectedRecord-
+            // Rollup). ResolvedGameResults.GetByYearAsync (real result if played,
+            // else the locked Projection — same resolution GetByYearThroughWeekAsync
+            // above already uses, just unscoped by week) gives this for free: no new
+            // fallback logic, no separate "is this week 0" branch. At week 0 this is
+            // 100% projected; as the season plays out, real results replace
+            // projections week by week, same mechanism, same code path throughout.
+            //
+            // Deliberately NOT reused for rawStats/Z-scores above — those grade
+            // actual, resolved performance and must stay "through week" (grading a
+            // team's Z-score against its own not-yet-played, still-projected games
+            // would be circular). Only opponent-strength/SOS widens to the full
+            // schedule; Wins/Losses/PointsFor/PointsAgainst/OffensiveZScore/
+            // DefensiveZScore below are untouched.
+            var fullSeasonGames = await _uow.ResolvedGameResults.GetByYearAsync(year, token);
+
+            var sosParticipants = fullSeasonGames
+                .Where(g => fbsIds.Contains(g.HomeId ?? 0) || fbsIds.Contains(g.AwayId ?? 0))
+                .SelectMany(g =>
+                {
+                    var homeId = g.HomeId ?? 0;
+                    var awayId = g.AwayId ?? 0;
+                    return new[]
+                    {
+                        new
+                        {
+                            TeamId           = homeId,
+                            OpponentId       = awayId,
+                            OpponentDivision = teamById.TryGetValue(awayId, out var at)
+                                ? at.Division : "fbs"
+                        },
+                        new
+                        {
+                            TeamId           = awayId,
+                            OpponentId       = homeId,
+                            OpponentDivision = teamById.TryGetValue(homeId, out var ht)
+                                ? ht.Division : "fbs"
+                        }
+                    };
+                })
+                .Select(p =>
+                {
+                    priorByTeamId.TryGetValue(p.OpponentId, out var oppPrior);
+                    bool oppIsFcs = string.Equals(p.OpponentDivision, "fcs",
+                                        StringComparison.OrdinalIgnoreCase);
+                    decimal oppPregameStrength = oppIsFcs
+                        ? 0m
+                        : RatingCalculator.ResolveStrength(p.OpponentId, oppPrior, seedByTeamId);
+
+                    return new
+                    {
+                        p.TeamId,
+                        p.OpponentId,
+                        DivWeight = RatingCalculator.DivisionWeight(p.OpponentDivision),
+                        OppStrength = (double)oppPregameStrength
+                    };
+                })
+                .ToList();
 
             // ── 6-8. BaseSOS → SubSOS → CombinedSOS ──────────────────────────────
             //
@@ -414,14 +470,14 @@ namespace SaturdayPulse.Services
             //
             // The old performance-weight bucketing has moved to PowerRating below as
             // a smooth QualityMod applied to the team's own z-score.
-            var baseSOS = withZScores
+            var baseSOS = sosParticipants
                 .GroupBy(x => x.TeamId)
                 .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
                     ? Math.Round(
                         g.Sum(x => x.OppStrength * x.DivWeight) / g.Sum(x => x.DivWeight), 4)
                     : 0.0);
 
-            var subSOS = withZScores
+            var subSOS = sosParticipants
                 .GroupBy(x => x.TeamId)
                 .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
                     ? Math.Round(
