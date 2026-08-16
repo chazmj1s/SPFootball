@@ -91,9 +91,9 @@ namespace SaturdayPulse.Data
                 .HasDatabaseName("IX_Games_Year_Week");
 
             modelBuilder.Entity<TeamsConferenceHistory>()
-                .HasIndex(t => new { t.TeamId, t.StartYear })
+                .HasIndex(t => new { t.TeamId, t.ConferenceId, t.StartYear })
                 .IsUnique()
-                .HasDatabaseName("UQ_TeamsConferenceHistory_TeamId_StartYear");
+                .HasDatabaseName("UQ_TeamsConferenceHistory_TeamId_ConferenceId_StartYear");
 
             // --- ResolvedGameResults (view) ---
             // Keyless — a view row has no natural single-column key, and this

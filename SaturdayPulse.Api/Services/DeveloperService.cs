@@ -107,10 +107,6 @@ namespace SaturdayPulse.Services
         public Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
            => _gameDataService.BuildTeamsConferenceHistoryAsync(startYear, token);
 
-        public IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(
-            int startYear, bool dryRun = false, CancellationToken token = default)
-           => _gameDataService.BuildTeamsConferenceHistoryStreamAsync(startYear, dryRun, token);
-
         public Task<PortalCoverageResult> GetPortalCoverageAsync(CancellationToken token = default)
             => _gameDataService.GetPortalCoverageAsync(token);
 

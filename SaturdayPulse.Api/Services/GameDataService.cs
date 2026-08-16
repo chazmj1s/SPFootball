@@ -30,10 +30,12 @@ namespace SaturdayPulse.Services
         /// Valley" fbs/fbs) — so a plain ToDictionary(c => c.Name) throws
         /// ArgumentException on the second matching row. Uses TryAdd instead
         /// so an unexpected future collision logs instead of crashing whoever
-        /// called this. Shared by LoadTeamsAsync, BuildTeamsConferenceHistoryAsync,
-        /// and BuildTeamsConferenceHistoryStreamAsync — all three do the same
-        /// CFBD-conference-name → ConferenceId resolution and previously each
-        /// had their own copy of this exact bug.
+        /// called this. Used by LoadTeamsAsync for CFBD-conference-name →
+        /// ConferenceId resolution.
+        ///
+        /// BuildTeamsConferenceHistoryAsync no longer uses this — it now reads
+        /// ConferenceId directly from CFBD's /conferences/affiliations response
+        /// (see that method's remarks).
         /// </summary>
         private async Task<Dictionary<(string Name, string Classification), int>> BuildConferenceLookupAsync(
             string callerLabel, CancellationToken token)
@@ -365,221 +367,60 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
-        /// Backfills TeamsConferenceHistory by replaying /teams?year={year} for each year
-        /// in the range and recording conference changes per team.
+        /// Rebuilds TeamsConferenceHistory from CFBD's /conferences/affiliations
+        /// endpoint. TeamId/ConferenceId are taken directly from CFBD — no
+        /// name-based resolution against our Teams/Conferences tables, since
+        /// those are sourced from CFBD too and the ids match directly.
         ///
-        /// Algorithm per team per year:
-        ///   - Find the open row (EndYear == null) for this team
-        ///   - If conference unchanged → do nothing
-        ///   - If conference changed → close the open row (EndYear = year - 1),
-        ///     open a new row (StartYear = year, EndYear = null)
-        ///   - If no row exists → open a new row
+        /// `startYear` is passed through to CFBD as `minYear`, and only rows
+        /// with StartYear >= startYear are cleared before reinserting — NOT the
+        /// whole table. Existing TeamsConferenceHistory data is corrupted
+        /// (2026-08-15 handoff), so a full rebuild means calling this with
+        /// startYear=1965; calling it with a later year does a scoped
+        /// reload/refresh of just that range instead of destroying everything
+        /// before it.
         ///
-        /// Safe to re-run — will not duplicate rows, only fills gaps.
-        /// Example: POST /api/developer/buildTeamsConferenceHistory?startYear=2000
+        /// Caveat: if CFBD's minYear filter excludes an affiliation row whose
+        /// StartYear predates minYear even though it's still open
+        /// (EndYear == null — e.g. Oregon State's Pac-12 row starts 2022), a
+        /// scoped call with startYear set after that row's StartYear won't see
+        /// or touch it, which is correct (it's out of scope) but means partial
+        /// reloads can't be used to "fix" an ongoing row that started earlier
+        /// than the requested range. Full 1965 rebuilds aren't affected.
+        /// Example: POST /api/developer/buildTeamsConferenceHistory?startYear=1965
         /// </summary>
         public async Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
         {
-            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
-            var changes = 0;
+            var response = await CfbdClient.GetAsync($"/conferences/affiliations?minYear={startYear}", token);
+            response.EnsureSuccessStatusCode();
 
-            // See BuildConferenceLookupAsync — Name alone isn't a safe key for
-            // conference resolution, several names are reused across eras/levels.
-            var confLookup = await BuildConferenceLookupAsync(nameof(BuildTeamsConferenceHistoryAsync), token);
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdConferenceAffiliationDto>>(cancellationToken: token) ?? [];
 
-            bool TryResolveConference(CfbdTeamV2Dto dto, out int confId) =>
-                TryResolveConferenceId(confLookup, dto.Conference, dto.Classification, out confId);
-
-            for (var year = startYear; year <= currentYear; year++)
-            {
-                // Fetch teams for this year from CFBD
-                var response = await CfbdClient.GetAsync($"/teams?year={year}", token);
-                if (!response.IsSuccessStatusCode)
+            var records = dtos
+                .Where(d => string.Equals(d.Classification, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(d => new TeamsConferenceHistory
                 {
-                    Console.WriteLine($"BuildTeamsConferenceHistoryAsync: CFBD returned {response.StatusCode} for {year}, skipping");
-                    await Task.Delay(300, token);
-                    continue;
-                }
+                    TeamId = d.TeamId,
+                    ConferenceId = d.ConferenceId,
+                    StartYear = d.StartYear,
+                    EndYear = d.EndYear
+                })
+                // Defensive: unique index is (TeamId, ConferenceId, StartYear) —
+                // collapse any duplicate rows CFBD returns before AddRange throws
+                // on the constraint.
+                .GroupBy(r => (r.TeamId, r.ConferenceId, r.StartYear))
+                .Select(g => g.First())
+                .ToList();
 
-                var dtos = await response.Content
-                    .ReadFromJsonAsync<List<CfbdTeamV2Dto>>(cancellationToken: token) ?? [];
+            // Scoped delete — only wipes what we're about to reinsert, not the
+            // whole table. See doc comment above re: partial-range caveat.
+            await _uow.TeamsConferenceHistory.ClearFromStartYearAsync(startYear, token);
+            await _uow.TeamsConferenceHistory.AddRangeAsync(records, token);
 
-                // Filter to FBS — log any with unrecognized conference names
-                var fbsDtos = dtos
-                    .Where(d => string.Equals(d.Classification, "fbs", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+            Console.WriteLine($"BuildTeamsConferenceHistoryAsync: {records.Count} rows inserted (StartYear >= {startYear}) from {dtos.Count} total affiliations ({dtos.Count - records.Count} non-FBS/duplicate skipped)");
 
-                foreach (var dto in fbsDtos.Where(d => !TryResolveConference(d, out _)))
-                    Console.WriteLine($"BuildTeamsConferenceHistoryAsync: unmatched conference '{dto.Conference ?? "null"}' for team '{dto.School}' in {year}");
-
-                fbsDtos = fbsDtos
-                    .Where(d => TryResolveConference(d, out _))
-                    .ToList();
-
-                foreach (var dto in fbsDtos)
-                {
-                    TryResolveConference(dto, out var confId);
-
-                    // Load this team's full history to find the open row
-                    var history = await _uow.TeamsConferenceHistory.GetByTeamIdAsync(dto.Id, token);
-                    var openRow = history.FirstOrDefault(h => h.EndYear == null);
-
-                    if (openRow == null)
-                    {
-                        // No history at all — open a new row
-                        await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
-                        {
-                            TeamId = dto.Id,
-                            ConferenceId = confId,
-                            StartYear = year,
-                            EndYear = null
-                        }, token);
-                        changes++;
-                    }
-                    else if (openRow.ConferenceId != confId)
-                    {
-                        // Conference changed — close the old row, open a new one
-                        openRow.EndYear = year - 1;
-                        await _uow.TeamsConferenceHistory.UpdateAsync(openRow, token);
-
-                        await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
-                        {
-                            TeamId = dto.Id,
-                            ConferenceId = confId,
-                            StartYear = year,
-                            EndYear = null
-                        }, token);
-                        changes++;
-                    }
-                    // else: same conference, nothing to do
-                }
-
-                Console.WriteLine($"BuildTeamsConferenceHistoryAsync: completed {year}, {fbsDtos.Count} teams processed");
-                await Task.Delay(300, token);
-            }
-
-            Console.WriteLine($"BuildTeamsConferenceHistoryAsync: {changes} conference changes recorded from {startYear} to {currentYear}");
-            return changes;
-        }
-
-        /// <summary>
-        /// Streaming version of BuildTeamsConferenceHistoryAsync, with an optional
-        /// dryRun mode. In dry-run, every change that WOULD be written is described
-        /// in the yielded message, but nothing is added/updated in
-        /// TeamsConferenceHistory and no team names are matched to a conference that
-        /// doesn't already exist in the Conferences table — same matching logic as
-        /// the live path, just without the write.
-        ///
-        /// Added specifically so 2026's conference realignment (Pac-12
-        /// reconstitution) can be checked against what CFBD actually reports before
-        /// trusting a live run — if CFBD's conference name string for a
-        /// reconstituted team doesn't match what's already in the Conferences
-        /// table, that team-year comes back as "unmatched" here exactly like it
-        /// would in the live path, but nothing gets written either way.
-        /// </summary>
-        public async IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(
-            int startYear, bool dryRun = false, [EnumeratorCancellation] CancellationToken token = default)
-        {
-            var currentYear = DateTime.Now.Month < 8 ? DateTime.Now.Year - 1 : DateTime.Now.Year;
-
-            // See BuildConferenceLookupAsync — Name alone isn't a safe key for
-            // conference resolution, several names are reused across eras/levels.
-            var confLookup = await BuildConferenceLookupAsync(nameof(BuildTeamsConferenceHistoryStreamAsync), token);
-
-            bool TryResolveConference(CfbdTeamV2Dto dto, out int confId) =>
-                TryResolveConferenceId(confLookup, dto.Conference, dto.Classification, out confId);
-
-            for (var year = startYear; year <= currentYear; year++)
-            {
-                token.ThrowIfCancellationRequested();
-
-                bool success = true;
-                var yearChanges = 0;
-                var unmatched = new List<string>();
-                string message;
-
-                try
-                {
-                    var response = await CfbdClient.GetAsync($"/teams?year={year}", token);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        success = false;
-                        message = $"CFBD returned {response.StatusCode}, skipped";
-                    }
-                    else
-                    {
-                        var dtos = await response.Content
-                            .ReadFromJsonAsync<List<CfbdTeamV2Dto>>(cancellationToken: token) ?? [];
-
-                        var fbsDtos = dtos
-                        .Where(d => string.Equals(d.Classification, "fbs", StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-
-                    unmatched = fbsDtos
-                        .Where(d => !TryResolveConference(d, out _))
-                        .Select(d => $"{d.School} → '{d.Conference ?? "null"}'")
-                        .ToList();
-
-                    fbsDtos = fbsDtos
-                        .Where(d => TryResolveConference(d, out _))
-                        .ToList();
-
-                    foreach (var dto in fbsDtos)
-                    {
-                        TryResolveConference(dto, out var confId);
-
-                        var history = await _uow.TeamsConferenceHistory.GetByTeamIdAsync(dto.Id, token);
-                        var openRow = history.FirstOrDefault(h => h.EndYear == null);
-
-                        if (openRow == null)
-                        {
-                            if (!dryRun)
-                            {
-                                await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
-                                {
-                                    TeamId = dto.Id,
-                                    ConferenceId = confId,
-                                    StartYear = year,
-                                    EndYear = null
-                                }, token);
-                            }
-                            yearChanges++;
-                        }
-                        else if (openRow.ConferenceId != confId)
-                        {
-                            if (!dryRun)
-                            {
-                                openRow.EndYear = year - 1;
-                                await _uow.TeamsConferenceHistory.UpdateAsync(openRow, token);
-
-                                await _uow.TeamsConferenceHistory.AddAsync(new TeamsConferenceHistory
-                                {
-                                    TeamId = dto.Id,
-                                    ConferenceId = confId,
-                                    StartYear = year,
-                                    EndYear = null
-                                }, token);
-                            }
-                            yearChanges++;
-                        }
-                    }
-
-                        var prefix = dryRun ? "[DRY RUN] " : "";
-                        message = unmatched.Count == 0
-                            ? $"{prefix}{yearChanges} conference change(s)"
-                            : $"{prefix}{yearChanges} conference change(s); {unmatched.Count} unmatched: {string.Join("; ", unmatched.Take(5))}" +
-                              (unmatched.Count > 5 ? $" (+{unmatched.Count - 5} more)" : "");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    success = false;
-                    message = ex.Message;
-                }
-
-                yield return new ProgressUpdate(year.ToString(), success, message);
-                await Task.Delay(300, token);
-            }
+            return records.Count;
         }
 
         /// <summary>

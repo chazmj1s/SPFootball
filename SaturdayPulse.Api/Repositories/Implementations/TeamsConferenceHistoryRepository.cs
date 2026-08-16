@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SaturdayPulse.Data;
 using SaturdayPulse.Models;
 using SaturdayPulse.Repositories.Interfaces;
@@ -36,6 +36,17 @@ namespace SaturdayPulse.Repositories.Implementations
         public async Task UpdateAsync(TeamsConferenceHistory record, CancellationToken token = default)
         {
             _context.TeamsConferenceHistory.Update(record);
+            await _context.SaveChangesAsync(token);
+        }
+
+        public Task ClearFromStartYearAsync(int startYear, CancellationToken token = default)
+            => _context.TeamsConferenceHistory
+                .Where(t => t.StartYear >= startYear)
+                .ExecuteDeleteAsync(token);
+
+        public async Task AddRangeAsync(IEnumerable<TeamsConferenceHistory> records, CancellationToken token = default)
+        {
+            _context.TeamsConferenceHistory.AddRange(records);
             await _context.SaveChangesAsync(token);
         }
     }

@@ -302,7 +302,7 @@
         {
             await StepAsync("Load Conferences", () => Api.LoadConferencesAsync());
             await StepAsync("Load Teams", () => Api.LoadTeamsAsync(_seasonYear));
-            await StepAsync("Build Conference History", () => Api.BuildTeamsConferenceHistoryAsync(_seasonYear));
+            await StepAsync("Build Conference History", () => Api.BuildTeamsConferenceHistoryAsync(1965));
             await StepAsync("Compute Tier Discount Coefficients", () => Api.ComputeTierDiscountCoefficientsAsync(_seasonYear));
             await StepAsync("Initialize Season", () => Api.InitializeSeasonAsync(_seasonYear));
             await StepAsync("Load Portal", () => Api.LoadPortalAsync(_seasonYear));

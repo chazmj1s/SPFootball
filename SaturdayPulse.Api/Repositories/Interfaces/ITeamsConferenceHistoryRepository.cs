@@ -7,5 +7,6 @@ public interface ITeamsConferenceHistoryRepository
     Task<Dictionary<int, int>> GetConferenceIdsByYearAsync(int year, CancellationToken token = default);
     Task AddAsync(TeamsConferenceHistory record, CancellationToken token = default);
     Task UpdateAsync(TeamsConferenceHistory record, CancellationToken token = default);
-
+    Task ClearFromStartYearAsync(int startYear, CancellationToken token = default);
+    Task AddRangeAsync(IEnumerable<TeamsConferenceHistory> records, CancellationToken token = default);
 }

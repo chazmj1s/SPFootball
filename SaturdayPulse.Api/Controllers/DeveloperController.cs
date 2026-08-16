@@ -276,20 +276,6 @@ namespace SaturdayPulse.Controllers
         }
 
         /// <summary>
-        /// Streaming version, with an optional dryRun flag — see
-        /// GameDataService.BuildTeamsConferenceHistoryStreamAsync for what dry-run
-        /// mode does and why it exists (2026 Pac-12 reconstitution check).
-        /// Example: POST /api/developer/buildTeamsConferenceHistory/stream?startYear=2000&dryRun=true
-        /// </summary>
-        [HttpPost("buildTeamsConferenceHistory/stream")]
-        [Tags("CFBD V2 - Load")]
-        public IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStream(
-            [FromQuery] int startYear,
-            [FromQuery] bool dryRun,
-            CancellationToken token) =>
-            developerService.BuildTeamsConferenceHistoryStreamAsync(startYear, dryRun, token);
-
-        /// <summary>
         /// Sunday/Wednesday refresh — loads games and lines for a single week.
         /// Use this for the regular in-season weekly data update.
         /// Example: POST /api/developer/weeklyRefresh?year=2025&week=10
