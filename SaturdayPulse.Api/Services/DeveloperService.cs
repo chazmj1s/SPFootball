@@ -107,10 +107,6 @@ namespace SaturdayPulse.Services
         public Task<int> BuildTeamsConferenceHistoryAsync(int startYear, CancellationToken token = default)
            => _gameDataService.BuildTeamsConferenceHistoryAsync(startYear, token);
 
-        public IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(
-            int startYear, bool dryRun = false, CancellationToken token = default)
-           => _gameDataService.BuildTeamsConferenceHistoryStreamAsync(startYear, dryRun, token);
-
         public Task<PortalCoverageResult> GetPortalCoverageAsync(CancellationToken token = default)
             => _gameDataService.GetPortalCoverageAsync(token);
 
@@ -462,7 +458,7 @@ namespace SaturdayPulse.Services
             // from — same guard the old version had, just checked without needing a
             // specific "last snapshot" row (nothing here copies from one anymore).
             var snapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
-            if (!snapshots.Any(s => s.Year == year - 1))
+            if (!snapshots.Any(s => year == 1965 || s.Year == year - 1))
                 throw new InvalidOperationException(
                     $"No WeeklyRankings found for {year - 1}. Run backfillWeeklyRankings first.");
 

@@ -41,11 +41,6 @@ namespace SaturdayPulse.Interfaces
         IAsyncEnumerable<ProgressUpdate> LoadGamesBulkStreamAsync(int startYear, CancellationToken token = default);
         IAsyncEnumerable<ProgressUpdate> LoadLinesBulkStreamAsync(int startYear, CancellationToken token = default);
 
-        // dryRun: reports what conference changes WOULD be written without touching
-        // TeamsConferenceHistory. Added specifically to sanity-check CFBD's naming
-        // for the 2026 Pac-12 reconstitution before trusting a live run against it.
-        IAsyncEnumerable<ProgressUpdate> BuildTeamsConferenceHistoryStreamAsync(int startYear, bool dryRun = false, CancellationToken token = default);
-
         // ── Portal coverage check ─────────────────────────────────────────────
         // Read-only diagnostic — no write, safe to call any time. Reports which
         // seasons since portal data became available (2021) have zero PortalEntries.
