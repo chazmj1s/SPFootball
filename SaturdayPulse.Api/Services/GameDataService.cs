@@ -415,7 +415,7 @@ namespace SaturdayPulse.Services
 
             // Scoped delete — only wipes what we're about to reinsert, not the
             // whole table. See doc comment above re: partial-range caveat.
-            await _uow.TeamsConferenceHistory.ClearFromStartYearAsync(startYear, token);
+            await _uow.TeamsConferenceHistory.ClearAsync(token);
             await _uow.TeamsConferenceHistory.AddRangeAsync(records, token);
 
             Console.WriteLine($"BuildTeamsConferenceHistoryAsync: {records.Count} rows inserted (StartYear >= {startYear}) from {dtos.Count} total affiliations ({dtos.Count - records.Count} non-FBS/duplicate skipped)");

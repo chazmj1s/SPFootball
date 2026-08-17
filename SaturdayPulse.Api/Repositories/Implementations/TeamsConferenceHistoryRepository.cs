@@ -39,9 +39,8 @@ namespace SaturdayPulse.Repositories.Implementations
             await _context.SaveChangesAsync(token);
         }
 
-        public Task ClearFromStartYearAsync(int startYear, CancellationToken token = default)
+        public Task ClearAsync(CancellationToken token = default)
             => _context.TeamsConferenceHistory
-                .Where(t => t.StartYear >= startYear)
                 .ExecuteDeleteAsync(token);
 
         public async Task AddRangeAsync(IEnumerable<TeamsConferenceHistory> records, CancellationToken token = default)

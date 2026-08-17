@@ -458,7 +458,7 @@ namespace SaturdayPulse.Services
             // from — same guard the old version had, just checked without needing a
             // specific "last snapshot" row (nothing here copies from one anymore).
             var snapshots = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
-            if (!snapshots.Any(s => s.Year == year - 1))
+            if (!snapshots.Any(s => year == 1965 || s.Year == year - 1))
                 throw new InvalidOperationException(
                     $"No WeeklyRankings found for {year - 1}. Run backfillWeeklyRankings first.");
 
