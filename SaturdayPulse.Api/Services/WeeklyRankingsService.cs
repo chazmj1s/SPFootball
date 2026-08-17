@@ -102,6 +102,23 @@ namespace SaturdayPulse.Services
                 .Where(tr => tr.SeedRating.HasValue)
                 .ToDictionary(tr => tr.TeamID, tr => tr.SeedRating!.Value);
 
+            // Year-aware tier data — hoisted here (was previously loaded later, at
+            // step 11's overall/tier-rank computation) so the SAME dictionary can
+            // also drive the tier-discount lookup in the projection loop below,
+            // rather than querying it twice for the same year.
+            var tierByTeamId = await _tierService.GetConfDataBatchAsync(fbsIds, year, token);
+            string TierFor(int teamId, string teamName) =>
+                tierByTeamId.TryGetValue(teamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, teamName);
+
+            // Tier discount coefficient for this season — see TierDiscountCoefficient
+            // remarks. Null if RunSeasonSetupAsync's compute step hasn't run yet for
+            // this season; BuildProjection treats a null coefficient the same as a
+            // same-tier matchup (no adjustment applied).
+            var tierDiscountCoefficient = await _uow.TierDiscountCoefficients
+                .GetLatestBySeasonAsync(year, token);
+
             // ── 2. Decide/refresh every game from `week` through end of season ─────
             //
             // REBUILT (Option C) — replaces the old steps 2b + 17, which did the
@@ -200,13 +217,29 @@ namespace SaturdayPulse.Services
                     // above. Tie-breaking, integer scores, and spread/total
                     // consistency are all handled inside BuildProjection now —
                     // no separate 0-0 guard needed here like the old step 2b had.
+                    //
+                    // homeWinDiff/awayWinDiff: real Wins - Losses from the SAME
+                    // priorByTeamId snapshot the rating pipeline itself reads —
+                    // same "at kickoff" convention TierDiscountCalculator uses.
+                    // A team absent from priorByTeamId (no games yet) defaults to
+                    // 0-0, not skipped — a legitimate real record, not missing data.
+                    var homeWinDiff = priorByTeamId.TryGetValue(g.HomeId.Value, out var hpr)
+                        ? hpr.Wins - hpr.Losses : 0;
+                    var awayWinDiff = priorByTeamId.TryGetValue(g.AwayId.Value, out var apr)
+                        ? apr.Wins - apr.Losses : 0;
+
                     projectionsToWrite.Add(GamePredictionService.BuildProjection(
                         prediction: pred,
                         gameId:     g.GameId,
                         year:       year,
                         week:       g.Week,
                         homeTeamId: g.HomeId.Value,
-                        awayTeamId: g.AwayId.Value));
+                        awayTeamId: g.AwayId.Value,
+                        homeWinDiff: homeWinDiff,
+                        awayWinDiff: awayWinDiff,
+                        homeTier:   TierFor(homeTeam.TeamId, homeTeam.TeamName),
+                        awayTier:   TierFor(awayTeam.TeamId, awayTeam.TeamName),
+                        tierDiscountCoefficient: tierDiscountCoefficient));
                 }
 
                 await _uow.Projections.UpsertManyAsync(projectionsToWrite, token);
@@ -541,15 +574,9 @@ namespace SaturdayPulse.Services
             });
 
             // ── 11. Overall and tier ranks ────────────────────────────────────────
-            // Year-aware batch lookup — matters for BackfillYearAsync, where a team's
-            // CURRENT conference (the old ConfName/Teams.ConferenceId approach) can
-            // differ from the conference it belonged to in the year being backfilled.
-            var tierByTeamId = await _tierService.GetConfDataBatchAsync(fbsIds, year, token);
-            string TierFor(Teams t) =>
-                tierByTeamId.TryGetValue(t.TeamId, out var cd)
-                    ? cd.Tier
-                    : ConferenceTierService.GetTierStatic(null, t.TeamName);
-
+            // tierByTeamId/TierFor already loaded in step 1 above — reused here
+            // rather than querying GetConfDataBatchAsync a second time for the same
+            // year.
             var ranked = fbsTeams
                 .Where(t => rankings[t.TeamId].HasValue)
                 .OrderByDescending(t => rankings[t.TeamId])
@@ -557,7 +584,7 @@ namespace SaturdayPulse.Services
                 {
                     Team        = t,
                     OverallRank = i + 1,
-                    Tier        = TierFor(t)
+                    Tier        = TierFor(t.TeamId, t.TeamName)
                 })
                 .ToList();
 

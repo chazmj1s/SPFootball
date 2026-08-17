@@ -22,17 +22,17 @@ namespace SaturdayPulse.Utilities
     ///     persisted coefficients drift with reality automatically rather than needing
     ///     a second calculation to track drift on the side.
     ///   - Production Comparison — REMOVED as a standalone measurement after serving
-    ///     its purpose: it measured this same two-parameter model against the REAL,
-    ///     live IAvgScoreDifferentialService output instead of a synthetic curve, and
-    ///     confirmed Method B's numbers (D and C landed within ~2% of each other across
-    ///     two structurally different models run against the identical 5,505-game
-    ///     population). Decision made to apply Method B's output directly rather than
-    ///     Production's — both were statistically defensible; the margin between tiers
-    ///     is real and directly observable, and Method B is the simpler of the two
-    ///     models to reason about and maintain going forward.
-    ///   - Method B (MOV Variance Test, two-parameter) — the one that's actually
-    ///     applied. Fits a discount D and a flat caliber-gap constant C. See remarks
-    ///     below for the full method.
+    ///     its purpose: it measured this same model against the REAL, live
+    ///     IAvgScoreDifferentialService output instead of real win-loss records, and
+    ///     confirmed Method B's D landed close to Production's. Deliberately NOT
+    ///     revisited when this model was later rebuilt (below) — Production's fit
+    ///     target (AvgScoreDifferentialService's Ranking-based margin) already has
+    ///     tier-blindness baked into it via Ranking, which is the exact bias this
+    ///     calculator exists to correct for. Fitting against it would launder that
+    ///     bias back in rather than removing it. Method B's real-win-loss-record
+    ///     target is deliberately kept as the only input.
+    ///   - Method B (MOV Variance Test) — the one that's actually applied. See remarks
+    ///     below for the current method.
     ///
     /// Shared infrastructure:
     ///   - Games: regular-season only, both teams FBS, from GetPlayedGamesSinceYearAsync.
@@ -58,40 +58,44 @@ namespace SaturdayPulse.Utilities
     ///   project's established P4/G6 classification service) rather than routing
     ///   through it — still an open follow-up, not resolved here.
     ///
-    /// ── Method B — MOV Variance Test (two-parameter) ────────────────────────────────
+    /// ── Method B — MOV Variance Test ─────────────────────────────────────────────────
     /// TIER-oriented (Tier1Team - Tier2Team), not record-oriented — discounts the
     /// TIER 2 team's win differential input specifically, regardless of which team has
-    /// the better raw record in a given matchup. Fits Predicted_g(D, C) = a continuous,
-    /// odd-symmetric mirror of a Tier1-vs-Tier1-only curve (see BuildSignedAnchorPoints
-    /// remarks — a naive "look up a magnitude, then reapply Math.Sign" approach was
-    /// tried first and had a real discontinuity at every tied-nonzero-record game's
-    /// exact D=WinDiffT1/WinDiffT2 threshold) evaluated at (WinDiffT1 - D*WinDiffT2),
-    /// PLUS a flat additive constant C.
+    /// the better raw record in a given matchup.
     ///
-    /// Matching only the population average cannot pin down two parameters — C can
-    /// absorb whatever the mean error is for ANY D, so infinitely many (D, C) pairs
-    /// would satisfy an average-only match equally well. This is a real per-game
-    /// least-squares fit instead: for a fixed D, the optimal C has a closed form (the
-    /// mean of the per-game residuals at that D), which collapses the two-parameter
-    /// problem to a 1D grid search over D alone — minimizing the SUM OF SQUARED
-    /// per-game errors (the residual variance), not the mean error, since the mean is
-    /// trivially zeroed out by C regardless of D.
+    /// Fits Predicted_g(D, K, C) = K * (WinDiffT1 - D * WinDiffT2) + C directly against
+    /// real per-game score margins (ScoreT1 - ScoreT2) — three parameters, all solved
+    /// from real cross-tier games, with no intermediate curve or lookup table:
+    ///   D — discount applied to Tier 2's win differential before comparison.
+    ///   K — points per unit of discounted win-differential; what actually converts
+    ///       the discounted record gap into points.
+    ///   C — flat additive caliber-gap constant; the portion of the real margin that
+    ///       does NOT scale with either team's record at all.
     ///
-    /// BaselineError = mean(ActualDelta) - mean(UndiscountedPredictedDelta) at D=1,
-    /// C=0 — this dataset's own empirical analog to the doc's externally-asserted
-    /// "10 to 14 points" structural margin, NOT hardcoded to that range, since it
-    /// should come from our own data rather than an imported figure.
+    /// (Earlier version of this model converted the discounted win-differential to
+    /// points via linear interpolation over a Tier1-vs-Tier1-only "Curve 1" — see git
+    /// history for BuildSignedAnchorPoints/PredictScoreDeltaSigned/TierCurvePoint if
+    /// that's ever needed again. That curve was never persisted anywhere, which meant
+    /// D had no usable meaning downstream of this calculator — BuildProjection had a
+    /// discount factor with nothing to apply it to. Replaced with the direct 3-parameter
+    /// linear fit below specifically so D, K, and C are all plain persisted numbers a
+    /// downstream consumer can use with nothing but arithmetic.)
+    ///
+    /// For a fixed D, the OLS-optimal (K, C) has a closed form — the standard simple
+    /// linear regression of ScoreDelta against the discounted win-differential — which
+    /// collapses the three-parameter problem to a 1D grid search over D alone,
+    /// minimizing SSE (sum of squared per-game errors) at each D's optimal (K, C).
+    ///
+    /// RmseAtNoDiscount (D=1, i.e. Tier 2's record taken at face value, K/C still
+    /// OLS-fit) vs RmseAtSolvedParameters is the real methodology check here — how much
+    /// actually discounting Tier 2's record improves the fit, versus not discounting it
+    /// at all.
     /// </summary>
     public class TierDiscountCalculator(IUnitOfWork _uow)
     {
-        // Minimum sample size for a Curve 1 bucket to be used as an interpolation
-        // anchor. Buckets below this are excluded from the lookup — a 1-2 game bucket
-        // at the noisy tail can break monotonicity badly enough to hijack
-        // interpolation for every bucket above it.
-        private const int MinAnchorSampleSize = 20;
-
-        // Bounded grid search range/step — Curve 1 is real, potentially noisy data, so
-        // a closed-form or bisection solve isn't assumed safe.
+        // Bounded grid search range/step over D — real, potentially noisy game data, so
+        // a closed-form or bisection solve for D isn't assumed safe. K and C are always
+        // solved in closed form at each D (see FitTierDiscountModel).
         private const double SearchMin = -1.0;
         private const double SearchMax = 3.0;
         private const double SearchStep = 0.001;
@@ -158,8 +162,11 @@ namespace SaturdayPulse.Utilities
 
             var result = new TierDiscountAnalysisResult { StartYear = startYear };
 
-            // ── Shared per-game pass: build Curve 1 AND the cross-tier game list. ──
-            var controlRaw = new Dictionary<int, List<double>>(); // Curve 1 (Tier1-vs-Tier1 only)
+            // ── Shared per-game pass: build the cross-tier game list. ──────────────
+            // (Previously also built Curve 1 — a Tier1-vs-Tier1-only baseline used to
+            // convert win-differential to points via interpolation. Method B no longer
+            // needs it; see class remarks. Tier1-vs-Tier1 games are simply skipped now,
+            // same as Tier2-vs-Tier2 always was.)
             var methodBGames = new List<(double WinDiffT1, double WinDiffT2, double ScoreT1, double ScoreT2)>();
 
             int skippedNoConferenceHistory = 0;
@@ -198,19 +205,7 @@ namespace SaturdayPulse.Utilities
                 var homeTier1 = homeTeam.IsTierOne(g.Year, homeConferenceAbbr);
                 var awayTier1 = awayTeam.IsTierOne(g.Year, awayConferenceAbbr);
 
-                if (homeTier1 && awayTier1)
-                {
-                    // Curve 1 — Control Baseline: fully symmetric, absolute both axes.
-                    // Order doesn't matter here — pure "raw record-gap magnitude to
-                    // score-gap magnitude" baseline.
-                    var bucketKey = Math.Abs(homeWinDiff - awayWinDiff);
-                    var value = Math.Abs((double)(g.HomePoints!.Value - g.AwayPoints!.Value));
-
-                    if (!controlRaw.TryGetValue(bucketKey, out var list))
-                        controlRaw[bucketKey] = list = new List<double>();
-                    list.Add(value);
-                }
-                else if (homeTier1 != awayTier1)
+                if (homeTier1 != awayTier1)
                 {
                     // TIER-oriented (not record-oriented) — which team is "T1"/"T2" is
                     // fixed by actual tier, not by which has the better record.
@@ -228,52 +223,14 @@ namespace SaturdayPulse.Utilities
 
                     methodBGames.Add((winDiffT1, winDiffT2, scoreT1, scoreT2));
                 }
-                // both false (Tier 2 vs Tier 2) — not relevant to this measurement.
+                // both true (Tier1 vs Tier1) or both false (Tier2 vs Tier2) — not
+                // relevant to this measurement.
             }
 
             result.GamesSkippedNoConferenceHistory = skippedNoConferenceHistory;
             result.GamesSkippedNoPriorWeekSnapshot = skippedNoPriorWeekSnapshot;
 
-            // ── Curve 1 ───────────────────────────────────────────────────────────
-            var controlCurve = controlRaw
-                .Select(kvp => new TierCurvePoint
-                {
-                    WinDifferential = kvp.Key,
-                    AvgScoreDelta = Math.Round(kvp.Value.Average(), 4),
-                    SampleSize = kvp.Value.Count
-                })
-                .OrderBy(p => p.WinDifferential)
-                .ToList();
-
-            var anchorPoints = controlCurve
-                .Where(p => p.SampleSize >= MinAnchorSampleSize)
-                .OrderBy(p => p.WinDifferential)
-                .ToList();
-
-            var signedAnchorPoints = BuildSignedAnchorPoints(anchorPoints);
-
-            if (anchorPoints.Count == 0)
-            {
-                // Every prediction would collapse to 0 (BuildSignedAnchorPoints still
-                // returns the forced (0,0) origin point, so PredictScoreDeltaSigned
-                // never throws — it just always returns 0). With predictNoC constant
-                // across every d, FitTwoParameterModel's grid search would report
-                // whatever d it tries first as "solved" — not a real fit. Most likely
-                // to occur for the earliest seasons of a full historical backfill,
-                // where the Tier1-vs-Tier1 population in that limited window is too
-                // thin for any bucket to reach MinAnchorSampleSize.
-                result.MethodB = new TwoParameterFitResult
-                {
-                    GamesUsed = methodBGames.Count,
-                    ExclusionReason = $"No Curve 1 bucket meets the minimum sample size ({MinAnchorSampleSize}) — cannot fit against an empty control curve"
-                };
-            }
-            else
-            {
-                result.MethodB = FitTwoParameterModel(
-                    methodBGames,
-                    (d, t1, t2) => PredictScoreDeltaSigned(signedAnchorPoints, t1 - d * t2));
-            }
+            result.MethodB = FitTierDiscountModel(methodBGames);
 
             result.ComputedThroughYear = years.Count > 0 ? years.Max() : startYear;
 
@@ -288,14 +245,13 @@ namespace SaturdayPulse.Utilities
         /// every game up through today) — and persists a new row.
         ///
         /// Returns null and does NOT persist if MethodB.ExclusionReason is set — either
-        /// zero cross-tier games in the season-1-and-earlier window, or a Curve 1 too
-        /// thin for any bucket to reach MinAnchorSampleSize (which would otherwise
-        /// silently collapse every prediction to 0 and make the "solved" D meaningless
-        /// — the grid search's first-tested value, not a real fit). Both are expected
-        /// for the first season or two of any full historical backfill (e.g. season
-        /// 1965 has no prior data at all) — persisting a D=0/C=0/RMSE=0 row in either
-        /// case would be indistinguishable from a real computed value rather than "no
-        /// data available yet."
+        /// zero cross-tier games in the season-1-and-earlier window, or (far less
+        /// likely) every candidate D in the grid search producing a degenerate,
+        /// zero-variance fit (see FitTierDiscountModel remarks). The zero-games case is
+        /// expected for the first season or two of any full historical backfill (e.g.
+        /// season 1965 has no prior data at all) — persisting a D=0/K=0/C=0/RMSE=0 row
+        /// in that case would be indistinguishable from a real computed value rather
+        /// than "no data available yet."
         ///
         /// Intended to run BEFORE InitializeSeasonAsync in RunSeasonSetupAsync, per
         /// the project's season-setup ordering. Always inserts when there IS usable
@@ -320,6 +276,7 @@ namespace SaturdayPulse.Utilities
                 ComputedFromStartYear = startYear,
                 ComputedThroughYear = result.ComputedThroughYear,
                 WinDifferentialDiscount = (decimal)result.MethodB.SolvedDiscountCoefficient,
+                PointsPerWinDifferential = (decimal)result.MethodB.SolvedPointsPerWinDifferential,
                 CaliberGapPoints = (decimal)result.MethodB.SolvedCaliberConstant,
                 TypicalPredictionErrorPoints = (decimal)result.MethodB.RmseAtSolvedParameters,
                 GamesUsed = result.MethodB.GamesUsed,
@@ -368,18 +325,19 @@ namespace SaturdayPulse.Utilities
         }
 
         // ══════════════════════════════════════════════════════════════════════════
-        // Two-parameter fit
+        // Tier discount fit
         // ══════════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Fits Predicted_g(D, C) = predictNoC(D, T1_g, T2_g) + C against real per-game
-        /// margins, via bounded grid search over D with the OLS-closed-form-optimal C
-        /// at each D (see class remarks — matching only the population average can't
-        /// pin down two parameters, since C absorbs the mean error for any D).
+        /// Fits Predicted_g(D, K, C) = K * (T1_g - D * T2_g) + C directly against real
+        /// per-game margins — bounded grid search over D, with the OLS-closed-form-
+        /// optimal (K, C) via simple linear regression at each D (see class remarks —
+        /// matching only the population average can't pin down K and C independently
+        /// of D, since a regression's C always absorbs the mean error regardless of D;
+        /// K and C together are what's actually solved for at each candidate D).
         /// </summary>
-        private static TwoParameterFitResult FitTwoParameterModel(
-            List<(double T1, double T2, double ScoreT1, double ScoreT2)> games,
-            Func<double, double, double, double> predictNoC)
+        private static TwoParameterFitResult FitTierDiscountModel(
+            List<(double T1, double T2, double ScoreT1, double ScoreT2)> games)
         {
             var fit = new TwoParameterFitResult { GamesUsed = games.Count };
 
@@ -389,153 +347,106 @@ namespace SaturdayPulse.Utilities
                 return fit;
             }
 
+            var n = games.Count;
             var actualAvgDelta = games.Average(g => g.ScoreT1 - g.ScoreT2);
-            var undiscountedPredictedAvgDelta = games.Average(g => predictNoC(1.0, g.T1, g.T2));
-
             fit.ActualAvgScoreDelta = Math.Round(actualAvgDelta, 4);
-            fit.UndiscountedPredictedAvgScoreDelta = Math.Round(undiscountedPredictedAvgDelta, 4);
-            fit.BaselineError = Math.Round(actualAvgDelta - undiscountedPredictedAvgDelta, 4);
+
+            // Always trivially equal under this model — see field remarks on
+            // TwoParameterFitResult for why these two no longer carry information.
+            fit.UndiscountedPredictedAvgScoreDelta = fit.ActualAvgScoreDelta;
+            fit.BaselineError = 0.0;
+
+            // OLS regression of ScoreDelta against the discounted win-differential
+            // (T1 - D*T2), closed form via the standard sum identities — avoids a
+            // second pass through games at each D. Returns null if Sxx is ~0 (every
+            // game's discounted win-differential collapsed to the same value at this
+            // D — degenerate, no meaningful slope), in which case this D is skipped
+            // by the caller rather than reporting a division-by-zero fit.
+            (double K, double C, double Sse)? FitAtD(double d)
+            {
+                double sumX = 0, sumY = 0, sumXX = 0, sumXY = 0, sumYY = 0;
+                foreach (var g in games)
+                {
+                    var x = g.T1 - d * g.T2;
+                    var y = g.ScoreT1 - g.ScoreT2;
+                    sumX += x; sumY += y; sumXX += x * x; sumXY += x * y; sumYY += y * y;
+                }
+
+                var xbar = sumX / n;
+                var ybar = sumY / n;
+                var sxx = sumXX - n * xbar * xbar;
+                var sxy = sumXY - n * xbar * ybar;
+                var syy = sumYY - n * ybar * ybar;
+
+                if (sxx < 1e-9) return null; // degenerate at this D — see remarks above
+
+                var k = sxy / sxx;
+                var c = ybar - k * xbar;
+                var sse = syy - k * sxy; // standard identity: SSE = Syy - K*Sxy
+
+                return (k, c, sse);
+            }
+
+            // RmseAtNoDiscount: D=1 (Tier 2's record taken at face value, K/C still
+            // OLS-fit) — the real methodology check, not the old curve-based
+            // "predict with C=0" baseline (see class remarks — that comparison had no
+            // clean equivalent once K itself has to be fit rather than looked up).
+            var atNoDiscount = FitAtD(1.0);
+            fit.RmseAtNoDiscount = atNoDiscount.HasValue
+                ? Math.Round(Math.Sqrt(atNoDiscount.Value.Sse / n), 4)
+                : (double?)null;
 
             var bestD = SearchMin;
+            var bestK = 0.0;
             var bestC = 0.0;
             var bestSse = double.MaxValue;
-            var n = games.Count;
 
             for (var d = SearchMin; d <= SearchMax; d += SearchStep)
             {
-                double sum = 0.0, sumSq = 0.0;
-                foreach (var g in games)
-                {
-                    var predictedNoC = predictNoC(d, g.T1, g.T2);
-                    var residual = (g.ScoreT1 - g.ScoreT2) - predictedNoC;
-                    sum += residual;
-                    sumSq += residual * residual;
-                }
+                var result = FitAtD(d);
+                if (result == null) continue;
 
-                var c = sum / n;
-                var sse = sumSq - (sum * sum) / n; // == Σ(residual - c)² — standard identity, avoids a second pass
-
-                if (sse < bestSse)
+                if (result.Value.Sse < bestSse)
                 {
-                    bestSse = sse;
+                    bestSse = result.Value.Sse;
                     bestD = d;
-                    bestC = c;
+                    bestK = result.Value.K;
+                    bestC = result.Value.C;
                 }
             }
 
+            if (bestSse == double.MaxValue)
+            {
+                // Every D in the search range was degenerate (Sxx ~0) — would need a
+                // genuinely pathological dataset (e.g. every game's T2 = T1, so T1-D*T2
+                // is constant across every D). Not expected in practice; surfaced
+                // explicitly rather than persisting a meaningless D=SearchMin/K=0/C=0 row.
+                fit.ExclusionReason = "No candidate D produced a non-degenerate fit (every discounted win-differential was constant across the game population)";
+                return fit;
+            }
+
             fit.SolvedDiscountCoefficient = Math.Round(bestD, 4);
+            fit.SolvedPointsPerWinDifferential = Math.Round(bestK, 4);
             fit.SolvedCaliberConstant = Math.Round(bestC, 4);
             fit.RmseAtSolvedParameters = Math.Round(Math.Sqrt(bestSse / n), 4);
             fit.SseAtSolvedParameters = bestSse; // raw, unrounded — diagnostic
 
             foreach (var d in CheckpointValues)
             {
-                double sum = 0.0, sumSq = 0.0;
-                foreach (var g in games)
-                {
-                    var predictedNoC = predictNoC(d, g.T1, g.T2);
-                    var residual = (g.ScoreT1 - g.ScoreT2) - predictedNoC;
-                    sum += residual;
-                    sumSq += residual * residual;
-                }
-
-                var c = sum / n;
-                var sse = sumSq - (sum * sum) / n;
+                var result = FitAtD(d);
+                if (result == null) continue; // degenerate at this checkpoint — omitted rather than faked
 
                 fit.Checkpoints.Add(new TwoParameterCheckpoint
                 {
                     D = d,
-                    PredictedAvgScoreDelta = Math.Round(actualAvgDelta - sum / n, 4),
-                    OptimalCaliberConstant = Math.Round(c, 4),
-                    RmseAtThisD = Math.Round(Math.Sqrt(sse / n), 4),
-                    SseAtThisD = sse // raw, unrounded — diagnostic
+                    OptimalPointsPerWinDifferential = Math.Round(result.Value.K, 4),
+                    OptimalCaliberConstant = Math.Round(result.Value.C, 4),
+                    RmseAtThisD = Math.Round(Math.Sqrt(result.Value.Sse / n), 4),
+                    SseAtThisD = result.Value.Sse // raw, unrounded — diagnostic
                 });
             }
 
             return fit;
-        }
-
-        // ══════════════════════════════════════════════════════════════════════════
-        // Curve 1
-        // ══════════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Builds a continuous, odd-symmetric ("mirrored") version of Curve 1's anchor
-        /// points.
-        ///
-        /// Curve 1 is built from ABSOLUTE values (|WinDiffA-WinDiffB|, |ScoreA-ScoreB|)
-        /// and has no direction. An earlier approach computed a magnitude from Curve 1
-        /// and reapplied Math.Sign(signedWinDiff) as a separate step — which created a
-        /// real discontinuity: for two teams with the SAME NONZERO win differential (a
-        /// tied record, e.g. 3-2 vs 3-2), signedWinDiff = WinDiffT1 - D*WinDiffT2 hits
-        /// exactly zero ONLY at D=1 — and since that's an exactly-representable ratio
-        /// for small integers, EVERY such tied-record game shares that identical
-        /// threshold, producing an artificial pileup at D=1.
-        ///
-        /// This mirrors every anchor point (w, m) with w > 0 to (-w, -m), and forces
-        /// the origin itself to (0, 0) — a win differential of exactly zero predicts a
-        /// SIGNED margin of zero on average (no directional information), which
-        /// necessarily discards Curve 1's own w=0 data point (a real, non-zero AVERAGE
-        /// MAGNITUDE of blowout even between tied-record teams), since no continuous
-        /// odd function can encode both "no directional signal" and "real nonzero
-        /// magnitude" at the same point.
-        /// </summary>
-        private static List<TierCurvePoint> BuildSignedAnchorPoints(List<TierCurvePoint> anchorPoints)
-        {
-            var signed = new List<TierCurvePoint>
-            {
-                new() { WinDifferential = 0, AvgScoreDelta = 0.0, SampleSize = 0 }
-            };
-
-            foreach (var p in anchorPoints)
-            {
-                if (p.WinDifferential == 0) continue; // origin forced to (0,0) above — see remarks
-
-                signed.Add(new TierCurvePoint
-                {
-                    WinDifferential = p.WinDifferential,
-                    AvgScoreDelta = p.AvgScoreDelta,
-                    SampleSize = p.SampleSize
-                });
-                signed.Add(new TierCurvePoint
-                {
-                    WinDifferential = -p.WinDifferential,
-                    AvgScoreDelta = -p.AvgScoreDelta,
-                    SampleSize = p.SampleSize
-                });
-            }
-
-            return signed.OrderBy(p => p.WinDifferential).ToList();
-        }
-
-        /// <summary>
-        /// Predicts a signed score delta by direct linear interpolation over a
-        /// continuous, odd-symmetric signed curve (see BuildSignedAnchorPoints) — no
-        /// separate magnitude+sign step, so no discontinuity anywhere, including at
-        /// zero. Clamps to the farthest endpoint's value (no extrapolation) outside
-        /// the observed range.
-        /// </summary>
-        private static double PredictScoreDeltaSigned(List<TierCurvePoint> signedAnchorPoints, double signedWinDiff)
-        {
-            if (signedAnchorPoints.Count == 0) return 0.0;
-            if (signedAnchorPoints.Count == 1) return signedAnchorPoints[0].AvgScoreDelta;
-
-            if (signedWinDiff <= signedAnchorPoints[0].WinDifferential) return signedAnchorPoints[0].AvgScoreDelta;
-            if (signedWinDiff >= signedAnchorPoints[^1].WinDifferential) return signedAnchorPoints[^1].AvgScoreDelta;
-
-            for (var i = 0; i < signedAnchorPoints.Count - 1; i++)
-            {
-                var a = signedAnchorPoints[i];
-                var b = signedAnchorPoints[i + 1];
-
-                if (signedWinDiff < a.WinDifferential || signedWinDiff > b.WinDifferential) continue;
-                if (b.WinDifferential == a.WinDifferential) return a.AvgScoreDelta;
-
-                var t = (signedWinDiff - a.WinDifferential) / (double)(b.WinDifferential - a.WinDifferential);
-                return a.AvgScoreDelta + t * (b.AvgScoreDelta - a.AvgScoreDelta);
-            }
-
-            return signedAnchorPoints[^1].AvgScoreDelta; // unreachable given the range checks above
         }
     }
 
@@ -543,7 +454,13 @@ namespace SaturdayPulse.Utilities
     // DTOs
     // ══════════════════════════════════════════════════════════════════════════════
 
-    /// <summary>One point on Curve 1 (Tier 1 vs Tier 1 baseline).</summary>
+    /// <summary>
+    /// One point on the old Curve 1 (Tier 1 vs Tier 1 baseline) interpolation table.
+    /// No longer built or consumed anywhere in this file as of the 3-parameter linear
+    /// rewrite (see class remarks) — left defined only because it's public and this
+    /// codebase hasn't confirmed there's no other consumer. If nothing else in the
+    /// solution references this (check Find All References), safe to delete.
+    /// </summary>
     public class TierCurvePoint
     {
         public int WinDifferential { get; set; }
@@ -554,33 +471,63 @@ namespace SaturdayPulse.Utilities
     public class TwoParameterFitResult
     {
         public double ActualAvgScoreDelta { get; set; }
+
+        /// <summary>
+        /// No longer meaningful as a distinct diagnostic under the 3-parameter linear
+        /// fit — by OLS construction, the fitted mean always exactly equals the actual
+        /// mean at any D once (K, C) are jointly solved, so this is always equal to
+        /// ActualAvgScoreDelta and BaselineError is always 0. Left in place rather than
+        /// removed since the old curve-based model used these fields for a genuine
+        /// "how big is the caliber gap before any correction" check that doesn't
+        /// translate to this model. See RmseAtNoDiscount for the model's actual
+        /// equivalent methodology check (does discounting help at all, vs D=1).
+        /// </summary>
         public double UndiscountedPredictedAvgScoreDelta { get; set; }
 
-        /// <summary>mean(ActualAvgScoreDelta) - mean(UndiscountedPredictedAvgScoreDelta)
-        /// at D=1, C=0.</summary>
+        /// <summary>Always 0 under this model — see UndiscountedPredictedAvgScoreDelta remarks.</summary>
         public double BaselineError { get; set; }
+
+        /// <summary>
+        /// RMSE at D=1 (Tier 2's win differential taken at face value — no discount —
+        /// with K and C still OLS-fit). Compare against RmseAtSolvedParameters: the gap
+        /// between the two is the actual answer to "does discounting Tier 2's record
+        /// help the fit at all." Null only in the degenerate case where D=1 itself
+        /// produced a zero-variance discounted win-differential across every game
+        /// (see FitTierDiscountModel remarks) — not expected in practice.
+        /// </summary>
+        public double? RmseAtNoDiscount { get; set; }
 
         /// <summary>Discount applied to Tier 2's win differential before prediction.</summary>
         public double SolvedDiscountCoefficient { get; set; }
+
+        /// <summary>
+        /// Points per unit of discounted win-differential (WinDiffT1 - D*WinDiffT2) —
+        /// what actually converts the discounted record gap into points. Solved
+        /// jointly with SolvedCaliberConstant via closed-form linear regression at the
+        /// solved D.
+        /// </summary>
+        public double SolvedPointsPerWinDifferential { get; set; }
 
         /// <summary>Flat additive caliber-gap term — the portion of the real margin
         /// that does NOT scale with either team's discounted input at all.</summary>
         public double SolvedCaliberConstant { get; set; }
 
-        /// <summary>Root-mean-squared per-game error at the solved (D, C) — the actual
-        /// fit-quality metric, since the mean error is ~0 by construction regardless
-        /// of D once C is included.</summary>
+        /// <summary>Root-mean-squared per-game error at the solved (D, K, C) — the
+        /// actual fit-quality metric, since the mean error is ~0 by construction
+        /// regardless of D once K and C are jointly fit.</summary>
         public double RmseAtSolvedParameters { get; set; }
 
-        /// <summary>Raw, unrounded SSE at the solved (D, C) — diagnostic, compare
+        /// <summary>Raw, unrounded SSE at the solved (D, K, C) — diagnostic, compare
         /// directly against Checkpoints[].SseAtThisD with no Sqrt/Round in between.</summary>
         public double SseAtSolvedParameters { get; set; }
         public int GamesUsed { get; set; }
         public string? ExclusionReason { get; set; }
 
         /// <summary>
-        /// The (C, RMSE) tradeoff at a handful of fixed D values — lets you see the
-        /// actual shape of the fit surface rather than trusting the solved pair blind.
+        /// The (K, C, RMSE) tradeoff at a handful of fixed D values — lets you see the
+        /// actual shape of the fit surface rather than trusting the solved triple blind.
+        /// A given D is simply omitted here if it produced a degenerate (zero-variance)
+        /// fit — see FitTierDiscountModel remarks.
         /// </summary>
         public List<TwoParameterCheckpoint> Checkpoints { get; set; } = new();
     }
@@ -588,10 +535,7 @@ namespace SaturdayPulse.Utilities
     public class TwoParameterCheckpoint
     {
         public double D { get; set; }
-
-        /// <summary>D-only (C=0) predicted average. ActualAvgScoreDelta minus this
-        /// should equal OptimalCaliberConstant at this same D, as a consistency check.</summary>
-        public double PredictedAvgScoreDelta { get; set; }
+        public double OptimalPointsPerWinDifferential { get; set; }
         public double OptimalCaliberConstant { get; set; }
         public double RmseAtThisD { get; set; }
 

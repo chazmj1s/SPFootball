@@ -11,10 +11,12 @@ namespace SaturdayPulse.Services
     /// real games, and returns predicted spread and O/U side by side per game.
     /// Never persists anything — for manual/CSV review while calibrating K.
     ///
-    /// Reuses GamePredictionService.BuildProjection (unchanged, already in production)
-    /// to compute spread/total from each method's GamePrediction output, rather than
-    /// reimplementing that math — keeps the comparison honest against exactly what
-    /// production would have written to Projections.
+    /// Reuses GamePredictionService.BuildProjection to compute spread/total from each
+    /// method's GamePrediction output, rather than reimplementing that math — keeps
+    /// the comparison honest against exactly what production would have written to
+    /// Projections, including the tier discount adjustment (applied identically to
+    /// both prodProjection and expProjection below, so it cancels out of
+    /// SpreadDelta/TotalDelta and doesn't affect what this diagnostic measures).
     ///
     /// NEW FILE — part of the K=4 inertia-blending experimental comparison path.
     /// </summary>
@@ -24,17 +26,20 @@ namespace SaturdayPulse.Services
         private readonly ExperimentalInertiaRatingService _experimental;
         private readonly IUnitOfWork _uow;
         private readonly NCAAContext _context;
+        private readonly ConferenceTierService _tierService;
 
         public RatingComparisonService(
             GamePredictionService production,
             ExperimentalInertiaRatingService experimental,
             IUnitOfWork uow,
-            NCAAContext context)
+            NCAAContext context,
+            ConferenceTierService tierService)
         {
             _production = production;
             _experimental = experimental;
             _uow = uow;
             _context = context;
+            _tierService = tierService;
         }
 
         /// <summary>
@@ -56,6 +61,27 @@ namespace SaturdayPulse.Services
             var allYearGames = await _uow.Games.GetByYearAsync(year, token);
             var rows = new List<RatingComparisonRow>();
 
+            // Tier discount inputs — see GamePredictionService.BuildProjection remarks.
+            // Year-scoped (not week-scoped), loaded once here rather than per week,
+            // matching WeeklyRankingsService's convention. Same tier/coefficient
+            // values apply to BOTH prodProjection and expProjection below — an
+            // identical additive term on both sides, so it cancels out of
+            // SpreadDelta/TotalDelta and does not affect what this diagnostic
+            // actually measures (rating-method disagreement), while keeping
+            // ProductionSpread/ExperimentalSpread individually accurate to what
+            // production would really write.
+            var fbsIds = teamsDict.Values
+                .Where(t => string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.TeamId)
+                .ToHashSet();
+            var tierByTeamId = await _tierService.GetConfDataBatchAsync(fbsIds, year, token);
+            string TierFor(int teamId, string teamName) =>
+                tierByTeamId.TryGetValue(teamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, teamName);
+            var tierDiscountCoefficient = await _uow.TierDiscountCoefficients
+                .GetLatestBySeasonAsync(year, token);
+
             foreach (var week in weeks)
             {
                 var weekGames = allYearGames
@@ -66,6 +92,12 @@ namespace SaturdayPulse.Services
                     .ToList();
 
                 if (weekGames.Count == 0) continue;
+
+                // Prior-week Wins/Losses — same "at kickoff" snapshot convention
+                // TierDiscountCalculator and WeeklyRankingsService both use.
+                var priorWeek = Math.Max(week - 1, 0);
+                var priorRankings = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, priorWeek, token);
+                var priorByTeamId = priorRankings.ToDictionary(wr => wr.TeamID);
 
                 var matchupRequests = weekGames.Select(g => new MatchupRequest
                 {
@@ -102,10 +134,19 @@ namespace SaturdayPulse.Services
                     // (e.g. FCS opponent, see ExperimentalInertiaRatingService note).
                     if (prodPred == null || expPred == null) continue;
 
+                    var homeWinDiff = priorByTeamId.TryGetValue(g.HomeId.Value, out var hpr)
+                        ? hpr.Wins - hpr.Losses : 0;
+                    var awayWinDiff = priorByTeamId.TryGetValue(g.AwayId.Value, out var apr)
+                        ? apr.Wins - apr.Losses : 0;
+                    var homeTier = TierFor(homeTeam.TeamId, homeTeam.TeamName);
+                    var awayTier = TierFor(awayTeam.TeamId, awayTeam.TeamName);
+
                     var prodProjection = GamePredictionService.BuildProjection(
-                        prodPred, g.GameId, year, g.Week, g.HomeId.Value, g.AwayId.Value);
+                        prodPred, g.GameId, year, g.Week, g.HomeId.Value, g.AwayId.Value,
+                        homeWinDiff, awayWinDiff, homeTier, awayTier, tierDiscountCoefficient);
                     var expProjection = GamePredictionService.BuildProjection(
-                        expPred, g.GameId, year, g.Week, g.HomeId.Value, g.AwayId.Value);
+                        expPred, g.GameId, year, g.Week, g.HomeId.Value, g.AwayId.Value,
+                        homeWinDiff, awayWinDiff, homeTier, awayTier, tierDiscountCoefficient);
 
                     expRatings.TryGetValue(g.HomeId.Value, out var expHomeRecord);
                     expRatings.TryGetValue(g.AwayId.Value, out var expAwayRecord);

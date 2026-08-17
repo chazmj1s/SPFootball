@@ -52,6 +52,10 @@ namespace SaturdayPulse.Models
         [Column("CaliberGapPoints", TypeName = "decimal(10,4)")]
         public decimal CaliberGapPoints { get; set; }
 
+
+        [Column("PointsPerWinDifferential", TypeName = "decimal(10,4)")]
+        public decimal PointsPerWinDifferential { get; set; }
+
         /// <summary>
         /// Root-mean-squared per-game prediction error, in points, at
         /// (WinDifferentialDiscount, CaliberGapPoints) — how far off a typical single

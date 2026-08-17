@@ -22,7 +22,7 @@ namespace SaturdayPulse.Services
     /// </summary>
     public class SharedNavigationStateService : INotifyPropertyChanged
     {
-        private int    _selectedYear       = 2025;
+        private int    _selectedYear       = 2026;
         private int    _selectedWeek       = 1;
         private string _selectedConference = "All";
         private bool   _showFavoritesFirst = Preferences.Get("ShowFavoritesFirst", false);
