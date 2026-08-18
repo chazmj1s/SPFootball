@@ -339,10 +339,40 @@ namespace SaturdayPulse.Services
 
         // ── Projection builder ────────────────────────────────────────────────────
 
+        /// <summary>
+        /// homeWinDiff/awayWinDiff: each team's real Wins - Losses as of the same
+        /// pregame snapshot CalculatePrediction used for `prediction` — NOT derived
+        /// from prediction itself. Caller's responsibility to source these from the
+        /// same prior-week WeeklyRankings snapshot the rating pipeline used, same
+        /// convention TierDiscountCalculator itself uses.
+        ///
+        /// homeTier/awayTier: "P4"/"G6"/"FCS"/"Other" from ConferenceTierService.
+        /// Only a strict P4-vs-G6 pair triggers the tier discount below — FCS/Other on
+        /// either side, or a same-tier P4-vs-P4/G6-vs-G6 matchup, leaves the
+        /// prediction untouched.
+        ///
+        /// tierDiscountCoefficient: the season's row from
+        /// TierDiscountCoefficients.GetLatestBySeasonAsync, or null if none exists yet
+        /// for this season (e.g. season setup hasn't run the compute step) — treated
+        /// the same as a same-tier matchup, no adjustment applied.
+        ///
+        /// Tier discount, when it applies: AdjustedMargin = K * (WinDiffT1 - D *
+        /// WinDiffT2) + C, toward the P4 side (see TierDiscountCoefficient remarks).
+        /// This is a downstream adjustment on top of CalculatePrediction's output —
+        /// AvgScoreDifferentialService/CalculatePrediction itself is NOT touched, per
+        /// the project's tier-agnostic constraint on that service. Split across both
+        /// sides' raw scores (half added to T1, half subtracted from T2) so the score
+        /// gap moves by the full adjustment while PredictedTotal is unaffected; the
+        /// full adjustment is applied directly to the spread, keeping both
+        /// representations consistent with each other.
+        /// </summary>
         public static Projection BuildProjection(
             GamePrediction prediction,
             int gameId, int year, int week,
-            int homeTeamId, int awayTeamId)
+            int homeTeamId, int awayTeamId,
+            int homeWinDiff, int awayWinDiff,
+            string homeTier, string awayTier,
+            TierDiscountCoefficient? tierDiscountCoefficient)
         {
             // Team-perspective → home/away mapping. Location is 'H' for a normal
             // home game and 'N' for neutral site — TeamName is always the actual
@@ -360,6 +390,32 @@ namespace SaturdayPulse.Services
                 ? prediction.PredictedOpponentScore
                 : prediction.PredictedTeamScore;
 
+            var rawSpread = teamIsHomeSide ? prediction.ExpectedMargin : -prediction.ExpectedMargin;
+
+            // ── Tier discount — downstream adjustment only, see remarks above ──────
+            bool homeIsP4 = homeTier == "P4", awayIsP4 = awayTier == "P4";
+            bool homeIsG6 = homeTier == "G6", awayIsG6 = awayTier == "G6";
+            bool isCrossTierP4VsG6 = (homeIsP4 && awayIsG6) || (homeIsG6 && awayIsP4);
+
+            if (isCrossTierP4VsG6 && tierDiscountCoefficient != null)
+            {
+                var d = (double)tierDiscountCoefficient.WinDifferentialDiscount;
+                var k = (double)tierDiscountCoefficient.PointsPerWinDifferential;
+                var c = (double)tierDiscountCoefficient.CaliberGapPoints;
+
+                bool homeIsT1 = homeIsP4;
+                double winDiffT1 = homeIsT1 ? homeWinDiff : awayWinDiff;
+                double winDiffT2 = homeIsT1 ? awayWinDiff : homeWinDiff;
+
+                var adjustedMargin = k * (winDiffT1 - d * winDiffT2) + c; // toward T1
+
+                var homeSignedAdjustment = homeIsT1 ? adjustedMargin : -adjustedMargin;
+
+                homePointsRaw += homeSignedAdjustment / 2.0;
+                awayPointsRaw -= homeSignedAdjustment / 2.0;
+                rawSpread     += homeSignedAdjustment;
+            }
+
             var homePoints = (int)Math.Round(homePointsRaw, MidpointRounding.AwayFromZero);
             var awayPoints = (int)Math.Round(awayPointsRaw, MidpointRounding.AwayFromZero);
 
@@ -371,6 +427,14 @@ namespace SaturdayPulse.Services
             // WinProbability rather than rounded scores, and already this
             // codebase's standard for projected-record/standings rollups (see
             // GamePrediction.IsTeamProjectedWinner remarks).
+            //
+            // NOTE: IsTeamProjectedWinner reflects CalculatePrediction's own
+            // win probability and is NOT re-derived from the tier discount above —
+            // a tie-break here can very rarely disagree with the tier-adjusted
+            // score's own sign in a near-pick-'em cross-tier game. Acceptable: this
+            // path only fires on an exact integer collision after rounding, an
+            // already-rare edge case, and IsTeamProjectedWinner remains the
+            // project's single documented source of truth for "who wins."
             if (homePoints == awayPoints)
             {
                 bool teamIsHome = teamIsHomeSide;
@@ -400,14 +464,14 @@ namespace SaturdayPulse.Services
             // value (RatingCalculator.GetSmoothedExpectedMargin against
             // AvgScoreDifferential.AverageMargin, then HFA/rivalry-adjusted),
             // team-perspective like WinProbability, flipped to home/away the
-            // same way homeWinProb is right above. Also deliberately NOT
+            // same way homeWinProb is right above, PLUS the tier discount
+            // adjustment applied above (rawSpread). Also deliberately NOT
             // affected by the tie-break above: that's purely a display-integer
             // artifact (two distinct continuous scores colliding on the same
             // rounded integer), not a real ~0 differential — ExpectedMargin
             // itself is untouched by it and rounds to 0.0 correctly in a
             // genuine pick-'em case.
-            var rawSpread = teamIsHomeSide ? prediction.ExpectedMargin : -prediction.ExpectedMargin;
-            var spread    = Math.Round(rawSpread, 1);
+            var spread = Math.Round(rawSpread, 1);
 
             return new Projection
             {
