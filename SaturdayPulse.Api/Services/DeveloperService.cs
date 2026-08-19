@@ -539,9 +539,15 @@ namespace SaturdayPulse.Services
             var priorYearRecords = await _uow.TeamRecords.GetByYearAsync(year - 1, token);
             var priorYearTeamsDict = await _uow.Teams.GetByTeamIdsAsync(
                 priorYearRecords.Select(r => r.TeamID).ToList(), token);
-            var referenceLeagueStats = RollingAverageService.BuildLeagueYearStats(
-                priorYearRecords, priorYearTeamsDict);
+            var referenceLeagueStats = RollingAverageService.BuildLeagueYearStats(priorYearRecords, priorYearTeamsDict);
+            
             referenceLeagueStats.TryGetValue((short)(year - 1), out var refStats);
+            _logger.LogWarning(
+                "refStats lookup for {Year}: found={Found}, keys=[{Keys}], mean={Mean}, stdDev={StdDev}, priorYearRecords.Count={Count}",
+                year - 1, referenceLeagueStats.ContainsKey((short)(year - 1)),
+                string.Join(",", referenceLeagueStats.Keys), refStats.Mean, refStats.StdDev,
+                priorYearRecords.Count);
+
             // refStats defaults to (Mean: 0.0, StdDev: 0.0) if year-1 has no FBS
             // PowerRating data for some reason — RatingScaling.FromUnitScale treats
             // stdDev<=0 by returning `mean` (0.0) for every team: degenerate but safe

@@ -18,6 +18,7 @@ namespace SaturdayPulse.Services
     ///   DivisionWeight          — FCS 0.25 / FBS 1.0
     ///   DampenZScore            — sign * Log(1 + |z|)
     ///   ComputeGameZScore       — full per-game Z-score pipeline
+    ///   ComputeRanking          — WinPct × (1 + PowerRating), single source of truth
     ///   GetDivision             — Sun Belt East/West
     ///   ConferenceDisplayOrder  — standard sort order for display
     ///
@@ -47,6 +48,16 @@ namespace SaturdayPulse.Services
     ///   i.e. it feeds the live weekly rating computation, not just prediction
     ///   display. Changing its behavior belongs with the already-planned calc-engine
     ///   refactor (WeeklyRankingsService/RollingAverageService/etc.), not this pass.
+    ///
+    /// ── ADDED — ComputeRanking, single source of truth ───────────────────────────
+    ///   Previously WeeklyRankingsService inlined `winPct × (1 + PowerRating)`
+    ///   directly, and ExperimentalInertiaRatingService inlined its own separate
+    ///   0.5m * (1 + PowerRating) estimate as a fallback. Both are now expected to
+    ///   call this method instead, so there's exactly one implementation of the
+    ///   Ranking formula in the codebase. Callers are responsible for deciding
+    ///   which wins/losses to pass in (actual-only vs. full-season actual+projected
+    ///   — see WeeklyRankingsService Step 10 remarks for why full-season is now the
+    ///   correct choice there).
     /// </summary>
     public static class RatingCalculator
     {
@@ -110,6 +121,29 @@ namespace SaturdayPulse.Services
             if (prior != null && prior.Ranking > 0m) return (decimal)prior.Ranking;
             if (prior?.PowerRating != null) return 0.5m * (1m + prior.PowerRating.Value);
             return seedByTeamId.TryGetValue(teamId, out var seed) ? seed : 0m;
+        }
+
+        // ── Ranking — single source of truth ─────────────────────────────────────
+
+        /// <summary>
+        /// Ranking = WinPct × (1 + PowerRating). Returns null when wins+losses == 0
+        /// (no record to compute a WinPct from — e.g. week 0 preseason, where
+        /// Ranking is intentionally left undefined per Charlie).
+        ///
+        /// Callers decide what "wins"/"losses" means for their context — the
+        /// production path (WeeklyRankingsService) passes the full-season
+        /// actual+projected rollup so Ranking reflects the whole season, not just
+        /// games played/locked through the current week (see WeeklyRankingsService
+        /// Step 10 remarks). This method itself is agnostic to that choice; it just
+        /// applies the formula once, consistently, wherever it's called.
+        /// </summary>
+        public static decimal? ComputeRanking(int wins, int losses, decimal powerRating)
+        {
+            var total = wins + losses;
+            if (total == 0) return null;
+
+            var winPct = (decimal)wins / total;
+            return Math.Round(winPct * (1 + powerRating), 4);
         }
 
         // ── Rivalry variance (metrics pipeline — UNTOUCHED) ─────────────────────────

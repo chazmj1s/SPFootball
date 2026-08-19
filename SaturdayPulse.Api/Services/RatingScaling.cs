@@ -7,9 +7,6 @@ namespace SaturdayPulse.Services
     /// a private helper duplicated in RollingAverageService (NormalizePowerRating /
     /// ToUnitScale) — that method can optionally be changed to delegate here, but this
     /// file does not modify RollingAverageService itself.
-    ///
-    /// NEW FILE — part of the K=4 inertia-blending experimental comparison path.
-    /// Not referenced by any production rating path.
     /// </summary>
     public static class RatingScaling
     {
