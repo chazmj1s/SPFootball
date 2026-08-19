@@ -428,7 +428,7 @@ namespace SaturdayPulse.Services
                 };
             }).ToList();
 
-            // ── 6. Full-season opponent set for SOS ────────────────────────────────
+            // ── 6. Full-season opponent set for SOS, and full-season W/L for Ranking ──
             //
             // BaseSOS/SubSOS now reflect the team's FULL schedule, not just games
             // played/locked through this week — consistent with how projected
@@ -444,10 +444,37 @@ namespace SaturdayPulse.Services
             // Deliberately NOT reused for rawStats/Z-scores above — those grade
             // actual, resolved performance and must stay "through week" (grading a
             // team's Z-score against its own not-yet-played, still-projected games
-            // would be circular). Only opponent-strength/SOS widens to the full
-            // schedule; Wins/Losses/PointsFor/PointsAgainst/OffensiveZScore/
-            // DefensiveZScore below are untouched.
+            // would be circular). Opponent-strength/SOS and Ranking's WinPct widen
+            // to the full schedule; Wins/Losses/PointsFor/PointsAgainst/
+            // OffensiveZScore/DefensiveZScore below are untouched — those columns
+            // still grade actual-to-date performance only.
             var fullSeasonGames = await _uow.ResolvedGameResults.GetByYearAsync(year, token);
+
+            // Full-season Win/Loss rollup — feeds Ranking's WinPct (Step 10) so
+            // Ranking reflects the whole season (actual + projected), same as
+            // CombinedSOS above. A real result always wins over a Projection once
+            // played (ResolvedGameResults' own resolution), so this phases from
+            // mostly-projected to mostly-actual naturally as the season plays out
+            // — no explicit blend weight needed, same reasoning as BaseSOS/SubSOS.
+            var fullSeasonRecord = fbsTeams.ToDictionary(t => t.TeamId, _ => new int[2]); // [wins, losses]
+
+            foreach (var g in fullSeasonGames)
+            {
+                var homeId   = g.HomeId ?? 0;
+                var awayId   = g.AwayId ?? 0;
+                var homePts  = g.HomePoints;
+                var awayPts  = g.AwayPoints;
+                bool homeWon = homePts >= awayPts;
+
+                if (fullSeasonRecord.TryGetValue(homeId, out var hfs))
+                {
+                    if (homeWon) hfs[0]++; else hfs[1]++;
+                }
+                if (fullSeasonRecord.TryGetValue(awayId, out var afs))
+                {
+                    if (!homeWon) afs[0]++; else afs[1]++;
+                }
+            }
 
             var sosParticipants = fullSeasonGames
                 .Where(g => fbsIds.Contains(g.HomeId ?? 0) || fbsIds.Contains(g.AwayId ?? 0))
@@ -562,15 +589,22 @@ namespace SaturdayPulse.Services
             //
             // This also aligns with TeamMetricsService.CalculateRankings, which
             // already uses this formula.
+            //
+            // FULL-SEASON WinPct (added) — WinPct now comes from fullSeasonRecord
+            // (Step 6 above: actual results through this week, blended with
+            // locked Projections for the remainder of the season) instead of
+            // winsLookup/lossesLookup (actual-through-week only). At week 1, a
+            // team's WinPct previously reflected a single game; it now reflects
+            // the full projected season, phasing naturally toward all-actual as
+            // real games accumulate — same resolution CombinedSOS already uses.
+            // Delegates to RatingCalculator.ComputeRanking so WeeklyRankingsService
+            // and ExperimentalInertiaRatingService share one implementation of the
+            // Ranking formula rather than each inlining their own.
             var rankings = fbsTeams.ToDictionary(t => t.TeamId, t =>
             {
-                var wins   = winsLookup.GetValueOrDefault(t.TeamId, 0);
-                var losses = lossesLookup.GetValueOrDefault(t.TeamId, 0);
-                var total  = wins + losses;
-                if (total == 0) return (decimal?)null;
-                var winPct = (decimal)wins / total;
+                var fs     = fullSeasonRecord.GetValueOrDefault(t.TeamId, new int[2]);
                 var pr     = (decimal)powerRatings.GetValueOrDefault(t.TeamId, 0.0);
-                return (decimal?)Math.Round(winPct * (1 + pr), 4);
+                return RatingCalculator.ComputeRanking(fs[0], fs[1], pr);
             });
 
             // ── 11. Overall and tier ranks ────────────────────────────────────────

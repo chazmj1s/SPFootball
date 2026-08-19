@@ -105,24 +105,39 @@ namespace SaturdayPulse.AdminBlazor.Components.Pages
                         },
                     ]
                 },
-                new RebuildTier
-                {
-                    Label = "Rankings",
-                    Ops =
-                    [
-                        new RebuildOp
-                        {
-                            Key = "initSeasons", Label = "Backfill Initialize Seasons", Year = y, EstimateMinutes = 5,
-                            StreamCall = (year, _, ct) => Api.BackfillInitializeSeasonsStreamAsync(year, ct)
-                        },
-                        new RebuildOp
-                        {
-                            Key = "weeklyRankings", Label = "Backfill Weekly Rankings", Year = y, EstimateMinutes = 40,
-                            StreamCall = (year, _, ct) => Api.BackfillWeeklyRankingsStreamAsync(year, ct)
-                        },
-                    ]
-                },
-                new RebuildTier
+new RebuildTier
+{
+    Label = "Rankings",
+    Ops =
+    [
+        new RebuildOp
+        {
+            // Real dependency is on Backfill Weekly Rankings below, not Initialize
+            // Seasons — WeeklyRankingsService.ComputeAndSaveAsync's BuildProjection
+            // step is the only consumer of TierDiscountCoefficients. InitializeSeason
+            // doesn't build any Projection rows, so it has no dependency on this at
+            // all (confirmed by reading the full method — no reference anywhere).
+            // Placed first in the tier anyway, since it must precede Weekly Rankings
+            // and doing so ahead of both is simplest.
+            Key = "tierDiscount", Label = "Backfill Tier Discount Coefficients", Year = y, EstimateMinutes = 2,
+            SingleCall = async (year, ct) =>
+            {
+                var res = await Api.ComputeTierDiscountCoefficientsBulkAsync(year, ct: ct);
+                return res.TryGetProperty("message", out var m) ? m.GetString() ?? "done" : "done";
+            }
+        },
+        new RebuildOp
+        {
+            Key = "initSeasons", Label = "Backfill Initialize Seasons", Year = y, EstimateMinutes = 5,
+            StreamCall = (year, _, ct) => Api.BackfillInitializeSeasonsStreamAsync(year, ct)
+        },
+        new RebuildOp
+        {
+            Key = "weeklyRankings", Label = "Backfill Weekly Rankings", Year = y, EstimateMinutes = 40,
+            StreamCall = (year, _, ct) => Api.BackfillWeeklyRankingsStreamAsync(year, ct)
+        },
+    ]
+},                new RebuildTier
                 {
                     Label = "Analytics",
                     Ops =

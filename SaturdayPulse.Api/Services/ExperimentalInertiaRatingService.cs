@@ -23,6 +23,29 @@ namespace SaturdayPulse.Services
     /// service's output is later run through it — avoids double-applying ZRoster.
     ///
     /// NEW FILE — part of the K=4 inertia-blending experimental comparison path.
+    ///
+    /// ── UPDATED — Ranking now via RatingCalculator.ComputeRanking, full-season ───
+    ///   Previously this method inlined its own two-tier Ranking estimate: real
+    ///   live.Ranking when available, else a rough 0.5m * (1 + blendedPowerRating)
+    ///   placeholder untethered to any actual win/loss record. That placeholder
+    ///   was also inconsistent with WeeklyRankingsService's own Ranking formula
+    ///   living in a completely separate inline implementation.
+    ///
+    ///   Both problems are fixed together: this method now fetches the same
+    ///   full-season (actual + projected) ResolvedGameResults WeeklyRankingsService
+    ///   uses for its own Ranking calculation (Step 6/10 there), and calls the same
+    ///   RatingCalculator.ComputeRanking(wins, losses, powerRating) — one shared
+    ///   formula, one shared "full season" definition of record, used everywhere
+    ///   Ranking is computed in the app.
+    ///
+    ///   This also means the old live.Ranking passthrough is gone: even where a
+    ///   prior WeeklyRankings row exists, that row's Ranking was built off
+    ///   WeeklyRankingsService's OWN PowerRating, not this service's blended
+    ///   PowerRating — reusing it here would silently mix two different strength
+    ///   inputs into one Ranking value. Recomputing from this service's own
+    ///   blendedPowerRating and the full-season record is strictly more internally
+    ///   consistent, and costs nothing extra since fullSeasonGames is a single
+    ///   query already sized for the whole method, not per-team.
     /// </summary>
     public class ExperimentalInertiaRatingService
     {
@@ -110,6 +133,33 @@ namespace SaturdayPulse.Services
             // FromUnitScale already handles stdDev<=0 by returning `mean` for
             // every team — safe, if uninformative, rather than a crash or NaN.
 
+            // Full-season (actual + projected) Win/Loss rollup — same
+            // ResolvedGameResults.GetByYearAsync resolution WeeklyRankingsService
+            // uses for its own Ranking calculation (real result wins over a
+            // Projection once played), and the same input RatingCalculator.
+            // ComputeRanking expects. One query for the whole method, not per-team.
+            var fullSeasonGames = await _uow.ResolvedGameResults.GetByYearAsync(year, token);
+            var fullSeasonRecord = currentYearTeamRecords
+                .ToDictionary(r => r.TeamID, _ => new int[2]); // [wins, losses]
+
+            foreach (var g in fullSeasonGames)
+            {
+                var homeId   = g.HomeId ?? 0;
+                var awayId   = g.AwayId ?? 0;
+                var homePts  = g.HomePoints;
+                var awayPts  = g.AwayPoints;
+                bool homeWon = homePts >= awayPts;
+
+                if (fullSeasonRecord.TryGetValue(homeId, out var hfs))
+                {
+                    if (homeWon) hfs[0]++; else hfs[1]++;
+                }
+                if (fullSeasonRecord.TryGetValue(awayId, out var afs))
+                {
+                    if (!homeWon) afs[0]++; else afs[1]++;
+                }
+            }
+
             var result = new Dictionary<int, TeamRecord>();
 
             foreach (var teamRecord in currentYearTeamRecords)
@@ -158,23 +208,22 @@ namespace SaturdayPulse.Services
                 double blendedUnit = _ratingBlending.BlendUnit(anchorUnit, liveUnit, gamesPlayed);
                 double blendedPowerRating = RatingScaling.FromUnitScale(blendedUnit, liveMean, liveStdDev);
 
-                // Ranking — was a raw, unblended pass-through from `live.Ranking`
-                // (Finding #5: the K=4 smoothing above only ever reached PowerRating,
-                // never the field CalculatePrediction's margin calc actually reads).
-                // Same 2-tier logic RatingCalculator.ResolveStrength already uses
-                // elsewhere, but tier 2 now reads the BLENDED PowerRating just
-                // computed above instead of raw live.PowerRating — so Ranking
-                // inherits the same smoothing PowerRating already gets. Tier 1
-                // (real live.Ranking) still wins whenever a genuine in-season
-                // value exists; only the estimate used when it doesn't (week 0/1,
-                // or any week with thin live data) changes. No third SeedRating
-                // fallback needed here — unlike ResolveStrength's other call
-                // sites, blendedPowerRating is never null by construction (liveUnit
-                // already falls back to anchorUnit above when there's no live data),
-                // so tier 2 always resolves.
-                decimal blendedRanking = live != null && live.Ranking > 0m
-                    ? (decimal)live.Ranking
-                    : 0.5m * (1m + (decimal)blendedPowerRating);
+                // Ranking — now via RatingCalculator.ComputeRanking, using this
+                // team's full-season (actual + projected) record and THIS
+                // service's own blendedPowerRating. See class remarks for why the
+                // old live.Ranking passthrough was dropped: that field was built
+                // off WeeklyRankingsService's own PowerRating, not the blended one
+                // computed here, so reusing it would mix two different strength
+                // inputs into a single Ranking value. Falls back to the same
+                // 0.5 * (1 + blendedPowerRating) estimate only in the genuine
+                // edge case of a team with no full-season record at all (wins +
+                // losses == 0 — shouldn't happen once a season's schedule is
+                // locked, since every FBS team has 12+ games projected, but kept
+                // as a safe default rather than propagating a null Ranking).
+                var fs = fullSeasonRecord.GetValueOrDefault(teamRecord.TeamID, new int[2]);
+                decimal blendedRanking =
+                    RatingCalculator.ComputeRanking(fs[0], fs[1], (decimal)blendedPowerRating)
+                    ?? 0.5m * (1m + (decimal)blendedPowerRating);
 
                 result[teamRecord.TeamID] = new TeamRecord
                 {
