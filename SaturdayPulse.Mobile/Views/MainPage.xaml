@@ -86,7 +86,7 @@
                          HorizontalOptions="Center" Padding="6,6">
                     <Label.Triggers>
                       <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="True">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                       </DataTrigger>
                       <DataTrigger TargetType="Label" Binding="{Binding IsSelected}" Value="False">
                         <Setter Property="TextColor" Value="{AppThemeBinding Light=#555555, Dark=#AAAAAA}" />
@@ -94,7 +94,7 @@
                     </Label.Triggers>
                   </Label>
                   <BoxView HeightRequest="2" HorizontalOptions="Fill"
-                           Color="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                           Color="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                            IsVisible="{Binding IsSelected}" />
                 </VerticalStackLayout>
                 <Grid.GestureRecognizers>

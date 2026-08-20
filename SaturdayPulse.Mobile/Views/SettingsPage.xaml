@@ -19,12 +19,12 @@
                    Text="Settings"
                    FontSize="20" FontAttributes="Bold"
                    VerticalOptions="Center"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
             <Label Grid.Column="1"
                    Text="Close"
                    FontSize="14" FontAttributes="Bold"
                    VerticalOptions="Center"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                 <Label.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding CloseCommand}" />
                 </Label.GestureRecognizers>
@@ -56,12 +56,12 @@
                         <Label Grid.Column="0"
                                Text="User Profile"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding IsUserProfileExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
@@ -79,17 +79,17 @@
                         <!-- User Name -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="User Name" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding EditHandleCommand}" />
                                 </Grid.GestureRecognizers>
                                 <Label Grid.Column="0" Text="{Binding Handle}"
                                        FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                                 <Label Grid.Column="1" Text="▾" FontSize="14" Margin="4,0,0,0"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                             </Grid>
                         </Grid>
@@ -97,22 +97,22 @@
                         <!-- Email + notification checkbox, same line -->
                         <Grid ColumnDefinitions="90,Auto,*,Auto,Auto" ColumnSpacing="6">
                             <Label Grid.Column="0" Text="Email" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <HorizontalStackLayout Grid.Column="1" Spacing="2">
                                 <HorizontalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding EditEmailCommand}" />
                                 </HorizontalStackLayout.GestureRecognizers>
                                 <Label Text="{Binding EmailDisplay}" FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                                 <Label Text="▾" FontSize="14"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                             </HorizontalStackLayout>
                             <BoxView Grid.Column="2" Color="Transparent" />
                             <CheckBox Grid.Column="3" IsChecked="{Binding MarketingEmailConsent}"
                                       Scale="0.8" VerticalOptions="Center"
-                                      Color="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                      Color="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                             <Label Grid.Column="4" Text="Allow notifications" FontSize="11" VerticalOptions="Center"
                                    TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
                         </Grid>
@@ -120,22 +120,22 @@
                         <!-- Phone + notification status, same line (read-only - see EditPhoneCommand for the actual consent flow) -->
                         <Grid ColumnDefinitions="90,Auto,*,Auto,Auto" ColumnSpacing="6">
                             <Label Grid.Column="0" Text="Phone" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <HorizontalStackLayout Grid.Column="1" Spacing="2">
                                 <HorizontalStackLayout.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding EditPhoneCommand}" />
                                 </HorizontalStackLayout.GestureRecognizers>
                                 <Label Text="{Binding PhoneDisplay}" FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                                 <Label Text="▾" FontSize="14"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                             </HorizontalStackLayout>
                             <BoxView Grid.Column="2" Color="Transparent" />
                             <CheckBox Grid.Column="3" IsChecked="{Binding MarketingSmsConsent}" IsEnabled="False"
                                       Scale="0.8" VerticalOptions="Center"
-                                      Color="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                      Color="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                             <Label Grid.Column="4" Text="Allow notifications" FontSize="11" VerticalOptions="Center"
                                    TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
                         </Grid>
@@ -143,16 +143,16 @@
                         <!-- Account: Login/Create Account, or Logout/Delete Account -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="Account" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <HorizontalStackLayout Grid.Column="1" Spacing="20" IsVisible="{Binding IsLoggedOut}">
                                 <Label Text="Login" FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding LoginCommand}" />
                                     </Label.GestureRecognizers>
                                 </Label>
                                 <Label Text="Create Account" FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding CreateAccountCommand}" />
                                     </Label.GestureRecognizers>
@@ -160,7 +160,7 @@
                             </HorizontalStackLayout>
                             <HorizontalStackLayout Grid.Column="1" Spacing="20" IsVisible="{Binding IsLoggedIn}">
                                 <Label Text="Logout" FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding LogoutCommand}" />
                                     </Label.GestureRecognizers>
@@ -177,10 +177,10 @@
                         <!-- Stay logged in -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="Stay logged in" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Switch Grid.Column="1" HorizontalOptions="Start"
                                     IsToggled="{Binding StayLoggedIn}"
-                                    OnColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                    OnColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                         </Grid>
 
                     </VerticalStackLayout>
@@ -203,12 +203,12 @@
                         <Label Grid.Column="0"
                                Text="App Settings"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding IsUserConfigExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
@@ -226,16 +226,16 @@
                         <!-- Favorites first -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="Favorites first" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Switch Grid.Column="1" HorizontalOptions="Start"
                                     IsToggled="{Binding ShowFavoritesFirst}"
-                                    OnColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                    OnColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                         </Grid>
 
                         <!-- Default week -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="Default week" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto,*" ColumnSpacing="8">
 
                                 <Grid.GestureRecognizers>
@@ -248,7 +248,7 @@
                                         <DataTrigger TargetType="Ellipse"
                                                      Binding="{Binding DefaultWeek}" Value="Week1">
                                             <Setter Property="Fill"
-                                                    Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                                    Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                             <Setter Property="StrokeThickness" Value="0" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Ellipse"
@@ -265,7 +265,7 @@
                                         <DataTrigger TargetType="Label"
                                                      Binding="{Binding DefaultWeek}" Value="Week1">
                                             <Setter Property="TextColor"
-                                                    Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                                    Value="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Label"
                                                      Binding="{Binding DefaultWeek}" Value="Current">
@@ -286,7 +286,7 @@
                                         <DataTrigger TargetType="Ellipse"
                                                      Binding="{Binding DefaultWeek}" Value="Current">
                                             <Setter Property="Fill"
-                                                    Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                                    Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                             <Setter Property="StrokeThickness" Value="0" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Ellipse"
@@ -303,7 +303,7 @@
                                         <DataTrigger TargetType="Label"
                                                      Binding="{Binding DefaultWeek}" Value="Current">
                                             <Setter Property="TextColor"
-                                                    Value="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                                    Value="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Label"
                                                      Binding="{Binding DefaultWeek}" Value="Week1">
@@ -321,17 +321,17 @@
                         <!-- Default conference -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="Conference" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding SelectDefaultConferenceCommand}" />
                                 </Grid.GestureRecognizers>
                                 <Label Grid.Column="0" Text="{Binding DefaultConference}"
                                        FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                                 <Label Grid.Column="1" Text="▾" FontSize="14" Margin="4,0,0,0"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                             </Grid>
                         </Grid>
@@ -339,17 +339,17 @@
                         <!-- Default team -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="My Team" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding SelectDefaultTeamCommand}" />
                                 </Grid.GestureRecognizers>
                                 <Label Grid.Column="0" Text="{Binding DefaultTeamDisplay}"
                                        FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                                 <Label Grid.Column="1" Text="▾" FontSize="14" Margin="4,0,0,0"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                             </Grid>
                         </Grid>
@@ -357,17 +357,17 @@
                         <!-- Default landing page -->
                         <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
                             <Label Grid.Column="0" Text="Landing page" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding SelectDefaultLandingPageCommand}" />
                                 </Grid.GestureRecognizers>
                                 <Label Grid.Column="0" Text="{Binding DefaultLandingPageDisplay}"
                                        FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                                 <Label Grid.Column="1" Text="▾" FontSize="14" Margin="4,0,0,0"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                        VerticalOptions="Center" />
                             </Grid>
                         </Grid>
@@ -392,12 +392,12 @@
                         <Label Grid.Column="0"
                                Text="Favorites"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label"
                                              Binding="{Binding IsFollowingExpanded}" Value="True">
@@ -424,7 +424,7 @@
                                        HorizontalOptions="Center" Padding="0,8">
                                     <Label.Triggers>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="True">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsTeamsView}" Value="False">
                                             <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
@@ -434,7 +434,7 @@
                                 <BoxView HeightRequest="2" HorizontalOptions="Fill">
                                     <BoxView.Triggers>
                                         <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="True">
-                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                            <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="BoxView" Binding="{Binding IsTeamsView}" Value="False">
                                             <Setter Property="Color" Value="Transparent" />
@@ -451,7 +451,7 @@
                                        HorizontalOptions="Center" Padding="0,8">
                                     <Label.Triggers>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="True">
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Label" Binding="{Binding IsGamesView}" Value="False">
                                             <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
@@ -461,7 +461,7 @@
                                 <BoxView HeightRequest="2" HorizontalOptions="Fill">
                                     <BoxView.Triggers>
                                         <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="True">
-                                            <Setter Property="Color" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                            <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="BoxView" Binding="{Binding IsGamesView}" Value="False">
                                             <Setter Property="Color" Value="Transparent" />
@@ -623,7 +623,7 @@
                                                 <Label Grid.Row="0" Grid.Column="2"
                                                        Text="{Binding DisplaySeries}"
                                                        FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
                                                        VerticalOptions="Center" />
 
                                                 <Label Grid.Row="0" Grid.Column="3"
@@ -655,7 +655,7 @@
                                                 <Label Grid.Row="1" Grid.Column="2"
                                                        Text="{Binding DisplayUpsetRate}"
                                                        FontSize="9"
-                                                       TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
                                                        VerticalOptions="Center" />
 
                                                 <Label Grid.Row="1" Grid.Column="3"
@@ -697,12 +697,12 @@
                         <Label Grid.Column="0"
                                Text="Season Pass"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding IsSeasonPassExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
@@ -733,10 +733,10 @@
                                                FontSize="12" FontAttributes="Bold" VerticalOptions="Center">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding StatusKey}" Value="Purchase">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                                                 </DataTrigger>
                                                 <DataTrigger TargetType="Label" Binding="{Binding StatusKey}" Value="Active">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource ResultWinLight}, Dark={StaticResource ResultWinDark}}" />
                                                 </DataTrigger>
                                                 <DataTrigger TargetType="Label" Binding="{Binding StatusKey}" Value="Expired">
                                                     <Setter Property="TextColor" Value="{AppThemeBinding Light=#999999, Dark=#777777}" />
@@ -765,11 +765,11 @@
                                 <TapGestureRecognizer Command="{Binding SetDevEntitlementCommand}" />
                             </Grid.GestureRecognizers>
                             <Label Grid.Column="0" Text="Dev toggle" FontSize="13" VerticalOptions="Center"
-                                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                             <Switch Grid.Column="1" HorizontalOptions="Start"
                                     IsToggled="{Binding HasSeasonPass, Mode=OneWay}"
                                     InputTransparent="True"
-                                    OnColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                                    OnColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                         </Grid>
 
                     </VerticalStackLayout>
@@ -792,12 +792,12 @@
                         <Label Grid.Column="0"
                                Text="Content"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding IsContentExpanded}" Value="True">
                                     <Setter Property="Text" Value="▲" />
@@ -867,12 +867,12 @@
                         <Label Grid.Column="0"
                                Text="Support"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label"
                                              Binding="{Binding IsFeedbackExpanded}" Value="True">
@@ -920,7 +920,7 @@
                                             <Span Text="or you can " TextColor="{AppThemeBinding Light=#888888, Dark=#AAAAAA}" />
                                             <Span Text="email the Dev Team"
                                                   FontAttributes="Bold"
-                                                  TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                                  TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                                                 <Span.GestureRecognizers>
                                                     <TapGestureRecognizer Command="{Binding EmailSupportCommand}" />
                                                 </Span.GestureRecognizers>
@@ -933,14 +933,14 @@
                             </VerticalStackLayout>
                             <Border Grid.Column="1"
                                     StrokeShape="RoundRectangle 4"
-                                    Stroke="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                    Stroke="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                     StrokeThickness="1"
                                     Padding="14,6"
                                     VerticalOptions="Center"
                                     IsEnabled="{Binding CanSubmitFeedback}">
                                 <Label Text="Send"
                                        FontSize="13" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding SubmitFeedbackCommand}" />
                                     </Label.GestureRecognizers>
@@ -969,12 +969,12 @@
                         <Label Grid.Column="0"
                                Text="Debug Log"
                                FontSize="15" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
                         <Label Grid.Column="1"
                                FontSize="14" FontAttributes="Bold"
                                HorizontalOptions="Center" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label"
                                              Binding="{Binding IsDebugLogExpanded}" Value="True">
@@ -1005,7 +1005,7 @@
                                     Padding="10,4">
                                 <Label Text="Clear"
                                        FontSize="11"
-                                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                                     <Label.GestureRecognizers>
                                         <TapGestureRecognizer Command="{Binding ClearLogCommand}" />
                                     </Label.GestureRecognizers>
@@ -1047,7 +1047,7 @@
         <!-- ROW 2: Status bar                                   -->
         <!-- ═══════════════════════════════════════════════════ -->
         <Grid Grid.Row="2" HeightRequest="24"
-              BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
+              BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
             <Label Text="{Binding StatusMessage}"
                    Padding="8,0" FontSize="10" Opacity="0.5"
                    VerticalOptions="Center" HorizontalOptions="Start"

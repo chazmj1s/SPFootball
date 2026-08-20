@@ -42,4 +42,58 @@
     <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
     <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
     <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         J1S APP PALETTE (added 2026-08-20)
+
+         Named colors for SaturdayPulse.Mobile's actual UI, as opposed to the
+         default MAUI template block above (Primary/Gray100-950/Magenta/etc.,
+         still used by Styles.xaml's implicit control styles for native chrome
+         — left untouched). These consolidate ~630 of the 943 raw hex color
+         usages found across the 9 page XAML files as of this pass. Smaller-
+         count outliers (#555555, #777777, #888888, #BBBBBB, #D8D8D8, etc.)
+         were deliberately left as raw hex — reviewed individually rather
+         than guessed into a bucket.
+
+         Usage pattern (matches the existing Styles.xaml convention):
+           TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight},
+                                        Dark={StaticResource TextPrimaryDark}}"
+
+         NOTE: fixing a real bug found during the audit — two places
+         (PostseasonPage.xaml, SchedulePage.xaml) had Light/Dark reversed on
+         what should be the same TextTertiary pairing (Light=#999999,
+         Dark=#666666 instead of Light=#666666, Dark=#999999). Both variants
+         collapse to the single correct TextTertiaryLight/Dark pair below —
+         see 2026-08-20 chat history for the diagnosis.
+    ═══════════════════════════════════════════════════════════════════ -->
+
+    <Color x:Key="AccentPrimaryLight">#6B4EAE</Color>
+    <Color x:Key="AccentPrimaryDark">#9B7EDE</Color>
+
+    <Color x:Key="AccentChartLight">#7A4DFF</Color>
+    <Color x:Key="AccentChartDark">#B388FF</Color>
+
+    <Color x:Key="TextPrimaryLight">#222222</Color>
+    <Color x:Key="TextPrimaryDark">#EEEEEE</Color>
+
+    <Color x:Key="TextSecondaryLight">#444444</Color>
+    <Color x:Key="TextSecondaryDark">#CCCCCC</Color>
+
+    <Color x:Key="TextTertiaryLight">#666666</Color>
+    <Color x:Key="TextTertiaryDark">#999999</Color>
+
+    <Color x:Key="TextDisabledLight">#AAAAAA</Color>
+    <Color x:Key="TextDisabledDark">#666666</Color>
+
+    <Color x:Key="PanelBackgroundLight">#F0EBFF</Color>
+    <Color x:Key="PanelBackgroundDark">#1A1520</Color>
+
+    <Color x:Key="SurfaceAltLight">#F0F0F0</Color>
+    <Color x:Key="SurfaceAltDark">#2B2B2B</Color>
+
+    <Color x:Key="ResultWinLight">#2E7D32</Color>
+    <Color x:Key="ResultWinDark">#66BB6A</Color>
+
+    <Color x:Key="ResultLossLight">#C62828</Color>
+    <Color x:Key="ResultLossDark">#EF5350</Color>
 </ResourceDictionary>

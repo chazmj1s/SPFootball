@@ -18,7 +18,7 @@
     </Style>
     <Style TargetType="Label" x:Key="SubLabel">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="TextColor" Value="{AppThemeBinding Light=#666666, Dark=#999999}" />
+      <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
       <Setter Property="VerticalOptions" Value="Center" />
     </Style>
   </ContentPage.Resources>
@@ -69,7 +69,7 @@
            HorizontalOptions="Center"
            VerticalOptions="Center"
            FontSize="14"
-           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+           TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
 
     <!-- Team list -->
     <CollectionView Grid.Row="2"

@@ -64,7 +64,7 @@
            HorizontalOptions="Center"
            VerticalOptions="Center"
            FontSize="14"
-           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+           TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
 
     <!-- Rivalries list -->
     <CollectionView Grid.Row="2"
@@ -137,7 +137,7 @@
               <Label Grid.Row="0" Grid.Column="2"
                      Text="{Binding DisplaySeries}"
                      FontSize="9"
-                     TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                     TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
                      VerticalOptions="Center" />
 
               <!-- Avg margin -->
@@ -172,7 +172,7 @@
               <Label Grid.Row="1" Grid.Column="2"
                      Text="{Binding DisplayUpsetRate}"
                      FontSize="9"
-                     TextColor="{AppThemeBinding Light=#666666, Dark=#999999}"
+                     TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
                      VerticalOptions="Center" />
 
               <!-- Avg swing -->
