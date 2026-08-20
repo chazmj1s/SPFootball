@@ -144,6 +144,36 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// Fetches the Roster Changes popup data for a single team — current+prior
+        /// ZRoster/rank, this year's signing class, portal in/out, and the Retained/
+        /// Departed/New player lists. Called lazily when the user first taps
+        /// "Roster ▼" on a row.
+        ///
+        /// Maps to: GET /api/productiongamedata/roster-changes?teamId=X&amp;year=Y
+        /// </summary>
+        public async Task<RosterChangesResponse?> GetRosterChangesAsync(int teamId, int year)
+        {
+            try
+            {
+                var url = $"roster-changes?teamId={teamId}&year={year}";
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching roster changes: {url}");
+                var data = await _httpClient.GetFromJsonAsync<RosterChangesResponse>(url);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Roster changes for teamId={teamId}: " +
+                    $"{data?.RecruitingClass?.Count ?? 0} recruit(s), " +
+                    $"{data?.PortalIn?.Count ?? 0} portal-in, " +
+                    $"{data?.PortalOut?.Count ?? 0} portal-out");
+                return data;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Error fetching roster changes for teamId={teamId}: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Gets all FBS teams with id, name, conference, and tier.
         /// </summary>
         public async Task<List<Models.TeamInfo>?> GetTeamsAsync()

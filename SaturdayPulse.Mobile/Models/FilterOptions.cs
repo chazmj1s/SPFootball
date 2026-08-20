@@ -26,6 +26,7 @@ namespace SaturdayPulse.Models
         Conference,
         SOS,
         TierRank,       // Rank within tier (P4/G5)
-        Tier            // Group by tier
+        Tier,           // Group by tier
+        RosterRank      // National roster talent (ZRoster) rank
     }
 }

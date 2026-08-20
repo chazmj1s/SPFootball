@@ -41,6 +41,16 @@ public class PowerRankingRowResponse
     public int? OffensiveRank { get; set; }
     public int? DefensiveRank { get; set; }
 
+    /// <summary>
+    /// National ordinal rank (1 = best) of this team's TeamRecord.ZRoster among all
+    /// FBS teams with a computed ZRoster for the year. Null if ZRoster hasn't been
+    /// computed for this team/year (RosterCapacityService.ComputeZRosterAsync not
+    /// yet run) — do NOT render as "unranked last," treat as "no roster data."
+    /// Computed at request time in GetPowerRankingsV2Async; ZRoster itself is the
+    /// persisted source of truth, this is a derived sort position only.
+    /// </summary>
+    public int? RosterRank { get; set; }
+
     public double? TrendRating { get; set; }
     public double? PedigreeRating { get; set; }
     public double? SeedRating { get; set; }

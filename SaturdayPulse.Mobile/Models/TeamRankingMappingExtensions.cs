@@ -35,6 +35,7 @@ namespace SaturdayPulse.Models
                 DefensiveZScore  = Convert.ToDecimal(dto.DefensiveZScore),
                 OffensiveRank    = dto.OffensiveRank,
                 DefensiveRank    = dto.DefensiveRank,
+                RosterRank       = dto.RosterRank,
                 TrendRating      = dto.TrendRating,
                 PedigreeRating   = dto.PedigreeRating,
                 SeedRating       = dto.SeedRating,

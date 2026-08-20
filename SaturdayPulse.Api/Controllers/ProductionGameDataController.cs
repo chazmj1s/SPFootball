@@ -17,6 +17,7 @@ namespace SaturdayPulse.Controllers
     [Route("api/[controller]")]
     public class ProductionGameDataController(
         ProductionGameDataService gameDataService,
+        RosterCapacityService rosterCapacityService,
         ILogger<ProductionGameDataController> logger) : ControllerBase
     {
         #region Predictions
@@ -671,6 +672,31 @@ namespace SaturdayPulse.Controllers
             {
                 logger.LogError(ex, "Error retrieving team history for {TeamId}", teamId);
                 return StatusCode(500, "An error occurred while retrieving team history.");
+            }
+        }
+
+        /// <summary>
+        /// Roster Changes popup — current+prior ZRoster/rank, this year's signing
+        /// class, portal in/out, and a plain RosterPlayer Retained/Departed/New diff.
+        /// Example: GET /api/productiongamedata/roster-changes?teamId=47&year=2026
+        /// </summary>
+        [HttpGet("roster-changes")]
+        public async Task<IActionResult> GetRosterChanges(
+            [FromQuery] int teamId,
+            [FromQuery] int? year,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var result = await rosterCapacityService.GetRosterChangesAsync(teamId, targetYear, token);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving roster changes for teamId={TeamId}", teamId);
+                return StatusCode(500, "An error occurred retrieving roster changes.");
             }
         }
 

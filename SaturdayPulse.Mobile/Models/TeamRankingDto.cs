@@ -38,6 +38,15 @@ namespace SaturdayPulse.Models
         public double  DefensiveZScore  { get; set; }
         public int     OffensiveRank    { get; set; }
         public int     DefensiveRank    { get; set; }
+
+        /// <summary>
+        /// National ordinal rank (1 = best) of TeamRecord.ZRoster for the year.
+        /// Null when ZRoster hasn't been computed for this team/year (roster data
+        /// not loaded, or Compute Portal Metrics never run for the season) — NOT
+        /// "unranked last." Mirrors PowerRankingRowResponse.RosterRank.
+        /// </summary>
+        public int?    RosterRank       { get; set; }
+
         public double? TrendRating      { get; set; }
         public double? PedigreeRating   { get; set; }
         public double? SeedRating       { get; set; }
