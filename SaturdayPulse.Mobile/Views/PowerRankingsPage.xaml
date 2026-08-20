@@ -18,7 +18,7 @@
     <Grid Grid.Row="0"
           Padding="4,3"
           BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}"
-          ColumnDefinitions="44,22,*,90,70,60">
+          ColumnDefinitions="44,22,*,76,54,50,46">
 
       <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
@@ -31,7 +31,7 @@
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
         </Label.GestureRecognizers>
       </Label>
-      <Label Grid.Column="3" Text="Rec ↕" FontAttributes="Bold" FontSize="10">
+      <Label Grid.Column="3" Text="Record ↕" FontAttributes="Bold" FontSize="10">
         <Label.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
         </Label.GestureRecognizers>
@@ -46,6 +46,15 @@
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
         </Label.GestureRecognizers>
       </Label>
+
+      <!-- Roster Rank — now sortable, same pattern as the other headers. -->
+      <VerticalStackLayout Grid.Column="6" Spacing="0" HorizontalOptions="Center">
+        <VerticalStackLayout.GestureRecognizers>
+          <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="RosterRank"/>
+        </VerticalStackLayout.GestureRecognizers>
+        <Label Text="Roster" FontAttributes="Bold" FontSize="9" HorizontalTextAlignment="Center" />
+        <Label Text="Rank ↕" FontAttributes="Bold" FontSize="9" HorizontalTextAlignment="Center" />
+      </VerticalStackLayout>
 
     </Grid>
 
@@ -66,7 +75,7 @@
 
       <!-- ── Main row ── -->
       <Grid Padding="4,3"
-            ColumnDefinitions="44,22,*,90,70,60"
+            ColumnDefinitions="44,22,*,76,54,50,46"
             BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
         <!-- Rank badge -->
@@ -101,7 +110,7 @@
           <Label Text="{Binding TeamName}"
                  FontSize="13" LineBreakMode="TailTruncation"/>
           <Label Text="{Binding DisplayConferenceTier}"
-                 FontSize="10" Opacity="0.6" LineBreakMode="TailTruncation"/>
+                 FontSize="10" TextColor="#99FFFFFF" LineBreakMode="TailTruncation"/>
         </VerticalStackLayout>
 
         <Label Grid.Column="3" Text="{Binding RecordWithProjection}"
@@ -110,11 +119,13 @@
                FontSize="11" FontAttributes="Bold" VerticalOptions="Center"/>
         <Label Grid.Column="5" Text="{Binding DisplaySOS}"
                FontSize="11" VerticalOptions="Center"/>
+        <Label Grid.Column="6" Text="{Binding DisplayRosterRank}"
+               FontSize="11" VerticalOptions="Center" HorizontalOptions="Center"/>
 
       </Grid>
 
-      <!-- ── Toggle bar: Trend/Pedigree | Season Arc | Offense/Defense ── -->
-      <Grid ColumnDefinitions="*,*,*"
+      <!-- ── Toggle bar: Trend/Pedigree | Season Arc | Offense/Defense | Roster ── -->
+      <Grid ColumnDefinitions="*,*,*,*"
             Padding="4,2,8,2"
             BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
@@ -146,7 +157,7 @@
           </Label.GestureRecognizers>
         </Label>
 
-        <!-- CENTER: Season Arc — disabled/grayed without Season Pass -->
+        <!-- Season Arc — disabled/grayed without Season Pass -->
         <Label Grid.Column="1"
                IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="Center"
@@ -172,11 +183,13 @@
           </Label.GestureRecognizers>
         </Label>
 
-        <!-- RIGHT: Offense / Defense — disabled/grayed without Season Pass -->
+        <!-- Offense / Defense — disabled/grayed without Season Pass. Moved from
+             HorizontalOptions="End" to "Center": no longer the rightmost column
+             now that Roster sits to its right. -->
         <Label Grid.Column="2"
                IsVisible="{Binding HasOffenseDefenseData}"
                IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
-               FontSize="10" HorizontalOptions="End"
+               FontSize="10" HorizontalOptions="Center"
                TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
           <Label.FormattedText>
             <FormattedString>
@@ -195,6 +208,39 @@
           <Label.GestureRecognizers>
             <TapGestureRecognizer
                 Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleStatsExpandCommand}"
+                CommandParameter="{Binding .}" />
+          </Label.GestureRecognizers>
+        </Label>
+
+        <!-- RIGHT: Roster — new. Gated behind Season Pass like Trend/Pedigree and
+             Season Arc (confirmed 2026-08). No IsVisible data-presence gate yet
+             (unlike Offense/Defense's HasOffenseDefenseData) — roster availability
+             isn't known until the lazy fetch runs, matching Season Arc's always-
+             visible approach rather than Offense/Defense's pre-known-data approach.
+             The panel itself shows an empty state if RosterCapacityService returns
+             no ZRoster for the team/year, per the API's documented null-coverage
+             caveat. -->
+        <Label Grid.Column="3"
+               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
+               FontSize="10" HorizontalOptions="End"
+               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+          <Label.FormattedText>
+            <FormattedString>
+              <Span Text="Roster" />
+              <Span Text="  " />
+              <Span Text="{Binding RosterExpandIcon}" FontSize="8" />
+            </FormattedString>
+          </Label.FormattedText>
+          <Label.Triggers>
+            <DataTrigger TargetType="Label"
+                         Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
+                         Value="False">
+              <Setter Property="Opacity" Value="0.35" />
+            </DataTrigger>
+          </Label.Triggers>
+          <Label.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRosterExpandCommand}"
                 CommandParameter="{Binding .}" />
           </Label.GestureRecognizers>
         </Label>
@@ -218,7 +264,7 @@
                          TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
                   <Label Grid.Column="1"
                          Text="{Binding Record}"
-                         FontSize="9" Opacity="0.6"
+                         FontSize="9" TextColor="#99FFFFFF"
                          Margin="0,0,10,0" />
                   <VerticalStackLayout Grid.Column="2" Spacing="0">
                     <Label Text="{Binding TrendRating, StringFormat='Trend {0:F4}'}"
@@ -282,7 +328,7 @@
                          TextColor="{AppThemeBinding Light=#2E8B57, Dark=#4CAF84}" />
                   <Label Grid.Column="1"
                          Text="{Binding Record}"
-                         FontSize="9" Opacity="0.6" />
+                         FontSize="9" TextColor="#99FFFFFF" />
                 </Grid>
 
                 <chart:SfCartesianChart HeightRequest="170" Margin="8,0,8,8">
@@ -337,19 +383,19 @@
 
         <Grid ColumnDefinitions="*,*,*" Padding="8,6,8,4" ColumnSpacing="4">
           <VerticalStackLayout Grid.Column="0" Spacing="1">
-            <Label Text="Offensive Rank" FontSize="9" Opacity="0.6" />
+            <Label Text="Offensive Rank" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding OffensiveRankDisplay}"
                    FontSize="10" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="1" Spacing="1">
-            <Label Text="Avg. Points Scored" FontSize="9" Opacity="0.6" />
+            <Label Text="Avg. Points Scored" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding AvgPointsScored, StringFormat='{0:F1}'}"
                    FontSize="10" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="2" Spacing="1">
-            <Label Text="Offensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
+            <Label Text="Offensive Index (Std-Z)" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding OffensiveZScore, StringFormat='{0:F4}'}"
                    FontSize="10" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
@@ -361,25 +407,245 @@
 
         <Grid ColumnDefinitions="*,*,*" Padding="8,4,8,6" ColumnSpacing="4">
           <VerticalStackLayout Grid.Column="0" Spacing="1">
-            <Label Text="Defensive Rank" FontSize="9" Opacity="0.6" />
+            <Label Text="Defensive Rank" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding DefensiveRankDisplay}"
                    FontSize="10" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="1" Spacing="1">
-            <Label Text="Avg. Points Allowed" FontSize="9" Opacity="0.6" />
+            <Label Text="Avg. Points Allowed" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding AvgPointsAllowed, StringFormat='{0:F1}'}"
                    FontSize="10" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="2" Spacing="1">
-            <Label Text="Defensive Index (Std-Z)" FontSize="9" Opacity="0.6" />
+            <Label Text="Defensive Index (Std-Z)" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding DefensiveZScore, StringFormat='{0:F4}'}"
                    FontSize="10" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
           </VerticalStackLayout>
         </Grid>
 
+      </VerticalStackLayout>
+
+      <!-- ── Roster Changes expanded panel — summary table + one shared
+           expandable list area (Recruiting / Portal In / Portal Out).
+           Retained/Departed/New are still in the API response but not
+           rendered here — reserved for the future standalone Roster page
+           per 2026-08 UX decision. ── -->
+      <VerticalStackLayout IsVisible="{Binding IsRosterExpanded}"
+                           Spacing="0"
+                           BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
+
+        <Label Text="No roster data available for this year."
+               IsVisible="{Binding ShowRosterEmptyState}"
+               FontSize="10" TextColor="#99FFFFFF" Padding="8,6" />
+
+        <VerticalStackLayout IsVisible="{Binding HasRosterData}" Spacing="0">
+
+          <!-- ── Summary table: Prior | Current | Change, one row per metric.
+               Positive/negative Change values use a 3-section custom numeric
+               format string ("+0.0;-0.0;0.0") — standard .NET formatting,
+               not a converter — to get an explicit "+" on gains. ── -->
+          <Grid ColumnDefinitions="*,50,50,55" Padding="8,6,8,2" RowSpacing="3">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Column headers -->
+            <Label Grid.Row="0" Grid.Column="1" Text="Prior" FontSize="8" TextColor="#80FFFFFF" HorizontalOptions="End" />
+            <Label Grid.Row="0" Grid.Column="2" Text="Now" FontSize="8" TextColor="#80FFFFFF" HorizontalOptions="End" />
+            <Label Grid.Row="0" Grid.Column="3" Text="Change" FontSize="8" TextColor="#80FFFFFF" HorizontalOptions="End" />
+
+            <!-- Roster Rank -->
+            <Label Grid.Row="1" Grid.Column="0" Text="Roster Rank" FontSize="10" VerticalOptions="Center" />
+            <Label Grid.Row="1" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
+                   Text="{Binding RosterChanges.RosterStrength.PriorRank, StringFormat='#{0}'}" />
+            <Label Grid.Row="1" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   Text="{Binding RosterChanges.RosterStrength.CurrentRank, StringFormat='#{0}'}" />
+            <Label Grid.Row="1" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   Text="{Binding RosterChanges.RosterStrength.RankChange, StringFormat='{0:+0;-0;0}'}" />
+
+            <!-- Roster Rating (10 × Φ(ZRoster)) -->
+            <Label Grid.Row="2" Grid.Column="0" Text="Roster Rating" FontSize="10" VerticalOptions="Center" />
+            <Label Grid.Row="2" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
+                   Text="{Binding RosterChanges.RosterStrength.PriorRatingDisplay, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="2" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   Text="{Binding RosterChanges.RosterStrength.CurrentRatingDisplay, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="2" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   Text="{Binding RosterChanges.RosterStrength.RatingChange, StringFormat='{0:+0.0;-0.0;0.0}'}" />
+
+            <!-- Recruiting — tappable, opens the shared list below -->
+            <Label Grid.Row="3" Grid.Column="0" FontSize="10" VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Recruiting  " />
+                  <Span Text="{Binding RecruitingListIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRecruitingListCommand}"
+                    CommandParameter="{Binding .}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Row="3" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
+                   Text="{Binding RosterChanges.RecruitingComposite.Prior, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="3" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   Text="{Binding RosterChanges.RecruitingComposite.Current, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="3" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   Text="{Binding RosterChanges.RecruitingComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
+
+            <!-- Portal In — tappable -->
+            <Label Grid.Row="4" Grid.Column="0" FontSize="10" VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Portal In  " />
+                  <Span Text="{Binding PortalInListIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePortalInListCommand}"
+                    CommandParameter="{Binding .}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Row="4" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
+                   Text="{Binding RosterChanges.PortalInComposite.Prior, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="4" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}"
+                   Text="{Binding RosterChanges.PortalInComposite.Current, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="4" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   Text="{Binding RosterChanges.PortalInComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
+
+            <!-- Portal Out — tappable. Values are pre-negated at the API. -->
+            <Label Grid.Row="5" Grid.Column="0" FontSize="10" VerticalOptions="Center"
+                   TextColor="{AppThemeBinding Light=#C62828, Dark=#EF5350}">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="Portal Out  " />
+                  <Span Text="{Binding PortalOutListIcon}" FontSize="8" />
+                </FormattedString>
+              </Label.FormattedText>
+              <Label.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePortalOutListCommand}"
+                    CommandParameter="{Binding .}" />
+              </Label.GestureRecognizers>
+            </Label>
+            <Label Grid.Row="5" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
+                   Text="{Binding RosterChanges.PortalOutComposite.Prior, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="5" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#C62828, Dark=#EF5350}"
+                   Text="{Binding RosterChanges.PortalOutComposite.Current, StringFormat='{0:F1}'}" />
+            <Label Grid.Row="5" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   Text="{Binding RosterChanges.PortalOutComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
+
+          </Grid>
+
+          <!-- Portal Composite — not tappable (derived, no list of its own).
+               Separate row below the main grid so its own emphasis doesn't
+               compete with the tappable rows above. -->
+          <Grid ColumnDefinitions="*,50,50,55" Padding="8,2,8,6">
+            <Label Grid.Column="0" Text="Portal Net" FontSize="10" FontAttributes="Bold" VerticalOptions="Center" />
+            <Label Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
+                   Text="{Binding RosterChanges.PortalNetComposite.Prior, StringFormat='{0:F1}'}" />
+            <Label Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   Text="{Binding RosterChanges.PortalNetComposite.Current, StringFormat='{0:F1}'}" />
+            <Label Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
+                   Text="{Binding RosterChanges.PortalNetComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
+          </Grid>
+
+          <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
+                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+          <!-- ── Shared list area — one of the three below is ever visible at
+               once, driven by ActiveRosterListKey. Physically all three sit
+               in the same position; only the active one has height. ── -->
+
+          <VerticalStackLayout IsVisible="{Binding IsRecruitingListActive}"
+                               Padding="8,4,8,6" Spacing="2"
+                               BindableLayout.ItemsSource="{Binding RosterChanges.RecruitingClass}">
+            <BindableLayout.ItemTemplate>
+              <DataTemplate x:DataType="models:RecruitSummary">
+                <Grid ColumnDefinitions="20,*,50" Padding="0,1">
+                  <Label Grid.Column="0" Text="{Binding Stars, StringFormat='{0}★'}" FontSize="9" />
+                  <Label Grid.Column="1" FontSize="9">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="{Binding Name}" />
+                        <Span Text=" · " TextColor="#80FFFFFF" />
+                        <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                  <Label Grid.Column="2" Text="{Binding Rating, StringFormat='{0:F3}'}"
+                         FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
+                </Grid>
+              </DataTemplate>
+            </BindableLayout.ItemTemplate>
+          </VerticalStackLayout>
+
+          <VerticalStackLayout IsVisible="{Binding IsPortalInListActive}"
+                               Padding="8,4,8,6" Spacing="2"
+                               BindableLayout.ItemsSource="{Binding RosterChanges.PortalIn}">
+            <BindableLayout.ItemTemplate>
+              <DataTemplate x:DataType="models:PortalTransfer">
+                <Grid ColumnDefinitions="*,40,70" Padding="0,1">
+                  <Label Grid.Column="0" FontSize="9">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="{Binding Name}" />
+                        <Span Text=" · " TextColor="#80FFFFFF" />
+                        <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                  <Label Grid.Column="1" Text="{Binding Rating, StringFormat='{0:F2}'}"
+                         FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
+                  <Label Grid.Column="2" Text="{Binding OtherTeam, StringFormat='from {0}'}"
+                         FontSize="9" HorizontalOptions="End" TextColor="#99FFFFFF" LineBreakMode="TailTruncation" />
+                </Grid>
+              </DataTemplate>
+            </BindableLayout.ItemTemplate>
+          </VerticalStackLayout>
+
+          <VerticalStackLayout IsVisible="{Binding IsPortalOutListActive}"
+                               Padding="8,4,8,6" Spacing="2"
+                               BindableLayout.ItemsSource="{Binding RosterChanges.PortalOut}">
+            <BindableLayout.ItemTemplate>
+              <DataTemplate x:DataType="models:PortalTransfer">
+                <Grid ColumnDefinitions="*,40,70" Padding="0,1">
+                  <Label Grid.Column="0" FontSize="9">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="{Binding Name}" />
+                        <Span Text=" · " TextColor="#80FFFFFF" />
+                        <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                  <Label Grid.Column="1" Text="{Binding Rating, StringFormat='{0:F2}'}"
+                         FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
+                  <Label Grid.Column="2" Text="{Binding OtherTeam, StringFormat='to {0}'}"
+                         FontSize="9" HorizontalOptions="End" TextColor="#99FFFFFF" LineBreakMode="TailTruncation" />
+                </Grid>
+              </DataTemplate>
+            </BindableLayout.ItemTemplate>
+          </VerticalStackLayout>
+
+        </VerticalStackLayout>
       </VerticalStackLayout>
 
       <BoxView HeightRequest="1" Opacity="0.10"
@@ -391,7 +657,7 @@
 
         <CollectionView.EmptyView>
           <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="20">
-            <Label Text="{Binding EmptyMessage}" FontSize="14" Opacity="0.7"
+            <Label Text="{Binding EmptyMessage}" FontSize="14" TextColor="#B3FFFFFF"
                    HorizontalOptions="Center" Margin="0,10,0,0"/>
           </VerticalStackLayout>
         </CollectionView.EmptyView>
@@ -406,7 +672,7 @@
     <Grid Grid.Row="2" HeightRequest="24"
           BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
       <Label Text="{Binding StatusMessage}"
-             Padding="8,0" FontSize="10" Opacity="0.7"
+             Padding="8,0" FontSize="10" TextColor="#B3FFFFFF"
              VerticalOptions="Center" HorizontalOptions="Start"/>
     </Grid>
 

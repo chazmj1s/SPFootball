@@ -33,6 +33,29 @@ namespace SaturdayPulse.Contracts.Responses
     public record TeamScheduleV2Result(object? Summary, IReadOnlyList<object> Games);
 
     /// <summary>
+    /// Roster Changes popup — current+prior ZRoster/rank, this year's signing class,
+    /// portal in/out, and a plain RosterPlayer T-vs-T-1 diff (Retained/Departed/New).
+    /// See RosterCapacityService.GetRosterChangesAsync for assembly and the known
+    /// data-quality caveats (ZRoster coverage, mid-season-transfer edge case).
+    /// </summary>
+    public record RosterChangesResult(
+        int TeamId,
+        string TeamName,
+        int Year,
+        RosterStrengthDto RosterStrength,
+        RosterChangeMetricDto RecruitingComposite,
+        RosterChangeMetricDto PortalInComposite,
+        RosterChangeMetricDto PortalOutComposite,
+        RosterChangeMetricDto PortalNetComposite,
+        IReadOnlyList<RecruitSummaryDto> RecruitingClass,
+        IReadOnlyList<PortalTransferDto> PortalIn,
+        IReadOnlyList<PortalTransferDto> PortalOut,
+        IReadOnlyList<PlayerSummaryDto> Retained,
+        IReadOnlyList<PlayerSummaryDto> Departed,
+        IReadOnlyList<PlayerSummaryDto> New);
+
+
+    /// <summary>
     /// AverageTotalPoints added — it already existed on the AvgScoreDifferential entity
     /// (populated in the DB from the same 60-year historical build as AverageMargin/
     /// StdDevMargin) but was never mapped into this record, so GamePredictionService

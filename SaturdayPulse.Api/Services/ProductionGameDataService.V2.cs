@@ -999,6 +999,18 @@ namespace SaturdayPulse.Services
 
                     var currentRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
                     var currentRecordLookup = currentRecords.ToDictionary(r => r.TeamID);
+
+                    // National ordinal rank of ZRoster among FBS teams that have it computed
+                    // for this year — coverage is partial (roster data only loaded 2020+, and
+                    // ComputeZRosterAsync is a manual admin trigger, not part of the automated
+                    // pipeline), so this dictionary intentionally omits teams without a value
+                    // rather than defaulting them to worst-rank.
+                    var rosterRankByTeam = currentRecords
+                        .Where(r => r.ZRoster.HasValue)
+                        .OrderByDescending(r => r.ZRoster!.Value)
+                        .Select((r, i) => new { r.TeamID, Rank = i + 1 })
+                        .ToDictionary(x => x.TeamID, x => x.Rank);
+
                     var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(
                         targetYear - 10, targetYear, token);
                     var historyByTeam = historicalRecords
@@ -1053,6 +1065,7 @@ namespace SaturdayPulse.Services
                                 DefensiveZScore = (double?)wr.DefensiveZScore,
                                 OffensiveRank = wr.OffensiveRank,
                                 DefensiveRank = wr.DefensiveRank,
+                                RosterRank = rosterRankByTeam.TryGetValue(wr.TeamID, out var rr) ? rr : (int?)null,
                                 TrendRating = (double?)(currentRecord?.TrendRating),
                                 PedigreeRating = (double?)currentRecord?.PedigreeRating,
                                 SeedRating = (double?)currentRecord?.SeedRating,
@@ -1072,6 +1085,13 @@ namespace SaturdayPulse.Services
                 {
                     var teamRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(targetYear, token);
                     var ranked = teamRecords.Where(tr => tr.Ranking.HasValue).ToList();
+
+                    // Same coverage caveat as the throughWeek branch above — see comment there.
+                    var rosterRankByTeam = teamRecords
+                        .Where(r => r.ZRoster.HasValue)
+                        .OrderByDescending(r => r.ZRoster!.Value)
+                        .Select((r, i) => new { r.TeamID, Rank = i + 1 })
+                        .ToDictionary(x => x.TeamID, x => x.Rank);
 
                     var projGames = await _uow.Games.GetByYearAsync(targetYear, token);
                     var projProjections = await _projectionCache.GetAllProjections(targetYear, token);
@@ -1130,6 +1150,7 @@ namespace SaturdayPulse.Services
                                 Losses = actualWL.Losses,
                                 BaseSOS = (double?)t.TeamRecord.BaseSOS,
                                 CombinedSOS = (double?)t.TeamRecord.CombinedSOS,
+                                RosterRank = rosterRankByTeam.TryGetValue(t.TeamRecord.TeamID, out var rr) ? rr : (int?)null,
                                 ProjectedWins = actualWL.Wins + projWL.Wins,
                                 ProjectedLosses = actualWL.Losses + projWL.Losses
                             };

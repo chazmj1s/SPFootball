@@ -55,6 +55,14 @@ public class TeamRanking : INotifyPropertyChanged
     public int OffensiveRank { get; set; }
     public int DefensiveRank { get; set; }
 
+    /// <summary>
+    /// National ordinal rank (1 = best) of this team's roster talent (ZRoster).
+    /// Null when ZRoster hasn't been computed for this team/year — render as
+    /// "no data," not as an unranked-last placement. Mirrors
+    /// PowerRankingRowResponse.RosterRank / TeamRankingDto.RosterRank.
+    /// </summary>
+    public int? RosterRank { get; set; }
+
     public double? TrendRating { get; set; }
     public double? PedigreeRating { get; set; }
     public double? SeedRating { get; set; }
@@ -136,6 +144,9 @@ public class TeamRanking : INotifyPropertyChanged
     public string DefensiveRankDisplay =>
         DefensiveRank > 0 ? $"#{DefensiveRank}" : "—";
 
+    public string DisplayRosterRank =>
+        RosterRank.HasValue ? $"#{RosterRank}" : "—";
+
     // =========================================================
     // UI State
     // =========================================================
@@ -178,6 +189,88 @@ public class TeamRanking : INotifyPropertyChanged
                 OnPropertyChanged(nameof(StatsExpandIcon));
         }
     }
+
+    // =========================================================
+    // Roster Changes Expansion
+    // =========================================================
+
+    public string RosterExpandIcon =>
+        IsRosterExpanded ? "▲" : "▼";
+
+    private bool _isRosterExpanded;
+
+    public bool IsRosterExpanded
+    {
+        get => _isRosterExpanded;
+        set
+        {
+            if (SetProperty(ref _isRosterExpanded, value))
+            {
+                OnPropertyChanged(nameof(RosterExpandIcon));
+                OnPropertyChanged(nameof(ShowRosterEmptyState));
+            }
+        }
+    }
+
+    private RosterChangesResponse? _rosterChanges;
+
+    public RosterChangesResponse? RosterChanges
+    {
+        get => _rosterChanges;
+        set
+        {
+            if (SetProperty(ref _rosterChanges, value))
+            {
+                OnPropertyChanged(nameof(HasRosterData));
+                OnPropertyChanged(nameof(ShowRosterEmptyState));
+            }
+        }
+    }
+
+    /// <summary>True once RosterChanges has been fetched successfully.</summary>
+    public bool HasRosterData => RosterChanges != null;
+
+    /// <summary>
+    /// True when the panel is open but the fetch returned nothing (API error, or a
+    /// genuine "no ZRoster computed for this team/year" case — see
+    /// RosterCapacityService.GetRosterChangesAsync's documented coverage caveat).
+    /// Safe from a loading-state flicker: ToggleRosterExpandCommand awaits the fetch
+    /// before flipping IsRosterExpanded, so this is never true mid-fetch.
+    /// </summary>
+    public bool ShowRosterEmptyState => IsRosterExpanded && RosterChanges == null;
+
+    // ── Recruiting / Portal In / Portal Out — single shared list area below the
+    // summary table. Only one selection at a time; selecting a different one
+    // overwrites what's shown, selecting the active one again closes it. Backed by
+    // one key rather than three independent bools so mutual exclusivity can't drift
+    // out of sync (the ViewModel commands only ever set this one property). ──
+
+    private string? _activeRosterListKey;
+
+    public string? ActiveRosterListKey
+    {
+        get => _activeRosterListKey;
+        set
+        {
+            if (SetProperty(ref _activeRosterListKey, value))
+            {
+                OnPropertyChanged(nameof(IsRecruitingListActive));
+                OnPropertyChanged(nameof(IsPortalInListActive));
+                OnPropertyChanged(nameof(IsPortalOutListActive));
+                OnPropertyChanged(nameof(RecruitingListIcon));
+                OnPropertyChanged(nameof(PortalInListIcon));
+                OnPropertyChanged(nameof(PortalOutListIcon));
+            }
+        }
+    }
+
+    public bool IsRecruitingListActive => ActiveRosterListKey == "Recruiting";
+    public bool IsPortalInListActive   => ActiveRosterListKey == "PortalIn";
+    public bool IsPortalOutListActive  => ActiveRosterListKey == "PortalOut";
+
+    public string RecruitingListIcon => IsRecruitingListActive ? "▲" : "▼";
+    public string PortalInListIcon   => IsPortalInListActive   ? "▲" : "▼";
+    public string PortalOutListIcon  => IsPortalOutListActive  ? "▲" : "▼";
 
     // =========================================================
     // Trend / Pedigree Expansion

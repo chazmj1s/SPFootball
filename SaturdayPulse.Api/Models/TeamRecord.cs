@@ -107,6 +107,39 @@ namespace SaturdayPulse.Models
         [Column("ZRoster", TypeName = "decimal(10,4)")]
         public decimal? ZRoster { get; set; }
 
+        /// <summary>
+        /// 10 × weighted-mean(Rating, PositionWeight) across this year's committed
+        /// recruiting class (RecruitPlayer.CommittedTo == this team). Weighted MEAN,
+        /// not sum — bounded 0-10 since Rating is natively 0.0-1.0, so the ×10 is an
+        /// exact rescale, not an arbitrary display multiplier. Null if the team has
+        /// no committed recruits for the year, not a zero composite. Computed once
+        /// per season by ComputeZRosterAsync (folded into the same trigger as
+        /// ZRoster — not a separate manual op), so has the same coverage caveat:
+        /// only as fresh as the last time that op was run for the year. See
+        /// RosterCapacityService.GetRosterChangesAsync / WeightedMeanRatingDisplay.
+        /// </summary>
+        [Column("RecruitingComposite", TypeName = "decimal(10,4)")]
+        public decimal? RecruitingComposite { get; set; }
+
+        /// <summary>
+        /// Same formula as RecruitingComposite, over incoming transfer-portal players
+        /// (PortalEntry.Destination == this team, Eligibility != Withdrawn). Players
+        /// with Rating == 0/null are excluded as "ungraded" rather than dragging the
+        /// mean down. Always positive in spirit (a gain) — no sign applied here.
+        /// </summary>
+        [Column("PortalInComposite", TypeName = "decimal(10,4)")]
+        public decimal? PortalInComposite { get; set; }
+
+        /// <summary>
+        /// Same formula and ungraded-exclusion rule as PortalInComposite, over
+        /// outgoing transfer-portal players (PortalEntry.Origin == this team,
+        /// Eligibility != Withdrawn, Destination != null). Pre-negated at compute
+        /// time — a loss is always stored as a negative value, so PortalInComposite +
+        /// PortalOutComposite is a plain sum (net swing), never a subtraction.
+        /// </summary>
+        [Column("PortalOutComposite", TypeName = "decimal(10,4)")]
+        public decimal? PortalOutComposite { get; set; }
+
         [NotMapped]
         public List<double>? TrendHistory { get; set; }
 

@@ -138,6 +138,45 @@ namespace SaturdayPulse.ViewModels
                 t.IsStatsExpanded = !t.IsStatsExpanded;
             });
 
+            ToggleRosterExpandCommand = new Command<TeamRanking>(async t =>
+            {
+                if (t == null || !HasSeasonPass) return;
+
+                if (!t.IsRosterExpanded && t.RosterChanges == null)
+                {
+                    var data = await Task.Run(async () =>
+                        await _apiService.GetRosterChangesAsync(t.TeamID, _navState.SelectedYear));
+
+                    if (data != null)
+                        t.RosterChanges = data;
+                }
+
+                t.IsRosterExpanded = !t.IsRosterExpanded;
+                if (!t.IsRosterExpanded)
+                    t.ActiveRosterListKey = null;
+            });
+
+            // Data is already loaded by the time these are tappable (they only
+            // render once RosterChanges is populated) — plain synchronous
+            // toggles, no fetch. Mirrors PowerRankingsViewModel exactly.
+            ToggleRecruitingListCommand = new Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                t.ActiveRosterListKey = t.IsRecruitingListActive ? null : "Recruiting";
+            });
+
+            TogglePortalInListCommand = new Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                t.ActiveRosterListKey = t.IsPortalInListActive ? null : "PortalIn";
+            });
+
+            TogglePortalOutListCommand = new Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                t.ActiveRosterListKey = t.IsPortalOutListActive ? null : "PortalOut";
+            });
+
             // Gated Details paywall message (2026-07-25) — tapping the
             // locked Vegas/projections message routes through the same
             // login-check EntitlementService uses for Settings' Season Pass
@@ -310,6 +349,10 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleTrendExpandCommand   { get; }
         public ICommand ToggleArcExpandCommand     { get; }
         public ICommand ToggleStatsExpandCommand   { get; }
+        public ICommand ToggleRosterExpandCommand    { get; }
+        public ICommand ToggleRecruitingListCommand  { get; }
+        public ICommand TogglePortalInListCommand    { get; }
+        public ICommand TogglePortalOutListCommand   { get; }
         public ICommand ToggleDetailsCommand       { get; }
         public ICommand ToggleRivalryNotesCommand  { get; }
         public ICommand TogglePersonalGameCommand  { get; }

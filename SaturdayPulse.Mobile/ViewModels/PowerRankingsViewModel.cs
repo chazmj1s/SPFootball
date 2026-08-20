@@ -103,6 +103,47 @@ namespace SaturdayPulse.ViewModels
                 t.IsArcExpanded = !t.IsArcExpanded;
             });
 
+            ToggleRosterExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
+            {
+                if (t == null || !HasSeasonPass) return;
+
+                if (!t.IsRosterExpanded && t.RosterChanges == null)
+                {
+                    var data = await Task.Run(async () =>
+                        await _apiService.GetRosterChangesAsync(t.TeamID, _navState.SelectedYear));
+
+                    if (data != null)
+                        t.RosterChanges = data;
+                }
+
+                t.IsRosterExpanded = !t.IsRosterExpanded;
+                if (!t.IsRosterExpanded)
+                    t.ActiveRosterListKey = null;
+            });
+
+            // Data is already loaded by the time these are tappable (they only render
+            // once RosterChanges is populated), so these are plain synchronous toggles
+            // — no fetch, no HasSeasonPass re-check needed beyond the panel already
+            // being open. Tapping the active one again closes it; tapping a different
+            // one switches the shared list area to that selection.
+            ToggleRecruitingListCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                t.ActiveRosterListKey = t.IsRecruitingListActive ? null : "Recruiting";
+            });
+
+            TogglePortalInListCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                t.ActiveRosterListKey = t.IsPortalInListActive ? null : "PortalIn";
+            });
+
+            TogglePortalOutListCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                t.ActiveRosterListKey = t.IsPortalOutListActive ? null : "PortalOut";
+            });
+
             ToggleScheduleExpandCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(async t =>
             {
                 if (t == null) return;
@@ -117,6 +158,16 @@ namespace SaturdayPulse.ViewModels
                 }
 
                 t.IsScheduleExpanded = !t.IsScheduleExpanded;
+            });
+
+            ToggleFollowCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                // FollowService fires TeamFollowChanged, which OnTeamFollowChanged already
+                // handles (updates t.IsFollowed on the matching _allTeams entry, re-sorts
+                // if ShowFavoritesFirst). No manual state mutation needed here — mirrors
+                // TeamsViewModel.ToggleFollow.
+                _followService.Toggle(t.TeamID);
             });
 
             _navState.PropertyChanged += OnNavStateChanged;
@@ -193,6 +244,7 @@ namespace SaturdayPulse.ViewModels
             RankingSort.Record     => "Record",
             RankingSort.TierRank   => "Tier",
             RankingSort.Rank       => "Rank",
+            RankingSort.RosterRank => "Roster Rank",
             _                      => "Rating"
         };
 
@@ -203,6 +255,7 @@ namespace SaturdayPulse.ViewModels
             RankingSort.Record     => t.Record,
             RankingSort.TierRank   => t.DisplayTierWithRank,
             RankingSort.Rank       => t.DisplayRank,
+            RankingSort.RosterRank => t.DisplayRosterRank,
             _                      => t.DisplayRank
         };
 
@@ -217,7 +270,12 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleStatsExpandCommand { get; }
         public ICommand ToggleTrendExpandCommand { get; }
         public ICommand ToggleArcExpandCommand   { get; }
+        public ICommand ToggleRosterExpandCommand { get; }
+        public ICommand ToggleRecruitingListCommand { get; }
+        public ICommand TogglePortalInListCommand { get; }
+        public ICommand TogglePortalOutListCommand { get; }
         public ICommand ToggleScheduleExpandCommand { get; }
+        public ICommand ToggleFollowCommand { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 
@@ -315,6 +373,7 @@ namespace SaturdayPulse.ViewModels
                 "SOS"        => RankingSort.SOS,
                 "TierRank"   => RankingSort.TierRank,
                 "Tier"       => RankingSort.Tier,
+                "RosterRank" => RankingSort.RosterRank,
                 _            => RankingSort.Rank
             };
 
@@ -387,6 +446,16 @@ namespace SaturdayPulse.ViewModels
                 RankingSort.Tier => _isSortAscending
                     ? filtered.OrderBy(t => t.Tier).ThenBy(t => t.TierRank)
                     : filtered.OrderByDescending(t => t.Tier).ThenBy(t => t.TierRank),
+                // RosterRank is nullable (no ZRoster computed for the team/year) — unlike
+                // the CombinedSOS ?? 0 pattern above, defaulting a missing rank to 0 would
+                // make "no data" sort as "#0, best in the country." Grouping HasValue first
+                // pins null-roster teams to the bottom of the list in EITHER sort direction;
+                // the direction toggle only reorders within the group that has real data.
+                RankingSort.RosterRank => _isSortAscending
+                    ? filtered.OrderBy(t => t.RosterRank.HasValue ? 0 : 1)
+                              .ThenBy(t => t.RosterRank ?? int.MaxValue)
+                    : filtered.OrderBy(t => t.RosterRank.HasValue ? 0 : 1)
+                              .ThenByDescending(t => t.RosterRank ?? int.MaxValue),
                 _ => filtered.OrderBy(t => t.OverallRank)
             };
 

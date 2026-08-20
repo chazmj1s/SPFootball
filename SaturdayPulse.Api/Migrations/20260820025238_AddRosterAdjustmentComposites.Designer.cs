@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260820025238_AddRosterAdjustmentComposites")]
+    partial class AddRosterAdjustmentComposites
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -789,11 +792,11 @@ namespace SaturdayPulse.Api.Migrations
 
                     b.Property<decimal?>("PortalInComposite")
                         .HasColumnType("decimal(10,4)")
-                        .HasColumnName("PortalInComposite");
+                        .HasColumnName("PortalInComposite    ");
 
                     b.Property<decimal?>("PortalOutComposite")
                         .HasColumnType("decimal(10,4)")
-                        .HasColumnName("PortalOutComposite");
+                        .HasColumnName("PortalOutComposite   ");
 
                     b.Property<decimal?>("PowerRating")
                         .HasColumnType("decimal(10,4)")
@@ -805,7 +808,7 @@ namespace SaturdayPulse.Api.Migrations
 
                     b.Property<decimal?>("RecruitingComposite")
                         .HasColumnType("decimal(10,4)")
-                        .HasColumnName("RecruitingComposite");
+                        .HasColumnName("RecruitingComposite  ");
 
                     b.Property<decimal?>("RosterStrength")
                         .HasColumnType("decimal(10,4)")
