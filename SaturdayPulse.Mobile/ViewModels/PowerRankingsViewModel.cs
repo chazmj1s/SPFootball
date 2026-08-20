@@ -160,6 +160,16 @@ namespace SaturdayPulse.ViewModels
                 t.IsScheduleExpanded = !t.IsScheduleExpanded;
             });
 
+            ToggleFollowCommand = new Microsoft.Maui.Controls.Command<TeamRanking>(t =>
+            {
+                if (t == null) return;
+                // FollowService fires TeamFollowChanged, which OnTeamFollowChanged already
+                // handles (updates t.IsFollowed on the matching _allTeams entry, re-sorts
+                // if ShowFavoritesFirst). No manual state mutation needed here — mirrors
+                // TeamsViewModel.ToggleFollow.
+                _followService.Toggle(t.TeamID);
+            });
+
             _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
             _rankingsCache.CacheUpdated += OnRankingsCacheUpdated;
@@ -265,6 +275,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand TogglePortalInListCommand { get; }
         public ICommand TogglePortalOutListCommand { get; }
         public ICommand ToggleScheduleExpandCommand { get; }
+        public ICommand ToggleFollowCommand { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 

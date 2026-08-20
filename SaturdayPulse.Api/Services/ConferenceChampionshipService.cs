@@ -1,102 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Services
 {
     // ─────────────────────────────────────────────────────────────────────────
-    // MODELS
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Represents a team's standing within its conference for championship
-    /// qualification purposes.
-    /// </summary>
-    public class ConferenceStanding
-    {
-        public int    TeamId          { get; set; }
-        public string TeamName        { get; set; }
-        public string Conference      { get; set; }
-        public string Division        { get; set; }  // null if conference has no divisions
-        public int    ConferenceWins { get; set; }
-        public int    ConferenceLosses { get; set; }
-        public int    ActualConferenceWins { get; set; }
-        public int    ActualConferenceLosses { get; set; }
-        public int    OverallWins     { get; set; }
-        public int    OverallLosses   { get; set; }
-
-        // Points for/against in conference games (used for margin tiebreakers)
-        public int    ConfPointsFor     { get; set; }
-        public int    ConfPointsAgainst { get; set; }
-
-        // Head-to-head results vs other teams in the conference (TeamId → W/L)
-        public Dictionary<int, bool> HeadToHeadResults { get; set; } = new();
-
-        // Win pct vs common conference opponents (populated during tiebreaker calc)
-        public double CommonOpponentWinPct { get; set; }
-
-        // Combined win pct of all conference opponents (strength of schedule proxy)
-        public double ConferenceOpponentWinPct { get; set; }
-
-        // Externally-sourced ranking — CFP, AP, Coaches Poll etc.
-        // NULL means unknown / not ranked (stubs out requirements we can't compute)
-        public int? CfpRanking      { get; set; }
-        public int? ApRanking       { get; set; }
-        public int? SportSourceRating { get; set; } // Big 12 / Mountain West / Pac-12 tiebreaker
-
-        public double ConferenceWinPct =>
-            (ConferenceWins + ConferenceLosses) > 0
-                ? (double)ConferenceWins / (ConferenceWins + ConferenceLosses)
-                : 0.0;
-
-        public double OverallWinPct =>
-            (OverallWins + OverallLosses) > 0
-                ? (double)OverallWins / (OverallWins + OverallLosses)
-                : 0.0;
-    }
-
-    /// <summary>
-    /// Result of a championship qualification calculation for one conference.
-    /// </summary>
-    public class ChampionshipQualificationResult
-    {
-        public string Conference   { get; set; }
-        public string Format       { get; set; }  // "Top 2" | "Division Winners" | etc.
-
-        // The two qualifiers (or one per division for division-based conferences)
-        public ConferenceStanding Qualifier1 { get; set; }
-        public ConferenceStanding Qualifier2 { get; set; }
-
-        // How the spots were determined
-        public string Qualifier1Method { get; set; }
-        public string Qualifier2Method { get; set; }
-
-        // Any tiebreaker steps that were used
-        public List<string> TiebreakerLog { get; set; } = new();
-
-        // Flags for stubs — requirements we couldn't compute from available data
-        public List<string> StubsApplied { get; set; } = new();
-
-        public List<ContenderInfo> Contenders { get; set; } = new();
-    }
-
-    public class ContenderInfo
-    {
-        public string TeamName { get; set; }
-        public int ConferenceWins { get; set; }
-        public int ConferenceLosses { get; set; }
-        public int OverallWins { get; set; }
-        public int OverallLosses { get; set; }
-        public int ActualConferenceWins { get; set; }
-        public int ActualConferenceLosses { get; set; }
-        public string ConferenceRecord => $"{ConferenceWins}-{ConferenceLosses}";
-        public string OverallRecord => $"{OverallWins}-{OverallLosses}";
-        public string ActualConferenceRecord => $"{ActualConferenceWins}-{ActualConferenceLosses}";
-
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
     // SERVICE
+    //
+    // Models (ConferenceStanding, ChampionshipQualificationResult, ContenderInfo)
+    // moved to SaturdayPulse.Api/Models/ — see those files for definitions.
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
