@@ -61,10 +61,10 @@
           <Label Grid.Row="0" Grid.Column="3" Text="{Binding DisplayVisitorScore}"
                  FontSize="13" FontAttributes="Bold"
                  HorizontalOptions="End" VerticalOptions="Center"
-                 TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                 TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
           <Label Grid.Row="0" Grid.Column="4" Text="{Binding DisplayMargin}"
                  FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                 TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
 
           <!-- Home heart -->
           <controls:FollowTeamIcon Grid.Row="1" Grid.Column="1"
@@ -83,17 +83,17 @@
               <FormattedString>
                 <Span Text="{Binding HomeName}" />
                 <Span Text="{Binding NeutralIndicator}" FontSize="10"
-                      TextColor="{AppThemeBinding Light=#999999, Dark=#666666}" />
+                      TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
               </FormattedString>
             </Label.FormattedText>
           </Label>
           <Label Grid.Row="1" Grid.Column="3" Text="{Binding DisplayHomeScore}"
                  FontSize="13" FontAttributes="Bold"
                  HorizontalOptions="End" VerticalOptions="Center"
-                 TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                 TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
           <Label Grid.Row="1" Grid.Column="4" Text="{Binding DisplayOU}"
                  FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                 TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
 
         </Grid>
 
@@ -101,7 +101,7 @@
         <Grid ColumnDefinitions="*" Padding="6,2,6,2"
               BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
           <Label FontSize="10" HorizontalOptions="Center"
-                 TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                  IsVisible="{Binding ShowDetails}">
             <Label.FormattedText>
               <FormattedString>
@@ -120,7 +120,7 @@
         <!-- Expanded details panel -->
         <VerticalStackLayout IsVisible="{Binding IsDetailsExpanded}"
                              Spacing="0"
-                             BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
+                             BackgroundColor="{AppThemeBinding Light={StaticResource PanelBackgroundLight}, Dark={StaticResource PanelBackgroundDark}}">
 
           <!-- Vegas Lines section -->
           <VerticalStackLayout IsVisible="{Binding VegasLines.HasLines}" Spacing="0">
@@ -128,7 +128,7 @@
             <Grid ColumnDefinitions="48,70,60,*" Padding="6,6,6,2" ColumnSpacing="4">
               <Label Grid.Column="0" Text="VEGAS"
                      FontSize="9" FontAttributes="Bold"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                      VerticalOptions="Center" />
               <Label Grid.Column="1" Text="— Spread —"
                      FontSize="9" Opacity="0.5" HorizontalOptions="Center" />
@@ -143,10 +143,10 @@
                      FontSize="9" Opacity="0.6" VerticalOptions="Center" />
               <Label Grid.Column="1" Text="{Binding VegasLines.DisplaySpreadOpen}"
                      FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
               <Label Grid.Column="2" Text="{Binding VegasLines.DisplayOUOpen}"
                      FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
               <Label Grid.Column="3" HorizontalOptions="Center" VerticalOptions="Center">
                 <Label.FormattedText>
                   <FormattedString>
@@ -156,7 +156,7 @@
                           TextColor="{AppThemeBinding Light=#CCCCCC, Dark=#CCCCCC}" />
                     <Span Text="{Binding VegasLines.DisplayAwayMoneyline}"
                           FontSize="10" FontAttributes="Bold"
-                          TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                          TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                   </FormattedString>
                 </Label.FormattedText>
               </Label>
@@ -167,10 +167,10 @@
                      FontSize="9" Opacity="0.6" VerticalOptions="Center" />
               <Label Grid.Column="1" Text="{Binding VegasLines.DisplaySpread}"
                      FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="2" Text="{Binding VegasLines.DisplayOU}"
                      FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="3" HorizontalOptions="Center" VerticalOptions="Center">
                 <Label.FormattedText>
                   <FormattedString>
@@ -180,7 +180,7 @@
                           TextColor="{AppThemeBinding Light=#CCCCCC, Dark=#CCCCCC}" />
                     <Span Text="{Binding VegasLines.DisplayHomeMoneyline}"
                           FontSize="10" FontAttributes="Bold"
-                          TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                          TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
                   </FormattedString>
                 </Label.FormattedText>
               </Label>
@@ -237,22 +237,22 @@
                   Padding="8,3,8,3" ColumnSpacing="2">
               <Label Grid.Column="0" Text="{Binding AwayStats.TeamName}"
                      FontSize="9" FontAttributes="Bold" LineBreakMode="TailTruncation"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="1" Text="{Binding AwayStats.Record}"
                      FontSize="9" HorizontalOptions="Center" />
               <Label Grid.Column="2" Text="{Binding AwayStats.DisplayRating}"
                      FontSize="9" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="3" Text="{Binding AwayStats.DisplaySOS}"
                      FontSize="9" HorizontalOptions="Center" />
               <Label Grid.Column="4" Text="{Binding AwayStats.DisplayOffRank}"
                      FontSize="9" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="5" Text="{Binding AwayStats.DisplayPtsScored}"
                      FontSize="9" HorizontalOptions="Center" />
               <Label Grid.Column="6" Text="{Binding AwayStats.DisplayDefRank}"
                      FontSize="9" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="7" Text="{Binding AwayStats.DisplayPtsAllowed}"
                      FontSize="9" HorizontalOptions="Center" />
             </Grid>
@@ -265,22 +265,22 @@
                   Padding="8,3,8,6" ColumnSpacing="2">
               <Label Grid.Column="0" Text="{Binding HomeStats.TeamName}"
                      FontSize="9" FontAttributes="Bold" LineBreakMode="TailTruncation"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="1" Text="{Binding HomeStats.Record}"
                      FontSize="9" HorizontalOptions="Center" />
               <Label Grid.Column="2" Text="{Binding HomeStats.DisplayRating}"
                      FontSize="9" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="3" Text="{Binding HomeStats.DisplaySOS}"
                      FontSize="9" HorizontalOptions="Center" />
               <Label Grid.Column="4" Text="{Binding HomeStats.DisplayOffRank}"
                      FontSize="9" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="5" Text="{Binding HomeStats.DisplayPtsScored}"
                      FontSize="9" HorizontalOptions="Center" />
               <Label Grid.Column="6" Text="{Binding HomeStats.DisplayDefRank}"
                      FontSize="9" HorizontalOptions="Center"
-                     TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                     TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Label Grid.Column="7" Text="{Binding HomeStats.DisplayPtsAllowed}"
                      FontSize="9" HorizontalOptions="Center" />
             </Grid>
@@ -312,7 +312,7 @@
              HorizontalOptions="Center" VerticalOptions="Center">
         <Label.Triggers>
           <DataTrigger TargetType="Label" Binding="{Binding IsChampionshipView}" Value="True">
-            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
             <Setter Property="TextDecorations" Value="Underline" />
           </DataTrigger>
           <DataTrigger TargetType="Label" Binding="{Binding IsChampionshipView}" Value="False">
@@ -330,7 +330,7 @@
              HorizontalOptions="Center" VerticalOptions="Center">
         <Label.Triggers>
           <DataTrigger TargetType="Label" Binding="{Binding IsPlayoffsView}" Value="True">
-            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
             <Setter Property="TextDecorations" Value="Underline" />
           </DataTrigger>
           <DataTrigger TargetType="Label" Binding="{Binding IsPlayoffsView}" Value="False">
@@ -348,7 +348,7 @@
              HorizontalOptions="Center" VerticalOptions="Center">
         <Label.Triggers>
           <DataTrigger TargetType="Label" Binding="{Binding IsBowlsView}" Value="True">
-            <Setter Property="TextColor" Value="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
             <Setter Property="TextDecorations" Value="Underline" />
           </DataTrigger>
           <DataTrigger TargetType="Label" Binding="{Binding IsBowlsView}" Value="False">
@@ -422,7 +422,7 @@
                                 Padding="10,4">
                             <Label Text="{Binding DateLabel}"
                                    FontSize="11" FontAttributes="Bold"
-                                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                    VerticalOptions="Center" />
                           </Grid>
 
@@ -499,7 +499,7 @@
                                 Padding="10,4">
                             <Label Text="{Binding DateLabel}"
                                    FontSize="11" FontAttributes="Bold"
-                                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                    VerticalOptions="Center" />
                           </Grid>
 
@@ -561,11 +561,11 @@
                   <Label.FormattedText>
                     <FormattedString>
                       <Span Text="A: " FontSize="9"
-                            TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#666666}" />
+                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
                       <Span Text="{Binding Qualifier1.ActualConferenceRecord}" FontSize="11"
                             TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
                       <Span Text="  P: " FontSize="9"
-                            TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#666666}" />
+                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
                       <Span Text="{Binding Qualifier1.ConferenceRecord}" />
                     </FormattedString>
                   </Label.FormattedText>
@@ -581,11 +581,11 @@
                   <Label.FormattedText>
                     <FormattedString>
                       <Span Text="A: " FontSize="9"
-                            TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#666666}" />
+                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
                       <Span Text="{Binding Qualifier2.ActualConferenceRecord}" FontSize="11"
                             TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
                       <Span Text="  P: " FontSize="9"
-                            TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#666666}" />
+                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
                       <Span Text="{Binding Qualifier2.ConferenceRecord}" />
                     </FormattedString>
                   </Label.FormattedText>
@@ -595,7 +595,7 @@
               <!-- Tiebreaker + Contenders toggles -->
               <Grid ColumnDefinitions="*,*" Padding="12,2,16,6">
                 <Label Grid.Column="0" IsVisible="{Binding HasTiebreaker}"
-                       FontSize="10" TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                       FontSize="10" TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                   <Label.FormattedText>
                     <FormattedString>
                       <Span Text="{Binding TiebreakerSummary}" />
@@ -611,7 +611,7 @@
                 </Label>
                 <Label Grid.Column="1" IsVisible="{Binding HasContenders}"
                        FontSize="10" HorizontalOptions="End"
-                       TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                   <Label.FormattedText>
                     <FormattedString>
                       <Span Text="Contenders" />
@@ -656,11 +656,11 @@
                         <Label.FormattedText>
                           <FormattedString>
                             <Span Text="A: " FontSize="9"
-                                  TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#666666}" />
+                                  TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
                             <Span Text="{Binding ActualConferenceRecord}" FontSize="11"
                                   TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
                             <Span Text="  P: " FontSize="9"
-                                  TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#666666}" />
+                                  TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
                             <Span Text="{Binding ConferenceRecord}" />
                           </FormattedString>
                         </Label.FormattedText>
@@ -690,7 +690,7 @@
     <!-- ROW 2: Status bar                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="2" HeightRequest="24"
-          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
+          BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
       <Label Text="{Binding StatusMessage}"
              Padding="8,0" FontSize="10" Opacity="0.5"
              VerticalOptions="Center" HorizontalOptions="Start"

@@ -17,7 +17,7 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="0"
           Padding="4,3"
-          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}"
+          BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
           ColumnDefinitions="44,22,*,76,54,50,46">
 
       <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
@@ -125,7 +125,7 @@
       </Grid>
 
       <!-- ── Toggle bar: Trend/Pedigree | Season Arc | Offense/Defense | Roster ── -->
-      <Grid ColumnDefinitions="*,*,*,*"
+      <Grid ColumnDefinitions="1.6*,1*,1.6*,0.8*"
             Padding="4,2,8,2"
             BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
 
@@ -135,7 +135,7 @@
                IsVisible="{Binding HasTrendData}"
                IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="Start"
-               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
               <Span Text="Trend / Pedigree" />
@@ -147,7 +147,7 @@
             <DataTrigger TargetType="Label"
                          Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                          Value="False">
-              <Setter Property="Opacity" Value="0.35" />
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
           <Label.GestureRecognizers>
@@ -161,7 +161,7 @@
         <Label Grid.Column="1"
                IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="Center"
-               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
               <Span Text="Season Arc" />
@@ -173,7 +173,7 @@
             <DataTrigger TargetType="Label"
                          Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                          Value="False">
-              <Setter Property="Opacity" Value="0.35" />
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
           <Label.GestureRecognizers>
@@ -190,7 +190,7 @@
                IsVisible="{Binding HasOffenseDefenseData}"
                IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="Center"
-               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
               <Span Text="Offense / Defense" />
@@ -202,7 +202,7 @@
             <DataTrigger TargetType="Label"
                          Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                          Value="False">
-              <Setter Property="Opacity" Value="0.35" />
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
           <Label.GestureRecognizers>
@@ -223,7 +223,7 @@
         <Label Grid.Column="3"
                IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                FontSize="10" HorizontalOptions="End"
-               TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
               <Span Text="Roster" />
@@ -235,7 +235,7 @@
             <DataTrigger TargetType="Label"
                          Binding="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
                          Value="False">
-              <Setter Property="Opacity" Value="0.35" />
+              <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
           <Label.GestureRecognizers>
@@ -261,7 +261,7 @@
                   <Label Grid.Column="0"
                          Text="Trend / Pedigree History"
                          FontSize="10" FontAttributes="Bold"
-                         TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                         TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                   <Label Grid.Column="1"
                          Text="{Binding Record}"
                          FontSize="9" TextColor="#99FFFFFF"
@@ -270,7 +270,7 @@
                     <Label Text="{Binding TrendRating, StringFormat='Trend {0:F4}'}"
                            FontSize="9" FontAttributes="Bold"
                            HorizontalTextAlignment="End"
-                           TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                           TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
                     <Label Text="{Binding PedigreeRating, StringFormat='Pedigree {0:F4}'}"
                            FontSize="9" FontAttributes="Bold"
                            HorizontalTextAlignment="End"
@@ -292,7 +292,7 @@
                       ItemsSource="{Binding TrendPoints}"
                       XBindingPath="Index" YBindingPath="Value"
                       Label="Trend"
-                      Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                      Fill="{AppThemeBinding Light={StaticResource AccentChartLight}, Dark={StaticResource AccentChartDark}}"
                       StrokeWidth="3.5" EnableTooltip="True" />
                   <chart:SplineSeries
                       ItemsSource="{Binding PedigreePoints}"
@@ -350,7 +350,7 @@
                       ItemsSource="{Binding ArcRankingPoints}"
                       XBindingPath="Index" YBindingPath="Value"
                       Label="Rating"
-                      Fill="{AppThemeBinding Light=#7A4DFF, Dark=#B388FF}"
+                      Fill="{AppThemeBinding Light={StaticResource AccentChartLight}, Dark={StaticResource AccentChartDark}}"
                       StrokeWidth="3" EnableTooltip="True" />
                   <chart:SplineSeries
                       ItemsSource="{Binding ArcSosPoints}"
@@ -379,50 +379,50 @@
       <!-- Labels only — no charts — IsVisible is fine here -->
       <VerticalStackLayout IsVisible="{Binding IsStatsExpanded}"
                            Spacing="0"
-                           BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
+                           BackgroundColor="{AppThemeBinding Light={StaticResource PanelBackgroundLight}, Dark={StaticResource PanelBackgroundDark}}">
 
         <Grid ColumnDefinitions="*,*,*" Padding="8,6,8,4" ColumnSpacing="4">
           <VerticalStackLayout Grid.Column="0" Spacing="1">
             <Label Text="Offensive Rank" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding OffensiveRankDisplay}"
                    FontSize="10" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="1" Spacing="1">
             <Label Text="Avg. Points Scored" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding AvgPointsScored, StringFormat='{0:F1}'}"
                    FontSize="10" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="2" Spacing="1">
             <Label Text="Offensive Index (Std-Z)" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding OffensiveZScore, StringFormat='{0:F4}'}"
                    FontSize="10" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
           </VerticalStackLayout>
         </Grid>
 
-        <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
-                 Color="{AppThemeBinding Light=Black, Dark=White}" />
+        <BoxView HeightRequest="1"  Margin="8,0"
+                 Color="{AppThemeBinding Light=#14000000, Dark=#14FFFFFF}" />
 
         <Grid ColumnDefinitions="*,*,*" Padding="8,4,8,6" ColumnSpacing="4">
           <VerticalStackLayout Grid.Column="0" Spacing="1">
             <Label Text="Defensive Rank" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding DefensiveRankDisplay}"
                    FontSize="10" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="1" Spacing="1">
             <Label Text="Avg. Points Allowed" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding AvgPointsAllowed, StringFormat='{0:F1}'}"
                    FontSize="10" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
           </VerticalStackLayout>
           <VerticalStackLayout Grid.Column="2" Spacing="1">
             <Label Text="Defensive Index (Std-Z)" FontSize="9" TextColor="#99FFFFFF" />
             <Label Text="{Binding DefensiveZScore, StringFormat='{0:F4}'}"
                    FontSize="10" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=#222222, Dark=#EEEEEE}" />
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
           </VerticalStackLayout>
         </Grid>
 
@@ -435,7 +435,7 @@
            per 2026-08 UX decision. ── -->
       <VerticalStackLayout IsVisible="{Binding IsRosterExpanded}"
                            Spacing="0"
-                           BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#1A1520}">
+                           BackgroundColor="{AppThemeBinding Light={StaticResource PanelBackgroundLight}, Dark={StaticResource PanelBackgroundDark}}">
 
         <Label Text="No roster data available for this year."
                IsVisible="{Binding ShowRosterEmptyState}"
@@ -467,7 +467,7 @@
             <Label Grid.Row="1" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.RosterStrength.PriorRank, StringFormat='#{0}'}" />
             <Label Grid.Row="1" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                    Text="{Binding RosterChanges.RosterStrength.CurrentRank, StringFormat='#{0}'}" />
             <Label Grid.Row="1" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
                    Text="{Binding RosterChanges.RosterStrength.RankChange, StringFormat='{0:+0;-0;0}'}" />
@@ -477,14 +477,14 @@
             <Label Grid.Row="2" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.RosterStrength.PriorRatingDisplay, StringFormat='{0:F1}'}" />
             <Label Grid.Row="2" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                    Text="{Binding RosterChanges.RosterStrength.CurrentRatingDisplay, StringFormat='{0:F1}'}" />
             <Label Grid.Row="2" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
                    Text="{Binding RosterChanges.RosterStrength.RatingChange, StringFormat='{0:+0.0;-0.0;0.0}'}" />
 
             <!-- Recruiting — tappable, opens the shared list below -->
             <Label Grid.Row="3" Grid.Column="0" FontSize="10" VerticalOptions="Center"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}">
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
                   <Span Text="Recruiting  " />
@@ -500,14 +500,14 @@
             <Label Grid.Row="3" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.RecruitingComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Row="3" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                    Text="{Binding RosterChanges.RecruitingComposite.Current, StringFormat='{0:F1}'}" />
             <Label Grid.Row="3" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
                    Text="{Binding RosterChanges.RecruitingComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
 
             <!-- Portal In — tappable -->
             <Label Grid.Row="4" Grid.Column="0" FontSize="10" VerticalOptions="Center"
-                   TextColor="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}">
+                   TextColor="{AppThemeBinding Light={StaticResource ResultWinLight}, Dark={StaticResource ResultWinDark}}">
               <Label.FormattedText>
                 <FormattedString>
                   <Span Text="Portal In  " />
@@ -523,14 +523,14 @@
             <Label Grid.Row="4" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.PortalInComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Row="4" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
-                   TextColor="{AppThemeBinding Light=#2E7D32, Dark=#66BB6A}"
+                   TextColor="{AppThemeBinding Light={StaticResource ResultWinLight}, Dark={StaticResource ResultWinDark}}"
                    Text="{Binding RosterChanges.PortalInComposite.Current, StringFormat='{0:F1}'}" />
             <Label Grid.Row="4" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
                    Text="{Binding RosterChanges.PortalInComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
 
             <!-- Portal Out — tappable. Values are pre-negated at the API. -->
             <Label Grid.Row="5" Grid.Column="0" FontSize="10" VerticalOptions="Center"
-                   TextColor="{AppThemeBinding Light=#C62828, Dark=#EF5350}">
+                   TextColor="{AppThemeBinding Light={StaticResource ResultLossLight}, Dark={StaticResource ResultLossDark}}">
               <Label.FormattedText>
                 <FormattedString>
                   <Span Text="Portal Out  " />
@@ -546,7 +546,7 @@
             <Label Grid.Row="5" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.PortalOutComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Row="5" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
-                   TextColor="{AppThemeBinding Light=#C62828, Dark=#EF5350}"
+                   TextColor="{AppThemeBinding Light={StaticResource ResultLossLight}, Dark={StaticResource ResultLossDark}}"
                    Text="{Binding RosterChanges.PortalOutComposite.Current, StringFormat='{0:F1}'}" />
             <Label Grid.Row="5" Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
                    Text="{Binding RosterChanges.PortalOutComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
@@ -561,14 +561,14 @@
             <Label Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.PortalNetComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
-                   TextColor="{AppThemeBinding Light=#6B4EAE, Dark=#9B7EDE}"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                    Text="{Binding RosterChanges.PortalNetComposite.Current, StringFormat='{0:F1}'}" />
             <Label Grid.Column="3" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
                    Text="{Binding RosterChanges.PortalNetComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
           </Grid>
 
-          <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
-                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+          <BoxView HeightRequest="1"  Margin="8,0"
+                   Color="{AppThemeBinding Light=#14000000, Dark=#14FFFFFF}" />
 
           <!-- ── Shared list area — one of the three below is ever visible at
                once, driven by ActiveRosterListKey. Physically all three sit
@@ -648,8 +648,8 @@
         </VerticalStackLayout>
       </VerticalStackLayout>
 
-      <BoxView HeightRequest="1" Opacity="0.10"
-               Color="{AppThemeBinding Light=Black, Dark=White}" />
+      <BoxView HeightRequest="1" 
+               Color="{AppThemeBinding Light=#1A000000, Dark=#1AFFFFFF}" />
 
     </VerticalStackLayout>
   </DataTemplate>
@@ -670,7 +670,7 @@
     <!-- ROW 2: Status bar                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="2" HeightRequest="24"
-          BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2B2B2B}">
+          BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
       <Label Text="{Binding StatusMessage}"
              Padding="8,0" FontSize="10" TextColor="#B3FFFFFF"
              VerticalOptions="Center" HorizontalOptions="Start"/>
