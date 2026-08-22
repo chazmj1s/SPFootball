@@ -59,6 +59,11 @@
                         Backfill Tier Discount Coefficients
                     </MudButton>
                 </div>
+                <div class="section-row">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="IsBusy" OnClick="BackfillAnchorBlendCoefficientsAsync">
+                        Backfill Anchor Blend Coefficients
+                    </MudButton>
+                </div>
             </MudItem>
 
             <MudItem xs="12" md="7">
@@ -294,6 +299,31 @@
         }
     }
 
+    private async Task BackfillAnchorBlendCoefficientsAsync()
+    {
+        _running = true;
+        // StartSeason=1965 for consistency with the tier-discount backfill above,
+        // same as that one it's a no-op until real data exists — ZRoster only
+        // exists from 2020 onward, so every season before ~2023 (the first season
+        // with a full 3-year trailing window of real ZRoster data) is skipped
+        // automatically by AnchorBlendCalculator's own GamesUsed==0 check, not
+        // treated as an error. See AnchorBlendCalculator remarks.
+        Append($"\u2500\u2500 Backfill Anchor Blend Coefficients  StartSeason=1965 \u2500\u2500");
+        try
+        {
+            await StepAsync("Backfill Anchor Blend Coefficients", () => Api.ComputeAnchorBlendCoefficientsBulkAsync(1965));
+            Append("\u2500\u2500 Complete \u2500\u2500", LogStatus.Success);
+        }
+        catch
+        {
+            Append("\u2500\u2500 Stopped due to error \u2500\u2500", LogStatus.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
     private async Task RunSeasonSetupAsync()
     {
         _running = true;
@@ -304,6 +334,7 @@
             await StepAsync("Load Teams", () => Api.LoadTeamsAsync(_seasonYear));
             await StepAsync("Build Conference History", () => Api.BuildTeamsConferenceHistoryAsync(1965));
             await StepAsync("Compute Tier Discount Coefficients", () => Api.ComputeTierDiscountCoefficientsAsync(_seasonYear));
+            await StepAsync("Compute Anchor Blend Coefficients", () => Api.ComputeAnchorBlendCoefficientsAsync(_seasonYear));
             await StepAsync("Initialize Season", () => Api.InitializeSeasonAsync(_seasonYear));
             await StepAsync("Load Portal", () => Api.LoadPortalAsync(_seasonYear));
             await StepAsync("Compute Portal Metrics", () => Api.ComputePortalMetricsAsync(_seasonYear));

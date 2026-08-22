@@ -31,6 +31,7 @@ namespace SaturdayPulse.Services
         private readonly ScoreDeltaCalculator      _scoreDeltaCalculator;
         private readonly MatchupHistoryCalculator  _matchupHistoryCalculator;
         private readonly TierDiscountCalculator    _tierDiscountCalculator;
+        private readonly AnchorBlendCalculator     _anchorBlendCalculator;
         private readonly WeeklyRankingsService     _weeklyRankingsService;
         private readonly GamePredictionService     _predictionService;
         private readonly ConferenceTierService     _tierService;
@@ -45,6 +46,7 @@ namespace SaturdayPulse.Services
             ScoreDeltaCalculator scoreDeltaCalculator,
             MatchupHistoryCalculator matchupHistoryCalculator,
             TierDiscountCalculator tierDiscountCalculator,
+            AnchorBlendCalculator anchorBlendCalculator,
             WeeklyRankingsService weeklyRankingsService,
             GamePredictionService predictionService,
             ConferenceTierService tierService,
@@ -58,6 +60,7 @@ namespace SaturdayPulse.Services
             _scoreDeltaCalculator     = scoreDeltaCalculator;
             _matchupHistoryCalculator = matchupHistoryCalculator;
             _tierDiscountCalculator   = tierDiscountCalculator;
+            _anchorBlendCalculator    = anchorBlendCalculator;
             _weeklyRankingsService    = weeklyRankingsService;
             _predictionService        = predictionService;
             _tierService              = tierService;
@@ -267,16 +270,38 @@ namespace SaturdayPulse.Services
             => _tierDiscountCalculator.ComputeAndPersistCoefficientsAsync(season, startYear, token);
 
         /// <summary>
-        /// Backfills TierDiscountCoefficients for every season from startSeason through
+        /// Backfills AnchorBlendCoefficients for every season from startSeason through
+        /// the most recent season with played data (or throughSeason, if given).
+        /// Returns (Persisted, Skipped) — Skipped seasons had no usable prior-year data
+        /// (expected for the earliest seasons of a full historical backfill, not an    
+        /// error).
+        /// </summary>
+        public Task<(int Persisted, int Skipped)> ComputeTierDiscountCoefficientsBulkAsync(
+            int startSeason, int? throughSeason = null, int startYear = 2021, CancellationToken token = default)
+            => _tierDiscountCalculator.ComputeAndPersistCoefficientsBulkAsync(startSeason, throughSeason, startYear, token);
+
+        /// <summary>
+        /// Computes and persists a new AnchorBlendCoefficients row for `season`, using
+        /// only games played through season - 1. Intended to run BEFORE
+        /// InitializeSeason in RunSeasonSetupAsync. Returns null (no row persisted) if
+        /// there's no usable data for that season yet — see
+        /// AnchorBlendCalculator.ComputeAndPersistCoefficientsAsync remarks.
+        /// </summary>
+        public async Task<AnchorBlendCoefficient?> ComputeAnchorBlendCoefficientsAsync(
+            int season, int windowYears = AnchorBlendCalculator.DefaultWindowYears, CancellationToken token = default)
+            => await _anchorBlendCalculator.ComputeAndPersistCoefficientsAsync(season, windowYears, token);
+
+        /// <summary>
+        /// Backfills AnchorBlendCoefficients for every season from startSeason through
         /// the most recent season with played data (or throughSeason, if given).
         /// Returns (Persisted, Skipped) — Skipped seasons had no usable prior-year data
         /// (expected for the earliest seasons of a full historical backfill, not an
         /// error).
         /// </summary>
-        public Task<(int Persisted, int Skipped)> ComputeTierDiscountCoefficientsBulkAsync(
-            int startSeason, int? throughSeason = null, int startYear = 1965, CancellationToken token = default)
-            => _tierDiscountCalculator.ComputeAndPersistCoefficientsBulkAsync(startSeason, throughSeason, startYear, token);
-
+        public Task<(int Persisted, int Skipped)> ComputeAnchorBlendCoefficientsBulkAsync(
+            int startSeason, int? throughSeason = null,
+            int windowYears = AnchorBlendCalculator.DefaultWindowYears, CancellationToken token = default)
+            => _anchorBlendCalculator.ComputeAndPersistCoefficientsBulkAsync(startSeason, throughSeason, windowYears, token);
 
         public async Task<AnalyticsResult> GetAnalyticsAsync(int? startYear, int? endYear, CancellationToken token)
         {
@@ -1000,6 +1025,7 @@ namespace SaturdayPulse.Services
             return new ComputeWeeklyResult(
                 $"Computed weekly rankings for {targetYear} week {week.Value}.", targetYear, week.Value);
         }
+
 
         // BackfillProjectionsStreamAsync removed — the old multi-snapshot-per-game
         // Projections design (one row per (GameId, snapshotWeek) pass) was replaced

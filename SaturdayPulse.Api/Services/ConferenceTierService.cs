@@ -88,6 +88,24 @@ namespace SaturdayPulse.Services
         private const int Pac12ConferenceId = 9;
         private const int Pac12LastP4Year   = 2023;
 
+        // FBS Independents (18) — NOT a real competitive tier, just "no conference."
+        // Member teams range from Notre Dame (genuinely P4-caliber) to programs that
+        // are correctly G6. GetTierFromConference's generic "not in P4ConferenceIds
+        // → G6" default is right for most of that range, but wrong for Notre Dame
+        // specifically. GetTierStatic already carried a team-name-keyed Notre Dame
+        // → P4 override, but that method is a fallback ONLY for teams missing from
+        // TeamsConferenceHistory entirely — Notre Dame has a real row (ConferenceId
+        // 18, 2021–present, confirmed via direct query), so that override was never
+        // actually reached. FIXED 2026-08-20: same team-specific override, applied
+        // here instead, keyed by TeamId (available in GetConfDataBatchAsync) rather
+        // than by name — reachable regardless of whether a history row exists.
+        private const int IndependentConferenceId = 18;
+
+        private static readonly Dictionary<int, string> IndependentTierOverridesByTeamId = new()
+        {
+            { 87, "P4" }, // Notre Dame
+        };
+
         // ── Conference info tuple ─────────────────────────────────────────────────
 
         /// <summary>
@@ -140,6 +158,17 @@ namespace SaturdayPulse.Services
                     {
                         var c    = confById[kvp.Value];
                         var tier = GetTierFromConference(c.ConferenceId, c.Classification, year);
+
+                        // Independent-conference team-specific override — see class
+                        // remarks on IndependentTierOverridesByTeamId. Only applies
+                        // within the Independent conference itself; every other
+                        // conference's tier is untouched.
+                        if (c.ConferenceId == IndependentConferenceId &&
+                            IndependentTierOverridesByTeamId.TryGetValue(kvp.Key, out var overrideTier))
+                        {
+                            tier = overrideTier;
+                        }
+
                         return new ConferenceData(
                             c.Name         ?? string.Empty,
                             c.Abbreviation ?? string.Empty,

@@ -155,7 +155,14 @@ namespace SaturdayPulse.Services
                 object? homeStats = null;
                 object? awayStats = null;
 
-                bool isWeek1 = g.Week == 1;
+                // REMOVED 2026-08-20: isWeek1 flag that forced OverallRank/Record/
+                // PowerRating/CombinedSOS/OffensiveRank/AvgPointsScored/
+                // OffensiveZScore/DefensiveRank/AvgPointsAllowed/DefensiveZScore
+                // to 0/null/"0-0" for every Week 1 game, every season. Legacy
+                // guard from before full-season blending existed and before
+                // week 0 was introduced — WeeklyRankings now has real, meaningful
+                // computed values at week 1 (and week 0), so there's no longer
+                // any reason to blank them on display. Confirmed with Charlie.
 
                 if (snapshot != null)
                 {
@@ -164,16 +171,16 @@ namespace SaturdayPulse.Services
                         {
                             TeamId = hwr.TeamID,
                             TeamName = homeTeam?.TeamName ?? g.HomeName,
-                            OverallRank = isWeek1 ? 0 : hwr.OverallRank,
-                            Record = isWeek1 ? "0-0" : $"{hwr.Wins}-{hwr.Losses}",
-                            PowerRating = isWeek1 ? (double?)null : (double?)hwr.Ranking,
-                            CombinedSOS = isWeek1 ? (double?)null : (double?)hwr.CombinedSOS,
-                            OffensiveRank = isWeek1 ? (int?)null : hwr.OffensiveRank,
-                            AvgPointsScored = isWeek1 ? (double?)null : (double?)hwr.AvgPointsScored,
-                            OffensiveZScore = isWeek1 ? (double?)null : (double?)hwr.OffensiveZScore,
-                            DefensiveRank = isWeek1 ? (int?)null : hwr.DefensiveRank,
-                            AvgPointsAllowed = isWeek1 ? (double?)null : (double?)hwr.AvgPointsAllowed,
-                            DefensiveZScore = isWeek1 ? (double?)null : (double?)hwr.DefensiveZScore,
+                            OverallRank = hwr.OverallRank,
+                            Record = $"{hwr.Wins}-{hwr.Losses}",
+                            PowerRating = (double?)hwr.Ranking,
+                            CombinedSOS = (double?)hwr.CombinedSOS,
+                            OffensiveRank = hwr.OffensiveRank,
+                            AvgPointsScored = (double?)hwr.AvgPointsScored,
+                            OffensiveZScore = (double?)hwr.OffensiveZScore,
+                            DefensiveRank = hwr.DefensiveRank,
+                            AvgPointsAllowed = (double?)hwr.AvgPointsAllowed,
+                            DefensiveZScore = (double?)hwr.DefensiveZScore,
                         };
 
                     if (snapshot.TryGetValue(g.AwayId ?? 0, out var awr))
@@ -181,16 +188,16 @@ namespace SaturdayPulse.Services
                         {
                             TeamId = awr.TeamID,
                             TeamName = awayTeam?.TeamName ?? g.AwayName,
-                            OverallRank = isWeek1 ? 0 : awr.OverallRank,
-                            Record = isWeek1 ? "0-0" : $"{awr.Wins}-{awr.Losses}",
-                            PowerRating = isWeek1 ? (double?)null : (double?)awr.Ranking,
-                            CombinedSOS = isWeek1 ? (double?)null : (double?)awr.CombinedSOS,
-                            OffensiveRank = isWeek1 ? (int?)null : awr.OffensiveRank,
-                            AvgPointsScored = isWeek1 ? (double?)null : (double?)awr.AvgPointsScored,
-                            OffensiveZScore = isWeek1 ? (double?)null : (double?)awr.OffensiveZScore,
-                            DefensiveRank = isWeek1 ? (int?)null : awr.DefensiveRank,
-                            AvgPointsAllowed = isWeek1 ? (double?)null : (double?)awr.AvgPointsAllowed,
-                            DefensiveZScore = isWeek1 ? (double?)null : (double?)awr.DefensiveZScore,
+                            OverallRank = awr.OverallRank,
+                            Record = $"{awr.Wins}-{awr.Losses}",
+                            PowerRating = (double?)awr.Ranking,
+                            CombinedSOS = (double?)awr.CombinedSOS,
+                            OffensiveRank = awr.OffensiveRank,
+                            AvgPointsScored = (double?)awr.AvgPointsScored,
+                            OffensiveZScore = (double?)awr.OffensiveZScore,
+                            DefensiveRank = awr.DefensiveRank,
+                            AvgPointsAllowed = (double?)awr.AvgPointsAllowed,
+                            DefensiveZScore = (double?)awr.DefensiveZScore,
                         };
                 }
 

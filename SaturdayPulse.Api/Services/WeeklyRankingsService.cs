@@ -88,9 +88,33 @@ namespace SaturdayPulse.Services
 
             // Load prior week's WeeklyRankings for pregame strength — same source
             // the AvgScoreDifferential table was built from.
-            var priorWeek     = Math.Max(week - 1, 0);
-            var priorRankings = await _uow.WeeklyRankings
-                .GetByYearAndWeekAsync(year, priorWeek, token);
+            //
+            // FIXED 2026-08-21. Previously: priorWeek = Math.Max(week - 1, 0),
+            // assuming week-1 always has a WeeklyRankings row. False whenever a
+            // week has zero games scheduled league-wide (e.g. week 14 here — the
+            // real off week between the bulk of the regular season and week 15,
+            // which currently holds only Army-Navy, itself a regular-season game
+            // that plays after most other regular-season games conclude — NOT
+            // conference championship week, corrected from an earlier wrong
+            // assumption in this session). BackfillYearAsync's week list is (and
+            // should stay) derived from actual scheduled games, so a genuinely
+            // empty week correctly never gets a WeeklyRankings row of its own —
+            // manufacturing one would just be a duplicate of the prior real
+            // week's data, adding clutter with no real signal. The bug was never
+            // "week 14 needs a row" — it's that week 15's lookup assumed one
+            // would be there. Fixed by searching backward for the nearest week
+            // that actually has data, same "resolve to what's real, don't assume
+            // a fixed offset" fix already applied today to
+            // ExperimentalInertiaRatingService's liveWeek resolution.
+            var priorWeek = Math.Max(week - 1, 0);
+            var priorRankings = new List<WeeklyRanking>();
+            while (priorWeek > 0)
+            {
+                priorRankings = await _uow.WeeklyRankings
+                    .GetByYearAndWeekAsync(year, priorWeek, token);
+                if (priorRankings.Count > 0) break;
+                priorWeek--;
+            }
             var priorByTeamId = priorRankings.ToDictionary(wr => wr.TeamID);
 
             // SeedRating fallback for opponent pregame strength — used when no
