@@ -981,11 +981,9 @@ namespace SaturdayPulse.Services
                 var targetYear = year ?? DateTime.Now.Year;
                 var Teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
 
-                // Year-aware Name + Abbreviation + Tier for every known team — one batch
                 var confDataByTeamId = await _tierService.GetConfDataBatchAsync(
                     Teams.Keys, targetYear, token);
 
-                // Safe lookup with static fallback for teams missing a history row
                 ConferenceTierService.ConferenceData ConfData(int? teamId, string? teamName = null)
                 {
                     if (teamId.HasValue && confDataByTeamId.TryGetValue(teamId.Value, out var cd))
@@ -1007,11 +1005,6 @@ namespace SaturdayPulse.Services
                     var currentRecords = await _uow.TeamRecords.GetByYearAsync(targetYear, token);
                     var currentRecordLookup = currentRecords.ToDictionary(r => r.TeamID);
 
-                    // National ordinal rank of ZRoster among FBS teams that have it computed
-                    // for this year — coverage is partial (roster data only loaded 2020+, and
-                    // ComputeZRosterAsync is a manual admin trigger, not part of the automated
-                    // pipeline), so this dictionary intentionally omits teams without a value
-                    // rather than defaulting them to worst-rank.
                     var rosterRankByTeam = currentRecords
                         .Where(r => r.ZRoster.HasValue)
                         .OrderByDescending(r => r.ZRoster!.Value)
@@ -1032,38 +1025,86 @@ namespace SaturdayPulse.Services
                     var sample = currentRecords.FirstOrDefault();
                     Debug.WriteLine($"Sample TrendRating: {sample?.TrendRating}, Pedigree: {sample?.PedigreeRating}, Seed: {sample?.SeedRating}");
 
-                    var result = weekly
+                    // ── Composite sort key — 2026-08-22 (Charlie) ────────────────────────
+                    // Rankings-page default sort: composite (actual + projected) win%,
+                    // tiebreak CombinedSOS, then RosterRank. Replaces the prior
+                    // wr.OverallRank ordering, which carried WeeklyRankingsService's own
+                    // Ranking-based rank straight through — a different, separately
+                    // circular computation (see WeeklyRankingsService Step 10) that this
+                    // change deliberately does NOT touch. Wins/Losses/RosterRank now need
+                    // resolving before the sort, not just inside the final projection.
+                    var eligible = weekly
                         .Where(wr => wr.Ranking.HasValue)
                         .Where(wr => currentRecordLookup.ContainsKey(wr.TeamID))
-                        .OrderBy(wr => wr.OverallRank)
                         .Select(wr =>
                         {
+                            projRecordByTeam.TryGetValue(wr.TeamID, out var projWL);
+                            actualRecordByTeam.TryGetValue(wr.TeamID, out var actualWL);
+                            var rosterRank = rosterRankByTeam.TryGetValue(wr.TeamID, out var rr) ? rr : (int?)null;
+                            Teams.TryGetValue(wr.TeamID, out var t0);
+                            var conf = ConfData(wr.TeamID, t0?.TeamName);
+
+                            var compositeWins = actualWL.Wins + projWL.Wins;
+                            var compositeLosses = actualWL.Losses + projWL.Losses;
+                            var compositeTotal = compositeWins + compositeLosses;
+
+                            return new
+                            {
+                                Weekly = wr,
+                                ActualWL = actualWL,
+                                ProjWL = projWL,
+                                RosterRank = rosterRank,
+                                Conf = conf,
+                                CompositeWinPct = compositeTotal > 0
+                                    ? (double)compositeWins / compositeTotal
+                                    : 0.0
+                            };
+                        })
+                        .OrderByDescending(x => x.CompositeWinPct)
+                        .ThenByDescending(x => (double?)x.Weekly.CombinedSOS ?? double.MinValue)
+                        .ThenBy(x => x.RosterRank ?? int.MaxValue)
+                        .ToList();
+
+                    // TierRank recomputed from the same composite order, grouped by tier
+                    // — same pattern the no-throughWeek branch below already used for its
+                    // own TierRank; group enumeration preserves eligible's sort order, so
+                    // no redundant OrderBy needed inside the loop.
+                    var tierRankLookup = new Dictionary<int, int>();
+                    foreach (var tierGroup in eligible.GroupBy(x => x.Conf.Tier))
+                    {
+                        var tieredTeams = tierGroup
+                            .Select((x, i) => new { x.Weekly.TeamID, TierRank = i + 1 })
+                            .ToList();
+                        foreach (var team in tieredTeams)
+                            tierRankLookup[team.TeamID] = team.TierRank;
+                    }
+
+                    var result = eligible
+                        .Select((x, i) =>
+                        {
+                            var wr = x.Weekly;
                             Teams.TryGetValue(wr.TeamID, out var t);
                             currentRecordLookup.TryGetValue(wr.TeamID, out var currentRecord);
                             historyByTeam.TryGetValue(wr.TeamID, out var history);
                             history ??= [];
 
-                            var conf = ConfData(wr.TeamID, t?.TeamName);
-                            projRecordByTeam.TryGetValue(wr.TeamID, out var projWL);
-                            actualRecordByTeam.TryGetValue(wr.TeamID, out var actualWL);
-
                             return new PowerRankingRowResponse
                             {
                                 TeamID = wr.TeamID,
                                 TeamName = t?.TeamName,
-                                Conference = conf.Name,
-                                ConferenceAbbr = conf.Abbreviation,
+                                Conference = x.Conf.Name,
+                                ConferenceAbbr = x.Conf.Abbreviation,
                                 Division = t?.Division,
-                                Tier = conf.Tier,
-                                OverallRank = wr.OverallRank,
-                                TierRank = wr.TierRank,
+                                Tier = x.Conf.Tier,
+                                OverallRank = i + 1,
+                                TierRank = tierRankLookup[wr.TeamID],
                                 Ranking = (double?)wr.Ranking,
                                 PowerRating = (double?)wr.PowerRating,
                                 Year = (int)wr.Year,
-                                Wins = actualWL.Wins,
-                                Losses = actualWL.Losses,
-                                ProjectedWins = actualWL.Wins + projWL.Wins,
-                                ProjectedLosses = actualWL.Losses + projWL.Losses,
+                                Wins = x.ActualWL.Wins,
+                                Losses = x.ActualWL.Losses,
+                                ProjectedWins = x.ActualWL.Wins + x.ProjWL.Wins,
+                                ProjectedLosses = x.ActualWL.Losses + x.ProjWL.Losses,
                                 BaseSOS = (double?)wr.BaseSOS,
                                 CombinedSOS = (double?)wr.CombinedSOS,
                                 AvgPointsScored = (double?)wr.AvgPointsScored,
@@ -1072,14 +1113,12 @@ namespace SaturdayPulse.Services
                                 DefensiveZScore = (double?)wr.DefensiveZScore,
                                 OffensiveRank = wr.OffensiveRank,
                                 DefensiveRank = wr.DefensiveRank,
-                                RosterRank = rosterRankByTeam.TryGetValue(wr.TeamID, out var rr) ? rr : (int?)null,
+                                RosterRank = x.RosterRank,
                                 TrendRating = (double?)(currentRecord?.TrendRating),
                                 PedigreeRating = (double?)currentRecord?.PedigreeRating,
                                 SeedRating = (double?)currentRecord?.SeedRating,
-                                TrendHistory = history
-                                    .Select(h => (double)(h.TrendRating ?? 0m)).ToList(),
-                                PedigreeHistory = history
-                                    .Select(h => (double)(h.PedigreeRating ?? 0m)).ToList()
+                                TrendHistory = history.Select(h => (double)(h.TrendRating ?? 0m)).ToList(),
+                                PedigreeHistory = history.Select(h => (double)(h.PedigreeRating ?? 0m)).ToList()
                             };
                         }).ToList();
 
@@ -1093,7 +1132,6 @@ namespace SaturdayPulse.Services
                     var teamRecords = await _uow.TeamRecords.GetByYearWithTeamsAsync(targetYear, token);
                     var ranked = teamRecords.Where(tr => tr.Ranking.HasValue).ToList();
 
-                    // Same coverage caveat as the throughWeek branch above — see comment there.
                     var rosterRankByTeam = teamRecords
                         .Where(r => r.ZRoster.HasValue)
                         .OrderByDescending(r => r.ZRoster!.Value)
@@ -1105,30 +1143,56 @@ namespace SaturdayPulse.Services
                     var projRecordByTeam = BuildProjectedRecordRollup(projGames, projProjections, null);
                     var actualRecordByTeam = BuildActualRecordRollup(projGames, null);
 
+                    // Same composite key as the throughWeek branch above — resolved here
+                    // too, since ordering now needs it before OverallRank is assigned.
                     var withTiers = ranked
                         .Select(tr =>
                         {
                             Teams.TryGetValue(tr.TeamID, out var t);
                             var conf = ConfData(tr.TeamID, t?.TeamName);
+                            projRecordByTeam.TryGetValue(tr.TeamID, out var projWL);
+                            actualRecordByTeam.TryGetValue(tr.TeamID, out var actualWL);
+                            var rosterRank = rosterRankByTeam.TryGetValue(tr.TeamID, out var rr) ? rr : (int?)null;
+
+                            var compositeWins = actualWL.Wins + projWL.Wins;
+                            var compositeLosses = actualWL.Losses + projWL.Losses;
+                            var compositeTotal = compositeWins + compositeLosses;
+
                             return new
                             {
                                 TeamRecord = tr,
                                 Team = t,
-                                Conf = conf
+                                Conf = conf,
+                                ActualWL = actualWL,
+                                ProjWL = projWL,
+                                RosterRank = rosterRank,
+                                CompositeWinPct = compositeTotal > 0
+                                    ? (double)compositeWins / compositeTotal
+                                    : 0.0
                             };
                         })
-                        .OrderByDescending(t => t.TeamRecord.Ranking)
+                        .OrderByDescending(t => t.CompositeWinPct)
+                        .ThenByDescending(t => (double?)t.TeamRecord.CombinedSOS ?? double.MinValue)
+                        .ThenBy(t => t.RosterRank ?? int.MaxValue)
                         .ToList();
 
                     var withOverallRank = withTiers
-                        .Select((t, i) => new { t.TeamRecord, t.Team, t.Conf, OverallRank = i + 1 })
+                        .Select((t, i) => new
+                        {
+                            t.TeamRecord,
+                            t.Team,
+                            t.Conf,
+                            t.ActualWL,
+                            t.ProjWL,
+                            t.RosterRank,
+                            OverallRank = i + 1
+                        })
                         .ToList();
 
                     var tierRankLookup = new Dictionary<int, int>();
                     foreach (var tierGroup in withOverallRank.GroupBy(t => t.Conf.Tier))
                     {
                         var tieredTeams = tierGroup
-                            .OrderByDescending(t => t.TeamRecord.Ranking)
                             .Select((t, i) => new { t.TeamRecord.TeamID, TierRank = i + 1 })
                             .ToList();
                         foreach (var team in tieredTeams)
@@ -1136,31 +1200,25 @@ namespace SaturdayPulse.Services
                     }
 
                     var rankings = withOverallRank
-                        .Select(t =>
+                        .Select(t => new PowerRankingRowResponse
                         {
-                            projRecordByTeam.TryGetValue(t.TeamRecord.TeamID, out var projWL);
-                            actualRecordByTeam.TryGetValue(t.TeamRecord.TeamID, out var actualWL);
-
-                            return new PowerRankingRowResponse
-                            {
-                                TeamID = t.TeamRecord.TeamID,
-                                TeamName = t.Team?.TeamName ?? t.TeamRecord.Teams?.TeamName,
-                                Conference = t.Conf.Name,
-                                ConferenceAbbr = t.Conf.Abbreviation,
-                                Division = t.Team?.Division,
-                                Tier = t.Conf.Tier,
-                                OverallRank = t.OverallRank,
-                                TierRank = tierRankLookup[t.TeamRecord.TeamID],
-                                Ranking = (double?)t.TeamRecord.Ranking,
-                                Year = t.TeamRecord.Year,
-                                Wins = actualWL.Wins,
-                                Losses = actualWL.Losses,
-                                BaseSOS = (double?)t.TeamRecord.BaseSOS,
-                                CombinedSOS = (double?)t.TeamRecord.CombinedSOS,
-                                RosterRank = rosterRankByTeam.TryGetValue(t.TeamRecord.TeamID, out var rr) ? rr : (int?)null,
-                                ProjectedWins = actualWL.Wins + projWL.Wins,
-                                ProjectedLosses = actualWL.Losses + projWL.Losses
-                            };
+                            TeamID = t.TeamRecord.TeamID,
+                            TeamName = t.Team?.TeamName ?? t.TeamRecord.Teams?.TeamName,
+                            Conference = t.Conf.Name,
+                            ConferenceAbbr = t.Conf.Abbreviation,
+                            Division = t.Team?.Division,
+                            Tier = t.Conf.Tier,
+                            OverallRank = t.OverallRank,
+                            TierRank = tierRankLookup[t.TeamRecord.TeamID],
+                            Ranking = (double?)t.TeamRecord.Ranking,
+                            Year = t.TeamRecord.Year,
+                            Wins = t.ActualWL.Wins,
+                            Losses = t.ActualWL.Losses,
+                            BaseSOS = (double?)t.TeamRecord.BaseSOS,
+                            CombinedSOS = (double?)t.TeamRecord.CombinedSOS,
+                            RosterRank = t.RosterRank,
+                            ProjectedWins = t.ActualWL.Wins + t.ProjWL.Wins,
+                            ProjectedLosses = t.ActualWL.Losses + t.ProjWL.Losses
                         }).ToList();
 
                     return new PowerRankingsResult(false, rankings);
@@ -1173,7 +1231,6 @@ namespace SaturdayPulse.Services
 
             return new PowerRankingsResult(false, new List<PowerRankingRowResponse>());
         }
-
 
         public async Task<TeamSeasonArcResult> GetTeamSeasonArcAsync(
             int teamId, int year, CancellationToken token = default)

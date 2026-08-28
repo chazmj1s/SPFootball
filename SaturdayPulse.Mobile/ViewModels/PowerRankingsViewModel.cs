@@ -16,7 +16,7 @@ namespace SaturdayPulse.ViewModels
         private ObservableCollection<TeamRanking> _filteredTeams = new();
         private bool          _isBusy;
         private RankingFilter _currentFilter         = RankingFilter.All;
-        private RankingSort   _currentSort           = RankingSort.PowerRating;
+        private RankingSort   _currentSort           = RankingSort.Record;
         private bool          _isSortAscending       = false;
         private string        _selectedFilterDisplay = "All";
         private string        _statusMessage = "Loading...";
@@ -252,7 +252,7 @@ namespace SaturdayPulse.ViewModels
         {
             RankingSort.PowerRating => t.DisplayRank,
             RankingSort.SOS        => t.DisplaySOS,
-            RankingSort.Record     => t.Record,
+            RankingSort.Record     => t.RecordWithProjection,
             RankingSort.TierRank   => t.DisplayTierWithRank,
             RankingSort.Rank       => t.DisplayRank,
             RankingSort.RosterRank => t.DisplayRosterRank,
@@ -394,6 +394,20 @@ namespace SaturdayPulse.ViewModels
             OnPropertyChanged(nameof(ActiveSortLabel));
         }
 
+        /// <summary>
+        /// Actual+projected win% — same composite the API now defaults the
+        /// Rankings order to (ProductionGameDataService.V2.GetPowerRankingsV2Async,
+        /// 2026-08-22). Kept here too so client-side re-sorts on the Record column
+        /// (tap to sort, toggle direction) match the API's own ordering instead of
+        /// falling back to actual-only Wins/Losses, which ties out everyone at 0-0
+        /// before any real games are played.
+        /// </summary>
+        private static double CompositeWinPct(TeamRanking t)
+        {
+            var total = t.ProjectedWins + t.ProjectedLosses;
+            return total > 0 ? (double)t.ProjectedWins / total : 0.0;
+        }
+
         private void ApplyFiltersAndSort()
         {
             var filtered = _allTeams.AsEnumerable();
@@ -432,8 +446,10 @@ namespace SaturdayPulse.ViewModels
                     ? filtered.OrderBy(t => t.Ranking ?? 0)
                     : filtered.OrderByDescending(t => t.Ranking ?? 0),
                 RankingSort.Record => _isSortAscending
-                    ? filtered.OrderBy(t => t.Wins).ThenBy(t => t.Losses)
-                    : filtered.OrderByDescending(t => t.Wins).ThenBy(t => t.Losses),
+                    ? filtered.OrderBy(t => CompositeWinPct(t)).ThenBy(t => t.CombinedSOS ?? 0)
+                              .ThenBy(t => t.RosterRank ?? int.MaxValue)
+                    : filtered.OrderByDescending(t => CompositeWinPct(t)).ThenByDescending(t => t.CombinedSOS ?? 0)
+                              .ThenBy(t => t.RosterRank ?? int.MaxValue),
                 RankingSort.Conference => _isSortAscending
                     ? filtered.OrderBy(t => t.Conference).ThenBy(t => t.OverallRank)
                     : filtered.OrderByDescending(t => t.Conference).ThenBy(t => t.OverallRank),

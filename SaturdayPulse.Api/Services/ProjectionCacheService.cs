@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Responses;
 
@@ -53,14 +54,20 @@ namespace SaturdayPulse.Services
     public class ProjectionCacheService
     {
         private readonly IServiceScopeFactory             _scopeFactory;
+        private readonly ILogger<ProjectionCacheService>  _logger;
 
         private readonly SemaphoreSlim                    _lock = new(1, 1);
         private          int?                             _cachedYear;
         private          Dictionary<int, GamePrediction>  _cache = new();
         private          Dictionary<int, GamePrediction>  _pregameCache = new();
 
-        public ProjectionCacheService(IServiceScopeFactory scopeFactory)
-            => _scopeFactory = scopeFactory;
+        public ProjectionCacheService(
+            IServiceScopeFactory scopeFactory,
+            ILogger<ProjectionCacheService> logger)
+        {
+            _scopeFactory = scopeFactory;
+            _logger = logger;
+        }
 
         // ── Public API ────────────────────────────────────────────────────────────
 
@@ -124,41 +131,72 @@ namespace SaturdayPulse.Services
 
                 var resolved = await uow.ResolvedGameResults.GetByYearAsync(year, token);
                 var allRawProjections = await uow.Projections.GetByYearAsync(year, token);
-                var projectionByGameId = allRawProjections.ToDictionary(p => p.GameId);
+
+                // GameId is not guaranteed unique per year — e.g. two teams that
+                // played each other in multiple different years (2021 Alabama /
+                // 1999 LSU) can produce duplicate GameId rows across the season's
+                // Projections/ResolvedGameResults query. Group-and-take-first
+                // instead of a bare ToDictionary so a duplicate degrades to a
+                // logged warning instead of an unhandled ArgumentException.
+                var projectionByGameId = allRawProjections
+                    .GroupBy(p => p.GameId)
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                if (projectionByGameId.Count != allRawProjections.Count)
+                {
+                    _logger.LogWarning(
+                        "ProjectionCacheService: {DuplicateCount} duplicate GameId row(s) in Projections for year {Year}; keeping first occurrence per GameId.",
+                        allRawProjections.Count - projectionByGameId.Count, year);
+                }
 
                 // Only unplayed games need a "projection" entry — a played game's
                 // real result is read straight from Games elsewhere, not from this
-                // cache. One row per game, guaranteed by the view itself, so no
-                // grouping/ordering to pick "the right" row.
-                var newCache = resolved
-                    .Where(r => r.IsProjected)
+                // cache.
+                var projectedResolved = resolved.Where(r => r.IsProjected).ToList();
+                var newCache = projectedResolved
+                    .GroupBy(r => r.GameId)
                     .ToDictionary(
-                        r => r.GameId,
-                        r => new GamePrediction
+                        g => g.Key,
+                        g =>
                         {
-                            GameId = r.GameId,
-                            Week = r.Week,
-                            PredictedTeamScore = r.HomePoints,
-                            PredictedOpponentScore = r.AwayPoints,
-                            ExpectedMargin = projectionByGameId.TryGetValue(r.GameId, out var proj)
-                                                    ? (double)proj.PredictedSpread : 0
+                            var r = g.First();
+                            return new GamePrediction
+                            {
+                                GameId = r.GameId,
+                                Week = r.Week,
+                                PredictedTeamScore = r.HomePoints,
+                                PredictedOpponentScore = r.AwayPoints,
+                                ExpectedMargin = projectionByGameId.TryGetValue(r.GameId, out var proj)
+                                                        ? (double)proj.PredictedSpread : 0
+                            };
                         });
+
+                if (newCache.Count != projectedResolved.Count)
+                {
+                    _logger.LogWarning(
+                        "ProjectionCacheService: duplicate GameId row(s) in ResolvedGameResults (projected) for year {Year}; keeping first occurrence per GameId.",
+                        year);
+                }
 
                 // Pregame: every game's locked Projection row, unconditionally —
                 // read straight from Projections, not resolved against Games, so
                 // a played game's original pregame prediction survives here even
-                // though it's excluded from newCache above. Same one-row-per-game
-                // guarantee as above, so no grouping/ordering needed.
+                // though it's excluded from newCache above.
                 var newPregameCache = allRawProjections
+                    .GroupBy(p => p.GameId)
                     .ToDictionary(
-                        p => p.GameId,
-                        p => new GamePrediction
+                        g => g.Key,
+                        g =>
                         {
-                            GameId                 = p.GameId,
-                            Week                   = p.Week,
-                            PredictedTeamScore     = p.HomePoints,
-                            PredictedOpponentScore = p.AwayPoints,
-                            ExpectedMargin         = (double)p.PredictedSpread
+                            var p = g.First();
+                            return new GamePrediction
+                            {
+                                GameId                 = p.GameId,
+                                Week                   = p.Week,
+                                PredictedTeamScore     = p.HomePoints,
+                                PredictedOpponentScore = p.AwayPoints,
+                                ExpectedMargin         = (double)p.PredictedSpread
+                            };
                         });
 
                 _cache = newCache;
