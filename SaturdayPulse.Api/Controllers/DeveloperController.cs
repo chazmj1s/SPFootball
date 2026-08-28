@@ -726,6 +726,70 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+
+        /// <summary>
+        /// Computes and persists a new AnchorBlendCoefficients row for `season`,
+        /// using only games played through season - 1. Intended to run BEFORE
+        /// Initialize Season in the Season Setup sequence. Returns a 200 with a
+        /// "skipped" message (not an error) if there's no usable prior-year data yet.
+        /// Example: POST /api/developer/computeAnchorBlendCoefficients?season=2026
+        /// </summary>
+        [HttpPost("computeAnchorBlendCoefficients")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> ComputeAnchorBlendCoefficients(
+            [FromQuery] int season,
+            [FromQuery] int windowYears = 3,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var coefficient = await developerService.ComputeAnchorBlendCoefficientsAsync(season, windowYears, token);
+                if (coefficient == null)
+                {
+                    return Ok(new { message = $"Skipped season {season} — no usable prior-year data yet.", persisted = false });
+                }
+                return Ok(new { message = $"Anchor blend coefficients computed and persisted for season {season}.", persisted = true, coefficient });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing anchor blend coefficients");
+                return StatusCode(500, "An error occurred while computing anchor blend coefficients.");
+            }
+        }
+
+        /// <summary>
+        /// Backfills AnchorBlendCoefficients for every season from startSeason
+        /// through the most recent season with played data (or throughSeason, if
+        /// given).
+        /// Example: POST /api/developer/computeAnchorBlendCoefficientsBulk?startSeason=1965
+        /// </summary>
+        [HttpPost("computeAnchorBlendCoefficientsBulk")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> ComputeAnchorBlendCoefficientsBulk(
+            [FromQuery] int startSeason,
+            [FromQuery] int? throughSeason = null,
+            [FromQuery] int windowYears = 3,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var (persisted, skipped) = await developerService.ComputeAnchorBlendCoefficientsBulkAsync(startSeason, throughSeason, windowYears, token);
+                return Ok(new
+                {
+                    message = $"Anchor blend coefficients backfilled — {persisted} season(s) persisted, {skipped} skipped (no usable prior-year data).",
+                    persisted,
+                    skipped
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error backfilling anchor blend coefficients");
+                return StatusCode(500, "An error occurred while backfilling anchor blend coefficients.");
+            }
+        }
+
+
+
         /// <summary>
         /// Shows detailed game-by-game analysis for a specific team.
         /// Example: GET /api/developer/analyzeTeamGames?teamId=110&year=2024

@@ -416,6 +416,23 @@ namespace SaturdayPulse.Services
                 rawSpread     += homeSignedAdjustment;
             }
 
+            // Floor at 0 before rounding — mirrors the existing Math.Max(0, ...)
+            // guard already applied to predictedTeamScore/predictedOppScore in
+            // CalculatePrediction (display/sandbox path). BuildProjection's
+            // persisted homePoints/awayPoints had no equivalent guard, which let
+            // an extreme Ranking gap (e.g. a team's own compounding chain of
+            // not-yet-played projections dragging its Ranking down week over
+            // week — see 2026-08-20 Notre Dame diagnosis) round through to a
+            // literal negative score in the stored Projection row. Companion
+            // fix: ExperimentalInertiaRatingService.GetBlendedRatingsForWeekAsync
+            // now pins its live rating source to the last actually-played week
+            // instead of chaining week-1, which stops the underlying Ranking
+            // gap from growing unbounded in the first place. This floor stays
+            // in either way, as a hard guarantee no persisted score is ever
+            // negative regardless of what upstream produces.
+            homePointsRaw = Math.Max(0, homePointsRaw);
+            awayPointsRaw = Math.Max(0, awayPointsRaw);
+
             var homePoints = (int)Math.Round(homePointsRaw, MidpointRounding.AwayFromZero);
             var awayPoints = (int)Math.Round(awayPointsRaw, MidpointRounding.AwayFromZero);
 

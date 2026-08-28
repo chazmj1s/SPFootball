@@ -18,6 +18,9 @@ namespace SaturdayPulse.Services
     /// (a Towards Data Science piece on basketball/golf rating systems) that turned out
     /// not to support the specific K=4 / ESPN FPI / SP+ claims attributed to it. Tune
     /// via the RatingComparisonService backtest output before treating this as final.
+    /// STILL a placeholder as of the 2026-08-20 anchor-blend fix below — that fix only
+    /// addressed ComputeSeededAnchorUnit's own internal weighting (TrendRating/SeedRating
+    /// vs ZRoster), not BlendUnit's K, which is a separate open question.
     ///
     /// NEW FILE — part of the K=4 inertia-blending experimental comparison path.
     /// </summary>
@@ -29,29 +32,63 @@ namespace SaturdayPulse.Services
             => _config = config.Value;
 
         /// <summary>
-        /// SeededAnchor = TrendRating (5-yr, already unit-scale) blended with ZRoster
-        /// (mapped onto the same [0,1] scale). Replaces the old week-0-snapshot-as-anchor
-        /// approach for the experimental path only. TrendRating itself is untouched —
-        /// pure historical, no ZRoster — this is a derived value computed at blend time,
-        /// not a write to the TrendRating column. Per Charlie's confirmation, Trend (not
-        /// a new column) is reused directly as the 5-year anchor source.
+        /// SeededAnchor = SeedRating (Trend + Pedigree blend, already unit-scale)
+        /// blended with ZRoster (mapped onto the same [0,1] scale). Replaces the
+        /// old week-0-snapshot-as-anchor approach for the experimental path only.
+        /// SeedRating itself is untouched — this is a derived value computed at
+        /// blend time, not a write to any TeamRecord column.
+        ///
+        /// UPDATED 2026-08-20 — two changes together, both from the same real-data
+        /// calibration (AnchorBlendCalculator), replacing what were both dev
+        /// placeholders never validated against actual outcomes:
+        ///
+        ///   1. TrendRating → SeedRating. AnchorBlendCalculator's rolling-window
+        ///      calibration is deliberately windowed to the trailing 3 seasons
+        ///      (see AnchorBlendCoefficient remarks on why — transfer-portal-era
+        ///      drift in ZRoster's importance). TrendRating is itself a 5-year
+        ///      window, which would outlive a 3-year calibration and quietly pull
+        ///      in data from outside the period being fit. SeedRating also fit
+        ///      marginally but consistently better in backtesting. Using
+        ///      TrendRating here while calibrating against SeedRating would be
+        ///      internally inconsistent — they need to match.
+        ///
+        ///   2. The old (trendUnit + zRosterUnit) / 2.0 straight average, and the
+        ///      ZRoster * 0.05-then-map-with-stdDev=0.25 compression feeding it,
+        ///      are both gone. Real games say TrendRating/SeedRating-equivalent
+        ///      signal outweighs ZRoster's independent contribution by roughly
+        ///      3-4x (standardized regression coefficients, not a guess) — a 50/50
+        ///      split was overweighting ZRoster relative to what it's actually
+        ///      worth, regardless of how compressed the input was. coefficient's
+        ///      ZRosterWeight/RatingWeight (sum to 1.0) replace the fixed 50/50;
+        ///      its ZRosterMean/ZRosterStdDev (real distribution over the
+        ///      calibration window) replace the arbitrary mean=0/stdDev=0.25.
+        ///
+        /// coefficient is null when AnchorBlendCalculator hasn't run yet for this
+        /// season (e.g. the first 3 seasons of a from-scratch historical backfill,
+        /// mirroring TierDiscountCoefficient's identical gap) — falls back to the
+        /// exact prior behavior (50/50, mean=0/stdDev=0.25) rather than breaking,
+        /// same "missing coefficient = safe default, not an error" convention
+        /// BuildProjection already uses for a null TierDiscountCoefficient.
         /// </summary>
-        public double ComputeSeededAnchorUnit(TeamRecord record, decimal zRosterScalingConstant)
+        public double ComputeSeededAnchorUnit(TeamRecord record, AnchorBlendCoefficient? coefficient)
         {
-            double trendUnit = record.TrendRating.HasValue ? (double)record.TrendRating.Value : 0.5;
+            double seedUnit = record.SeedRating.HasValue ? (double)record.SeedRating.Value : 0.5;
 
             if (!record.ZRoster.HasValue)
-                return trendUnit;
+                return seedUnit;
 
-            // ZRoster is already a national z-score by construction — no additional
-            // z-scoring needed here, just the same clamp/map used everywhere else so
-            // it's on the identical [0,1] scale as TrendRating before blending.
+            double zRosterMean = coefficient != null ? (double)coefficient.ZRosterMean : 0.0;
+            double zRosterStdDev = coefficient != null ? (double)coefficient.ZRosterStdDev : 0.25;
+            double zRosterWeight = coefficient != null ? (double)coefficient.ZRosterWeight : 0.5;
+            double ratingWeight = coefficient != null ? (double)coefficient.RatingWeight : 0.5;
+
+            // ZRoster mapped onto [0,1] using this window's REAL mean/stddev
+            // (from the coefficient row) rather than an arbitrary compression —
+            // no more "* 0.05" step; ToUnitScale does the real standardization now.
             double zRosterUnit = RatingScaling.ToUnitScale(
-                (double)(record.ZRoster.Value * zRosterScalingConstant), mean: 0.0, stdDev: 0.25);
+                (double)record.ZRoster.Value, mean: zRosterMean, stdDev: zRosterStdDev);
 
-            // Simple average — ZRoster nudges the historical anchor rather than
-            // overriding it. Weighting here is itself a candidate for future tuning.
-            return (trendUnit + zRosterUnit) / 2.0;
+            return (seedUnit * ratingWeight) + (zRosterUnit * zRosterWeight);
         }
 
         /// <summary>

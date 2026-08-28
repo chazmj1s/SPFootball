@@ -17,7 +17,8 @@ namespace SaturdayPulse.Data
         public DbSet<TeamsConferenceHistory> TeamsConferenceHistory  { get; set; }
         public DbSet<Projection>            Projections             { get; set; } = null!;
         public DbSet<PortalEntry>           PortalEntries           { get; set; }
-        public DbSet<TierDiscountCoefficient> TierDiscountCoefficients { get; set; } = null!;   
+        public DbSet<TierDiscountCoefficient> TierDiscountCoefficients { get; set; } = null!;
+        public DbSet<AnchorBlendCoefficient> AnchorBlendCoefficients { get; set; } = null;
 
 
         /// <summary>

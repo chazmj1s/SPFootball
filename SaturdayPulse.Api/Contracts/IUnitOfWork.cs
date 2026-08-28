@@ -36,6 +36,7 @@ namespace SaturdayPulse.Contracts
         /// season; use GetLatestBySeasonAsync for live consumption.
         /// </summary>
         ITierDiscountCoefficientRepository TierDiscountCoefficients { get; }
+        IAnchorBlendCoefficientRepository AnchorBlendCoefficients { get; }  
 
         // ── User management / entitlement repositories ────────────────────────
         IUserProfileRepository UserProfiles { get; }

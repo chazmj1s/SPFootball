@@ -1,3 +1,4 @@
+using SaturdayPulse.Api.Repositories.Implementations;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Data;
 using SaturdayPulse.Repositories;
@@ -38,6 +39,7 @@ namespace SaturdayPulse.Infrastructure
         public IRecruitPlayerRepository RecruitPlayers { get; }
 
         public ITierDiscountCoefficientRepository TierDiscountCoefficients { get; }
+        public IAnchorBlendCoefficientRepository AnchorBlendCoefficients { get; }
 
         // ── User management / entitlement repositories ────────────────────────
         public IUserProfileRepository UserProfiles { get; }
@@ -75,6 +77,7 @@ namespace SaturdayPulse.Infrastructure
             RecruitPlayers = new RecruitPlayerRepository(_context);
 
             TierDiscountCoefficients = new TierDiscountCoefficientRepository(_context);
+            AnchorBlendCoefficients = new AnchorBlendCoefficientRepository(_context);
 
             UserProfiles    = new UserProfileRepository(_context);
             UserContactInfo = new UserContactInfoRepository(_context);

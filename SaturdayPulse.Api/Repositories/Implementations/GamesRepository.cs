@@ -89,6 +89,30 @@ namespace SaturdayPulse.Repositories.Implementations
                 .ToList();
         }
 
+        public async Task<Dictionary<int, int>> GetLastPlayedWeekByTeamAsync(
+            int year,
+            CancellationToken token = default)
+        {
+            // HomeId/AwayId (nullable int, ?? 0) — matches GetRivalryHistoryAsync,
+            // GetGameParticipantsAsync, etc. below. NOT HomeTeamId/AwayTeamId —
+            // that was Games confused with Projection's column names, doesn't
+            // compile against this model.
+            var homeRows = await _context.Games
+                .Where(g => g.Year == year && g.HomePoints != 0 && g.AwayPoints != 0)
+                .Select(g => new { TeamId = g.HomeId ?? 0, g.Week })
+                .ToListAsync(token);
+
+            var awayRows = await _context.Games
+                .Where(g => g.Year == year && g.HomePoints != 0 && g.AwayPoints != 0)
+                .Select(g => new { TeamId = g.AwayId ?? 0, g.Week })
+                .ToListAsync(token);
+
+            return homeRows
+                .Concat(awayRows)
+                .GroupBy(r => r.TeamId)
+                .ToDictionary(g => g.Key, g => (int)g.Max(r => r.Week));
+        }
+
         public async Task<List<GameParticipant>> GetGameParticipantsAsync(
             int year, CancellationToken token = default)
         {
