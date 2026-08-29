@@ -689,12 +689,16 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 2: Status bar                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="2" HeightRequest="24"
+    <Grid Grid.Row="2" HeightRequest="24" ColumnDefinitions="*,Auto"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
-      <Label Text="{Binding StatusMessage}"
+      <Label Grid.Column="0" Text="{Binding StatusMessage}"
              Padding="8,0" FontSize="10" Opacity="0.5"
              VerticalOptions="Center" HorizontalOptions="Start"
              TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
+      <Label Grid.Column="1" Text="( ) = projected value"
+             Padding="8,0" FontSize="11" FontAttributes="Italic"
+             VerticalOptions="Center" HorizontalOptions="End"
+             TextColor="{AppThemeBinding Light=#333333, Dark=#E0E0E0}" />
     </Grid>
 
   </Grid>

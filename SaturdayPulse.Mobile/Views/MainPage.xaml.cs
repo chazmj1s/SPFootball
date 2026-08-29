@@ -32,7 +32,7 @@ namespace SaturdayPulse.Views
         private static readonly (string Label, int PageHostIndex, bool RequiresSeasonPass)[] GatedTabs =
         {
             ("My Teams",   0, false),
-            ("Scores",     1, false),
+            ("Games",     1, false),
             ("Rankings",   2, false),
             ("Postseason", 3, true),
             ("Sandbox",    4, true),
@@ -95,7 +95,7 @@ namespace SaturdayPulse.Views
             // longer in labels[]/TabItems — SyncPage addresses PageHost by
             // position, not by TabItems, so this still works.
             AddPageToHost(_myTeamsPage);     // 0 — My Teams
-            AddPageToHost(_schedulePage);    // 1 — Scores
+            AddPageToHost(_schedulePage);    // 1 — Games
             AddPageToHost(_rankingsPage);    // 2 — Rankings
             AddPageToHost(_postseasonPage);  // 3 — Postseason
             AddPageToHost(_sandboxPage);     // 4 — Sandbox
@@ -193,7 +193,7 @@ namespace SaturdayPulse.Views
         ///      genuinely is no account for this identity yet, whether that's
         ///      because nobody's logged in on this device at all, or because
         ///      a stored session's identity has no server-side record. Either
-        ///      way, silently falling through to My Teams/Scores as if this
+        ///      way, silently falling through to My Teams/Games as if this
         ///      were a normal user is exactly the bug that prompted this
         ///      split — don't reintroduce it here. Takes priority over
         ///      everything below.
@@ -206,7 +206,7 @@ namespace SaturdayPulse.Views
         ///      simply won't highlight anything in the (Settings-less) tab
         ///      strip, which is expected.
         ///   2. Otherwise, if we're sitting on My Teams (tab 0) with no
-        ///      primary team set, fall back to Scores — My Teams has nothing
+        ///      primary team set, fall back to Games — My Teams has nothing
         ///      useful to show without a primary or followed team, and this
         ///      is checked every launch, not just the very first.
         /// Runs after the fact rather than blocking startup on the network
@@ -396,7 +396,7 @@ namespace SaturdayPulse.Views
             var index = stored switch
             {
                 "MyTeams"    => 0,
-                "Scores"     => 1,
+                "Games" => 1,
                 "Rankings"   => 2,
                 "Postseason" => 3,
                 "Sandbox"    => 4,

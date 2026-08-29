@@ -575,74 +575,115 @@
                in the same position; only the active one has height. ── -->
 
           <VerticalStackLayout IsVisible="{Binding IsRecruitingListActive}"
-                               Padding="8,4,8,6" Spacing="2"
-                               BindableLayout.ItemsSource="{Binding RosterChanges.RecruitingClass}">
-            <BindableLayout.ItemTemplate>
-              <DataTemplate x:DataType="models:RecruitSummary">
-                <Grid ColumnDefinitions="20,*,50" Padding="0,1">
-                  <Label Grid.Column="0" Text="{Binding Stars, StringFormat='{0}★'}" FontSize="9" />
-                  <Label Grid.Column="1" FontSize="9">
-                    <Label.FormattedText>
-                      <FormattedString>
-                        <Span Text="{Binding Name}" />
-                        <Span Text=" · " TextColor="#80FFFFFF" />
-                        <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
-                      </FormattedString>
-                    </Label.FormattedText>
-                  </Label>
-                  <Label Grid.Column="2" Text="{Binding Rating, StringFormat='{0:F3}'}"
-                         FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
-                </Grid>
-              </DataTemplate>
-            </BindableLayout.ItemTemplate>
+                               Padding="8,4,8,6" Spacing="2">
+
+            <!-- Header — no label over the star-rank column -->
+            <Grid ColumnDefinitions="20,2*,*,50" Padding="0,0,0,2">
+              <Label Grid.Column="1" Text="Player" FontSize="8" FontAttributes="Bold" TextColor="#80FFFFFF" />
+              <Label Grid.Column="2" Text="Comment" FontSize="8" FontAttributes="Bold" TextColor="#80FFFFFF" />
+              <Label Grid.Column="3" Text="Rating" FontSize="8" FontAttributes="Bold"
+                     HorizontalOptions="End" TextColor="#80FFFFFF" />
+            </Grid>
+            <BoxView HeightRequest="1" Margin="0,0,0,2"
+                     Color="{AppThemeBinding Light=#1A000000, Dark=#1AFFFFFF}" />
+
+            <VerticalStackLayout Spacing="2"
+                                 BindableLayout.ItemsSource="{Binding RosterChanges.RecruitingClass}">
+              <BindableLayout.ItemTemplate>
+                <DataTemplate x:DataType="models:RecruitSummary">
+                  <Grid ColumnDefinitions="20,2*,*,50" Padding="0,1">
+                    <Label Grid.Column="0" Text="{Binding Stars, StringFormat='{0}★'}" FontSize="9" />
+                    <Label Grid.Column="1" FontSize="9">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="{Binding Name}" />
+                          <Span Text=" · " TextColor="#80FFFFFF" />
+                          <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                    <Label Grid.Column="2" Text="" FontSize="9" />
+                    <Label Grid.Column="3" Text="{Binding Rating, StringFormat='{0:F3}'}"
+                           FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
+                  </Grid>
+                </DataTemplate>
+              </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
           </VerticalStackLayout>
 
           <VerticalStackLayout IsVisible="{Binding IsPortalInListActive}"
-                               Padding="8,4,8,6" Spacing="2"
-                               BindableLayout.ItemsSource="{Binding RosterChanges.PortalIn}">
-            <BindableLayout.ItemTemplate>
-              <DataTemplate x:DataType="models:PortalTransfer">
-                <Grid ColumnDefinitions="*,40,70" Padding="0,1">
-                  <Label Grid.Column="0" FontSize="9">
-                    <Label.FormattedText>
-                      <FormattedString>
-                        <Span Text="{Binding Name}" />
-                        <Span Text=" · " TextColor="#80FFFFFF" />
-                        <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
-                      </FormattedString>
-                    </Label.FormattedText>
-                  </Label>
-                  <Label Grid.Column="1" Text="{Binding Rating, StringFormat='{0:F2}'}"
-                         FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
-                  <Label Grid.Column="2" Text="{Binding OtherTeam, StringFormat='from {0}'}"
-                         FontSize="9" HorizontalOptions="End" TextColor="#99FFFFFF" LineBreakMode="TailTruncation" />
-                </Grid>
-              </DataTemplate>
-            </BindableLayout.ItemTemplate>
+                               Padding="8,4,8,6" Spacing="2">
+
+            <Grid ColumnDefinitions="2*,*,50" Padding="0,0,0,2">
+              <Label Grid.Column="0" Text="Player" FontSize="8" FontAttributes="Bold" TextColor="#80FFFFFF" />
+              <Label Grid.Column="1" Text="Comment" FontSize="8" FontAttributes="Bold" TextColor="#80FFFFFF" />
+              <Label Grid.Column="2" Text="Rating" FontSize="8" FontAttributes="Bold"
+                     HorizontalOptions="End" TextColor="#80FFFFFF" />
+            </Grid>
+            <BoxView HeightRequest="1" Margin="0,0,0,2"
+                     Color="{AppThemeBinding Light=#1A000000, Dark=#1AFFFFFF}" />
+
+            <VerticalStackLayout Spacing="2"
+                                 BindableLayout.ItemsSource="{Binding RosterChanges.PortalIn}">
+              <BindableLayout.ItemTemplate>
+                <DataTemplate x:DataType="models:PortalTransfer">
+                  <Grid ColumnDefinitions="2*,*,50" Padding="0,1">
+                    <Label Grid.Column="0" FontSize="9">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="{Binding Name}" />
+                          <Span Text=" · " TextColor="#80FFFFFF" />
+                          <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                    <Label Grid.Column="1" Text="{Binding OtherTeam, StringFormat='from {0}'}"
+                           FontSize="9" TextColor="#99FFFFFF" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding Rating, StringFormat='{0:F3}'}"
+                           FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
+                  </Grid>
+                </DataTemplate>
+              </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
           </VerticalStackLayout>
 
           <VerticalStackLayout IsVisible="{Binding IsPortalOutListActive}"
-                               Padding="8,4,8,6" Spacing="2"
-                               BindableLayout.ItemsSource="{Binding RosterChanges.PortalOut}">
-            <BindableLayout.ItemTemplate>
-              <DataTemplate x:DataType="models:PortalTransfer">
-                <Grid ColumnDefinitions="*,40,70" Padding="0,1">
-                  <Label Grid.Column="0" FontSize="9">
-                    <Label.FormattedText>
-                      <FormattedString>
-                        <Span Text="{Binding Name}" />
-                        <Span Text=" · " TextColor="#80FFFFFF" />
-                        <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
-                      </FormattedString>
-                    </Label.FormattedText>
-                  </Label>
-                  <Label Grid.Column="1" Text="{Binding Rating, StringFormat='{0:F2}'}"
-                         FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
-                  <Label Grid.Column="2" Text="{Binding OtherTeam, StringFormat='to {0}'}"
-                         FontSize="9" HorizontalOptions="End" TextColor="#99FFFFFF" LineBreakMode="TailTruncation" />
-                </Grid>
-              </DataTemplate>
-            </BindableLayout.ItemTemplate>
+                               Padding="8,4,8,6" Spacing="2">
+
+            <Grid ColumnDefinitions="2*,*,50" Padding="0,0,0,2">
+              <Label Grid.Column="0" Text="Player" FontSize="8" FontAttributes="Bold" TextColor="#80FFFFFF" />
+              <Label Grid.Column="1" Text="Comment" FontSize="8" FontAttributes="Bold" TextColor="#80FFFFFF" />
+              <Label Grid.Column="2" Text="Rating" FontSize="8" FontAttributes="Bold"
+                     HorizontalOptions="End" TextColor="#80FFFFFF" />
+            </Grid>
+            <BoxView HeightRequest="1" Margin="0,0,0,2"
+                     Color="{AppThemeBinding Light=#1A000000, Dark=#1AFFFFFF}" />
+
+            <VerticalStackLayout Spacing="2"
+                                 BindableLayout.ItemsSource="{Binding RosterChanges.PortalOut}">
+              <BindableLayout.ItemTemplate>
+                <DataTemplate x:DataType="models:PortalTransfer">
+                  <Grid ColumnDefinitions="2*,*,50" Padding="0,1">
+                    <Label Grid.Column="0" FontSize="9">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="{Binding Name}" />
+                          <Span Text=" · " TextColor="#80FFFFFF" />
+                          <Span Text="{Binding Position}" TextColor="#B3FFFFFF" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                    <Label Grid.Column="1" Text="{Binding OtherTeam, StringFormat='to {0}'}"
+                           FontSize="9" TextColor="#99FFFFFF" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding Rating, StringFormat='{0:F3}'}"
+                           FontSize="9" HorizontalOptions="End" TextColor="#B3FFFFFF" />
+                  </Grid>
+                </DataTemplate>
+              </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
           </VerticalStackLayout>
 
         </VerticalStackLayout>
@@ -669,11 +710,15 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- ROW 2: Status bar                                   -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="2" HeightRequest="24"
+    <Grid Grid.Row="2" HeightRequest="24" ColumnDefinitions="*,Auto"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
-      <Label Text="{Binding StatusMessage}"
+      <Label Grid.Column="0" Text="{Binding StatusMessage}"
              Padding="8,0" FontSize="10" TextColor="#B3FFFFFF"
              VerticalOptions="Center" HorizontalOptions="Start"/>
+      <Label Grid.Column="1" Text="( ) = projected value"
+             Padding="8,0" FontSize="11" FontAttributes="Italic"
+             VerticalOptions="Center" HorizontalOptions="End"
+             TextColor="{AppThemeBinding Light=#333333, Dark=#E0E0E0}" />
     </Grid>
 
   </Grid>

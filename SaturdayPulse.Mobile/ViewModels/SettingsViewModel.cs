@@ -132,7 +132,7 @@ namespace SaturdayPulse.ViewModels
         public string DefaultLandingPageDisplay => DefaultLandingPage switch
         {
             "MyTeams"    => "My Teams",
-            "Scores"     => "Scores",
+            "Games"     => "Games",
             "Rankings"   => "Rankings",
             "Postseason" => "Postseason",
             "Sandbox"    => "Sandbox",
@@ -558,7 +558,7 @@ namespace SaturdayPulse.ViewModels
 
             SelectDefaultLandingPageCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var options = new[] { "My Teams", "Scores", "Rankings", "Postseason", "Sandbox", "Settings" };
+                var options = new[] { "My Teams", "Games", "Rankings", "Postseason", "Sandbox", "Settings" };
 
                 var result = await Shell.Current.DisplayActionSheet(
                     "Default Landing Page", "Cancel", null, options);
@@ -570,7 +570,7 @@ namespace SaturdayPulse.ViewModels
                 DefaultLandingPage = result switch
                 {
                     "My Teams"   => "MyTeams",
-                    "Scores"     => "Scores",
+                    "Games" => "Games",
                     "Rankings"   => "Rankings",
                     "Postseason" => "Postseason",
                     "Sandbox"    => "Sandbox",

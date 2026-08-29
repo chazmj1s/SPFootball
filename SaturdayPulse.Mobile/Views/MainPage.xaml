@@ -6,7 +6,7 @@
              x:Name="ThisPage"
              Shell.NavBarIsVisible="False">
 
-  <Grid RowDefinitions="Auto,Auto,2,Auto,Auto,*"
+  <Grid RowDefinitions="Auto,Auto,2,Auto,1,Auto,*"
         BackgroundColor="{AppThemeBinding Light=#1A1A2E, Dark=#0D0D1A}">
 
     <!-- ═══════════════════════════════════════════════════ -->
@@ -150,9 +150,18 @@
     </Border>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 4: Tab strip                                    -->
+    <!-- ROW 4: Divider — separates header/filter section     -->
+    <!-- from the tab strip below                             -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <ScrollView Grid.Row="4"
+    <BoxView Grid.Row="4"
+             HeightRequest="1"
+             HorizontalOptions="Fill"
+             Color="{AppThemeBinding Light=#D9D9D9, Dark=#3A3A4A}" />
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ROW 5: Tab strip                                    -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <ScrollView Grid.Row="5"
                 Orientation="Horizontal"
                 HorizontalScrollBarVisibility="Never"
                 BackgroundColor="{AppThemeBinding Light=#1A1A2E, Dark=#0D0D1A}">
@@ -189,9 +198,9 @@
     </ScrollView>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!-- ROW 5: Page host — AbsoluteLayout fills all space   -->
+    <!-- ROW 6: Page host — AbsoluteLayout fills all space   -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <AbsoluteLayout Grid.Row="5"
+    <AbsoluteLayout Grid.Row="6"
                     x:Name="PageHost"
                     BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#121212}">
       <AbsoluteLayout.GestureRecognizers>
