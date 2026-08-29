@@ -462,9 +462,9 @@
     <Grid Grid.Row="2" HeightRequest="24"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
       <Label Text="( ) = projected value"
-             Padding="8,0" FontSize="10" Opacity="0.5"
+             Padding="8,0" FontSize="11" FontAttributes="Italic"
              VerticalOptions="Center" HorizontalOptions="Start"
-             TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
+             TextColor="{AppThemeBinding Light=#333333, Dark=#E0E0E0}" />
     </Grid>
 
   </Grid>
