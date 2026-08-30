@@ -62,7 +62,7 @@ namespace SaturdayPulse.Data
                 new() { Team1Name = "Ole Miss", Team2Name = "Mississippi State", RivalryName = "Egg Bowl", Tier = "STATE", FirstPlayed = 1901 },
                 new() { Team1Name = "Oregon", Team2Name = "Oregon State", RivalryName = "Civil War (renamed)", Tier = "STATE", FirstPlayed = 1894 },
                 new() { Team1Name = "Clemson", Team2Name = "South Carolina", RivalryName = "Palmetto Bowl", Tier = "STATE", FirstPlayed = 1896 },
-                new() { Team1Name = "Texas", Team2Name = "Texas A&M", RivalryName = "118 meetings", Tier = "STATE", FirstPlayed = 1894 },
+                new() { Team1Name = "Texas", Team2Name = "Texas A&M", RivalryName = "Lonestar Showdown", Tier = "STATE", FirstPlayed = 1894 },
                 new() { Team1Name = "Oklahoma", Team2Name = "Oklahoma State", RivalryName = "Bedlam", Tier = "STATE", FirstPlayed = 1904 },
                 new() { Team1Name = "Washington", Team2Name = "Washington State", RivalryName = "Apple Cup", Tier = "STATE", FirstPlayed = 1900 },
                 new() { Team1Name = "Michigan", Team2Name = "Michigan State", RivalryName = "Paul Bunyan Trophy", Tier = "STATE", FirstPlayed = 1898 },

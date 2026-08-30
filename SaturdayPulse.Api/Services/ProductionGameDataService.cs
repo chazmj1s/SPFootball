@@ -375,52 +375,100 @@ namespace SaturdayPulse.Services
         // ════════════════════════════════════════════════════════════════════════
 
         internal static object? BuildRivalryNotes(
-            MatchupHistory? rivalry,
-            bool isPlayed,
-            double? actualMargin,
-            double? actualTotal,
-            double? projectedMargin,
-            double? projectedTotal)
+     MatchupHistory? rivalry,
+     bool isPlayed,
+     double? actualMargin,
+     double? actualTotal,
+     double? projectedMargin,
+     double? projectedTotal,
+     string team1,
+     string team2,
+     string winner)
         {
             if (rivalry == null) return null;
+
+            var avgMargin = (double)rivalry.AvgMargin;
+            var avgTotal = (double)rivalry.AvgTotalPoints;
+            var threshold = avgMargin * 0.25;
 
             string blurb;
             if (isPlayed && actualMargin.HasValue && actualTotal.HasValue)
             {
-                blurb =
-                    $"This year's result — a {actualMargin.Value:F0}-point margin on " +
-                    $"{actualTotal.Value:F0} total points — compares to this matchup's " +
-                    $"historical average of {rivalry.AvgMargin:F0} points and " +
-                    $"{rivalry.AvgTotalPoints:F0} total points.";
+                var margin = actualMargin.Value;
+                var total = actualTotal.Value;
+
+                if (margin < avgMargin - threshold)
+                {
+                    blurb =
+                        $"Closer than history suggested. {winner} won by {margin:F0} points " +
+                        $"on {total:F0} combined — tighter than the series norm of " +
+                        $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else if (margin > avgMargin + threshold)
+                {
+                    blurb =
+                        $"More decisive than history suggested. {winner} pulled away by " +
+                        $"{margin:F0} points on {total:F0} combined — wider than the " +
+                        $"series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else
+                {
+                    blurb =
+                        $"Right in line with history. {winner} won by {margin:F0} points " +
+                        $"on {total:F0} combined — consistent with the series norm of " +
+                        $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
             }
             else if (!isPlayed && projectedMargin.HasValue && projectedTotal.HasValue)
             {
-                blurb =
-                    $"This year's projection — a {projectedMargin.Value:F0}-point margin on " +
-                    $"{projectedTotal.Value:F0} total points — compares to this matchup's " +
-                    $"historical average of {rivalry.AvgMargin:F0} points and " +
-                    $"{rivalry.AvgTotalPoints:F0} total points.";
+                var margin = projectedMargin.Value;
+                var total = projectedTotal.Value;
+
+                if (margin < avgMargin - threshold)
+                {
+                    blurb =
+                        $"Tighter than history suggests. {winner} projects to win by " +
+                        $"{margin:F0} points on {total:F0} combined — below the " +
+                        $"series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else if (margin > avgMargin + threshold)
+                {
+                    blurb =
+                        $"More decisive than history suggests. {winner} projects to win " +
+                        $"by {margin:F0} points on {total:F0} combined — wider than " +
+                        $"the series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else
+                {
+                    blurb =
+                        $"Right in line with history. {winner} projects to win by " +
+                        $"{margin:F0} points on {total:F0} combined — consistent " +
+                        $"with the series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
             }
             else
             {
                 // No projection available and the game hasn't been played yet —
                 // fall back to a plain historical statement with no comparison.
                 blurb =
-                    $"This matchup has historically been decided by about {rivalry.AvgMargin:F0} " +
-                    $"points, with a total near {rivalry.AvgTotalPoints:F0} and an upset in roughly " +
+                    $"This matchup has historically been decided by about {avgMargin:F0} " +
+                    $"points, with a total near {avgTotal:F0} and an upset in roughly " +
                     $"{rivalry.UpsetRate:P0} of meetings.";
             }
 
+            var favored = rivalry.Team1Wins > rivalry.Team2Wins ? team1 : team2;
             return new
             {
-                RivalryName      = rivalry.RivalryName,
-                FirstPlayed      = rivalry.FirstPlayed,
-                AverageSpread    = Math.Round((double)rivalry.AvgMargin,      2),
+                RivalryName = rivalry.RivalryName,
+                FirstPlayed = rivalry.FirstPlayed,
+                AverageSpread = Math.Round((double)rivalry.AvgMargin, 2),
                 AverageOverUnder = Math.Round((double)rivalry.AvgTotalPoints, 2),
-                UpsetChance      = Math.Round((double)rivalry.UpsetRate,      2),
-                Blurb            = blurb
+                UpsetChance = Math.Round((double)rivalry.UpsetRate, 2),
+                Blurb = blurb,
+                Series = $"Series: {Math.Max(rivalry.Team1Wins, rivalry.Team2Wins)} - {Math.Min(rivalry.Team1Wins, rivalry.Team2Wins)} - {rivalry.Ties}, {favored}"
             };
         }
+
 
         // ════════════════════════════════════════════════════════════════════════
         // Helper — builds a single game object in the same shape as

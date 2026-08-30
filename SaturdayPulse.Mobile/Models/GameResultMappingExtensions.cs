@@ -87,6 +87,7 @@ namespace SaturdayPulse.Models
                 AverageOverUnder = dto.AverageOverUnder,
                 UpsetChance      = dto.UpsetChance,
                 Blurb            = dto.Blurb ?? string.Empty,
+                Series           = dto.Series ?? string.Empty,
             };
     }
 }

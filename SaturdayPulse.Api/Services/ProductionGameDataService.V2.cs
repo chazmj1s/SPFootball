@@ -4,6 +4,7 @@ using SaturdayPulse.Models;
 using SaturdayPulse.Utilities;
 using SQLitePCL;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace SaturdayPulse.Services
 {
@@ -122,10 +123,12 @@ namespace SaturdayPulse.Services
                 bool homeWon = homePoints >= awayPoints;
 
                 double? projHome = null, projAway = null, projMargin = null;
+                bool predWin = false;
                 if (allProjections.TryGetValue(g.GameId, out var pred))
                 {
                     projHome = Math.Max(0, Math.Round(pred.PredictedTeamScore, 1));
                     projAway = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
+                    predWin = pred.IsTeamProjectedWinner;
                     projMargin = Math.Round(pred.ExpectedMargin, 1);
                 }
 
@@ -135,18 +138,23 @@ namespace SaturdayPulse.Services
 
                 // Rivalry Notes — normalized pair lookup, same normalization
                 // MatchupHistoryCalculator used to store the table (lower ID first).
-                rivalryLookup.TryGetValue(
-                    (Math.Min(g.HomeId ?? 0, g.AwayId ?? 0), Math.Max(g.HomeId ?? 0, g.AwayId ?? 0)),
+                rivalryLookup.TryGetValue(                    (Math.Min(g.HomeId ?? 0, g.AwayId ?? 0), Math.Max(g.HomeId ?? 0, g.AwayId ?? 0)),
                     out var rivalryForGame);
+
+                var team1 = rivalryForGame?.Team1Id == g.HomeId ? g.HomeName : g.AwayName;   
+                var team2 = rivalryForGame?.Team2Id == g.AwayId ? g.AwayName : g.HomeName;
 
                 var rivalryNotes = BuildRivalryNotes(
                     rivalryForGame,
                     isPlayed,
-                    actualMargin:     isPlayed ? (double?)Math.Abs(homePoints - awayPoints) : null,
-                    actualTotal:      isPlayed ? (double?)actualOU : null,
-                    projectedMargin:  (projHome.HasValue && projAway.HasValue)
+                    actualMargin: isPlayed ? (double?)Math.Abs(homePoints - awayPoints) : null,
+                    actualTotal: isPlayed ? (double?)actualOU : null,
+                    projectedMargin: (projHome.HasValue && projAway.HasValue)
                                           ? (double?)Math.Abs(projHome.Value - projAway.Value) : null,
-                    projectedTotal:   projOU);
+                    projectedTotal: projOU,
+                    team1: team1,
+                    team2: team2,
+                    winner: (isPlayed ? homeWon : predWin) ? g.HomeName : g.AwayName);
 
                 // ── Team stats ────────────────────────────────────────────────
                 var lookupWeek = LookupWeek(g.Week);
@@ -1394,11 +1402,13 @@ namespace SaturdayPulse.Services
                 bool won   = myPts > oppPts;
 
                 double? projMy = null, projOpp = null;
+                bool predWin = false;
                 string confidence = "Unknown";
                 if (allProjections.TryGetValue(g.GameId, out var pred))
                 {
                     projMy   = isHome ? pred.PredictedTeamScore : pred.PredictedOpponentScore;
                     projOpp  = isHome ? pred.PredictedOpponentScore : pred.PredictedTeamScore;
+                    predWin  = projMy > projOpp;
                     confidence = pred.Confidence ?? "Unknown";
                 }
 
@@ -1408,6 +1418,9 @@ namespace SaturdayPulse.Services
                     (Math.Min(teamId, oppId), Math.Max(teamId, oppId)),
                     out var rivalryForGame);
 
+                var team1 = rivalryForGame?.Team1Id == g.HomeId ? g.HomeName : g.AwayName;
+                var team2 = rivalryForGame?.Team2Id == g.AwayId ? g.AwayName : g.HomeName;
+
                 var rivalryNotes = BuildRivalryNotes(
                     rivalryForGame,
                     isPlayed,
@@ -1416,7 +1429,10 @@ namespace SaturdayPulse.Services
                     projectedMargin: (projMy.HasValue && projOpp.HasValue)
                                          ? (double?)Math.Abs(projMy.Value - projOpp.Value) : null,
                     projectedTotal:  (projMy.HasValue && projOpp.HasValue)
-                                         ? (double?)(projMy.Value + projOpp.Value) : null);
+                                         ? (double?)(projMy.Value + projOpp.Value) : null,
+                    team1:           team1,
+                    team2:           team2,
+                    winner:          ((isPlayed ? won : predWin) == isHome) ? g.HomeName : g.AwayName);
 
                 return (object)new
                 {
