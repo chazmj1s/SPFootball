@@ -76,6 +76,24 @@ namespace SaturdayPulse.Models
         public int FirstPlayed { get; set; }
 
         /// <summary>
+        /// Total series wins for Team1Id, per CFBD's full-series matchup response.
+        /// </summary>
+        [Column("Team1Wins")]
+        public int Team1Wins { get; set; }
+
+        /// <summary>
+        /// Total series wins for Team2Id, per CFBD's full-series matchup response.
+        /// </summary>
+        [Column("Team2Wins")]
+        public int Team2Wins { get; set; }
+
+        /// <summary>
+        /// Total series ties, per CFBD's full-series matchup response.
+        /// </summary>
+        [Column("Ties")]
+        public int Ties { get; set; }
+
+        /// <summary>
         /// Optional rivalry name if this is a recognized rivalry.
         /// Example: "The Game", "Iron Bowl", "Red River Rivalry"
         /// </summary>

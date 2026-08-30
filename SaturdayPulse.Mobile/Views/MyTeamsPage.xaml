@@ -222,15 +222,18 @@
              Padding="10,8,10,4"
              TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
 
-      <Grid ColumnDefinitions="*,*,*" Padding="10,0,10,6" ColumnSpacing="4">
-        <Label Grid.Column="0" Text="{Binding Game.RivalryNotes.DisplayAverageSpread}"
+      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Padding="10,0,10,6" ColumnSpacing="4" RowSpacing="2">
+        <Label Grid.Row="0" Grid.Column="0" Text="{Binding Game.RivalryNotes.DisplayAverageSpread}"
                FontSize="10" HorizontalOptions="Start"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
-        <Label Grid.Column="1" Text="{Binding Game.RivalryNotes.DisplayAverageOU}"
-               FontSize="10" HorizontalOptions="Center"
+        <Label Grid.Row="0" Grid.Column="1" Text="{Binding Game.RivalryNotes.DisplayAverageOU}"
+               FontSize="10" HorizontalOptions="Start"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
-        <Label Grid.Column="2" Text="{Binding Game.RivalryNotes.DisplayUpsetChance}"
-               FontSize="10" HorizontalOptions="End"
+        <Label Grid.Row="1" Grid.Column="0" Text="{Binding Game.RivalryNotes.DisplayUpsetChance}"
+               FontSize="10" HorizontalOptions="Start"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Game.RivalryNotes.Series}"
+               FontSize="10" HorizontalOptions="Start"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
       </Grid>
 

@@ -84,6 +84,7 @@ namespace SaturdayPulse.Models
         public double   AverageSpread    { get; set; }
         public double   AverageOverUnder { get; set; }
         public double   UpsetChance      { get; set; }
-        public string?  Blurb            { get; set; }
+        public string?  Blurb { get; set; }
+        public string?  Series { get; set; }
     }
 }

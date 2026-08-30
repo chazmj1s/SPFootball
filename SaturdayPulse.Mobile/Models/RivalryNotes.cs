@@ -17,7 +17,8 @@ namespace SaturdayPulse.Models
         public double AverageSpread    { get; set; }
         public double AverageOverUnder { get; set; }
         public double UpsetChance      { get; set; }
-        public string Blurb            { get; set; } = string.Empty;
+        public string Blurb { get; set; } = string.Empty;
+        public string Series { get; set; } = string.Empty;
 
         // ── Display formatting — matches the Display* convention used elsewhere
         // (DisplaySpread, DisplayRating, DisplaySOS, etc.) ──────────────────────
