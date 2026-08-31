@@ -311,6 +311,278 @@
       </VerticalStackLayout>
     </DataTemplate>
 
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- Title Games Card A pieces — same visuals as GameResultCard above,  -->
+    <!-- split into score-body and details-panel so the Title Games page   -->
+    <!-- can slot its own combined Tiebreaker/Details/Contenders row in    -->
+    <!-- between them, instead of GameResultCard's built-in Details toggle.-->
+    <!-- Playoffs/Bowls keep using the full GameResultCard above unchanged.-->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <DataTemplate x:Key="GameResultCardBody" x:DataType="models:GameResult">
+      <Grid ColumnDefinitions="32,28,*,22,52,96"
+            RowDefinitions="Auto,Auto"
+            Padding="6,5,10,5"
+            BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
+
+        <!-- Wk label + star game follow -->
+        <VerticalStackLayout Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
+                             Spacing="2" VerticalOptions="Center"
+                             HorizontalOptions="Start">
+          <Label Text="{Binding Week, StringFormat='Wk{0}'}"
+                 FontSize="10"
+                 TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                 HorizontalOptions="Start" />
+          <controls:FollowGameIcon
+                IsFollowed="{Binding IsGameFavorited}"
+                VerticalOptions="Center" HorizontalOptions="Start">
+            <controls:FollowGameIcon.GestureRecognizers>
+              <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalGameCommand}"
+                    CommandParameter="{Binding .}" />
+            </controls:FollowGameIcon.GestureRecognizers>
+          </controls:FollowGameIcon>
+        </VerticalStackLayout>
+
+        <!-- Visitor heart -->
+        <controls:FollowTeamIcon Grid.Row="0" Grid.Column="1"
+              IsFollowed="{Binding VisitorIsFollowed}"
+              VerticalOptions="Center" HorizontalOptions="Start">
+          <controls:FollowTeamIcon.GestureRecognizers>
+            <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                  CommandParameter="{Binding AwayId}" />
+          </controls:FollowTeamIcon.GestureRecognizers>
+        </controls:FollowTeamIcon>
+
+        <Label Grid.Row="0" Grid.Column="2" Text="{Binding VisitorName}"
+               FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+
+        <!-- Single-game on-demand refresh -->
+        <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="3"
+                HorizontalOptions="Center" VerticalOptions="Center"
+                Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+          <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.RefreshGameCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+          <Label Text="&#x27F3;" FontSize="16"
+                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+        </Border>
+
+        <Label Grid.Row="0" Grid.Column="4" Text="{Binding DisplayVisitorScore}"
+               FontSize="13" FontAttributes="Bold"
+               HorizontalOptions="End" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="0" Grid.Column="5" Text="{Binding DisplayMargin}"
+               FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
+
+        <!-- Home heart -->
+        <controls:FollowTeamIcon Grid.Row="1" Grid.Column="1"
+              IsFollowed="{Binding HomeIsFollowed}"
+              VerticalOptions="Center" HorizontalOptions="Start">
+          <controls:FollowTeamIcon.GestureRecognizers>
+            <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
+                  CommandParameter="{Binding HomeId}" />
+          </controls:FollowTeamIcon.GestureRecognizers>
+        </controls:FollowTeamIcon>
+
+        <Label Grid.Row="1" Grid.Column="2"
+               FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation">
+          <Label.FormattedText>
+            <FormattedString>
+              <Span Text="{Binding HomeName}" />
+              <Span Text="{Binding NeutralIndicator}" FontSize="10"
+                    TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
+            </FormattedString>
+          </Label.FormattedText>
+        </Label>
+        <Label Grid.Row="1" Grid.Column="4" Text="{Binding DisplayHomeScore}"
+               FontSize="13" FontAttributes="Bold"
+               HorizontalOptions="End" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="1" Grid.Column="5" Text="{Binding DisplayOU}"
+               FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
+
+      </Grid>
+    </DataTemplate>
+
+    <DataTemplate x:Key="GameResultDetailsPanelOnly" x:DataType="models:GameResult">
+      <VerticalStackLayout IsVisible="{Binding IsDetailsExpanded}"
+                           Spacing="0"
+                           BackgroundColor="{AppThemeBinding Light={StaticResource PanelBackgroundLight}, Dark={StaticResource PanelBackgroundDark}}">
+
+        <!-- Vegas Lines section -->
+        <VerticalStackLayout IsVisible="{Binding VegasLines.HasLines}" Spacing="0">
+
+          <Grid ColumnDefinitions="48,70,60,*" Padding="6,6,6,2" ColumnSpacing="4">
+            <Label Grid.Column="0" Text="VEGAS"
+                   FontSize="9" FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
+                   VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="— Spread —"
+                   FontSize="9" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="2" Text="— O/U —"
+                   FontSize="9" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="3" Text="— Money Line —"
+                   FontSize="9" Opacity="0.5" HorizontalOptions="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="48,70,60,*" Padding="6,1,6,1" ColumnSpacing="4">
+            <Label Grid.Column="0" Text="Open:"
+                   FontSize="9" Opacity="0.6" VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="{Binding VegasLines.DisplaySpreadOpen}"
+                   FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+            <Label Grid.Column="2" Text="{Binding VegasLines.DisplayOUOpen}"
+                   FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+            <Label Grid.Column="3" HorizontalOptions="Center" VerticalOptions="Center">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="{Binding AwayName}" FontSize="8"
+                        TextColor="{AppThemeBinding Light=#CCCCCC, Dark=#CCCCCC}" />
+                  <Span Text=": " FontSize="8"
+                        TextColor="{AppThemeBinding Light=#CCCCCC, Dark=#CCCCCC}" />
+                  <Span Text="{Binding VegasLines.DisplayAwayMoneyline}"
+                        FontSize="10" FontAttributes="Bold"
+                        TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                </FormattedString>
+              </Label.FormattedText>
+            </Label>
+          </Grid>
+
+          <Grid ColumnDefinitions="48,70,60,*" Padding="6,1,6,6" ColumnSpacing="4">
+            <Label Grid.Column="0" Text="Current:"
+                   FontSize="9" Opacity="0.6" VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="{Binding VegasLines.DisplaySpread}"
+                   FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="2" Text="{Binding VegasLines.DisplayOU}"
+                   FontSize="10" FontAttributes="Bold" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="3" HorizontalOptions="Center" VerticalOptions="Center">
+              <Label.FormattedText>
+                <FormattedString>
+                  <Span Text="{Binding HomeName}" FontSize="8"
+                        TextColor="{AppThemeBinding Light=#CCCCCC, Dark=#CCCCCC}" />
+                  <Span Text=": " FontSize="8"
+                        TextColor="{AppThemeBinding Light=#CCCCCC, Dark=#CCCCCC}" />
+                  <Span Text="{Binding VegasLines.DisplayHomeMoneyline}"
+                        FontSize="10" FontAttributes="Bold"
+                        TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                </FormattedString>
+              </Label.FormattedText>
+            </Label>
+          </Grid>
+
+          <BoxView HeightRequest="1" Opacity="0.08" Margin="6,0"
+                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+        </VerticalStackLayout>
+
+        <!-- Inter-division message -->
+        <Label IsVisible="{Binding IsInterDivision}"
+               Text="Inter-division game — no ranking data available."
+               FontSize="9" Opacity="0.5"
+               HorizontalOptions="Center"
+               Padding="8,10,8,10" />
+
+        <!-- Team comparison table -->
+        <VerticalStackLayout IsVisible="{Binding HasStats}" Spacing="0">
+
+          <Grid ColumnDefinitions="*,44,44,44,38,44,38,44"
+                Padding="8,6,8,0" ColumnSpacing="2">
+            <Label Grid.Column="0" />
+            <Label Grid.Column="1" />
+            <Label Grid.Column="2" />
+            <Label Grid.Column="3" />
+            <Label Grid.Column="4" Grid.ColumnSpan="2"
+                   Text="— Offense —"
+                   FontSize="8" FontAttributes="Bold" Opacity="0.5"
+                   HorizontalOptions="Center" />
+            <Label Grid.Column="6" Grid.ColumnSpan="2"
+                   Text="— Defense —"
+                   FontSize="8" FontAttributes="Bold" Opacity="0.5"
+                   HorizontalOptions="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,44,44,44,38,44,38,44"
+                Padding="8,0,8,2" ColumnSpacing="2">
+            <Label Grid.Column="0" Text="Team"     FontSize="8" FontAttributes="Bold" Opacity="0.5" />
+            <Label Grid.Column="1" Text="Rec"      FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="2" Text="Rating"   FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="3" Text="SOS"      FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="4" Text="Rank"     FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="5" Text="Avg Pts"  FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="6" Text="Rank"     FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+            <Label Grid.Column="7" Text="Avg Pts"  FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+          </Grid>
+
+          <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
+                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+          <!-- Away team row -->
+          <Grid ColumnDefinitions="*,44,44,44,38,44,38,44"
+                Padding="8,3,8,3" ColumnSpacing="2">
+            <Label Grid.Column="0" Text="{Binding AwayStats.TeamName}"
+                   FontSize="9" FontAttributes="Bold" LineBreakMode="TailTruncation"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="1" Text="{Binding AwayStats.Record}"
+                   FontSize="9" HorizontalOptions="Center" />
+            <Label Grid.Column="2" Text="{Binding AwayStats.DisplayRating}"
+                   FontSize="9" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="3" Text="{Binding AwayStats.DisplaySOS}"
+                   FontSize="9" HorizontalOptions="Center" />
+            <Label Grid.Column="4" Text="{Binding AwayStats.DisplayOffRank}"
+                   FontSize="9" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="5" Text="{Binding AwayStats.DisplayPtsScored}"
+                   FontSize="9" HorizontalOptions="Center" />
+            <Label Grid.Column="6" Text="{Binding AwayStats.DisplayDefRank}"
+                   FontSize="9" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="7" Text="{Binding AwayStats.DisplayPtsAllowed}"
+                   FontSize="9" HorizontalOptions="Center" />
+          </Grid>
+
+          <BoxView HeightRequest="1" Opacity="0.05" Margin="8,0"
+                   Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+          <!-- Home team row -->
+          <Grid ColumnDefinitions="*,44,44,44,38,44,38,44"
+                Padding="8,3,8,6" ColumnSpacing="2">
+            <Label Grid.Column="0" Text="{Binding HomeStats.TeamName}"
+                   FontSize="9" FontAttributes="Bold" LineBreakMode="TailTruncation"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="1" Text="{Binding HomeStats.Record}"
+                   FontSize="9" HorizontalOptions="Center" />
+            <Label Grid.Column="2" Text="{Binding HomeStats.DisplayRating}"
+                   FontSize="9" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="3" Text="{Binding HomeStats.DisplaySOS}"
+                   FontSize="9" HorizontalOptions="Center" />
+            <Label Grid.Column="4" Text="{Binding HomeStats.DisplayOffRank}"
+                   FontSize="9" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="5" Text="{Binding HomeStats.DisplayPtsScored}"
+                   FontSize="9" HorizontalOptions="Center" />
+            <Label Grid.Column="6" Text="{Binding HomeStats.DisplayDefRank}"
+                   FontSize="9" HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+            <Label Grid.Column="7" Text="{Binding HomeStats.DisplayPtsAllowed}"
+                   FontSize="9" HorizontalOptions="Center" />
+          </Grid>
+
+        </VerticalStackLayout>
+
+      </VerticalStackLayout>
+    </DataTemplate>
+
   </ContentPage.Resources>
 
   <Grid RowDefinitions="Auto,*,24">
@@ -563,56 +835,83 @@
                        FontSize="13" FontAttributes="Bold" TextColor="White" />
               </Grid>
 
-              <!-- Game card — renders only when CFBD has published the title game.
-                   GameList is a zero/one-item list so BindableLayout draws nothing
-                   when Game is null, or one card via the shared template when it is. -->
-              <VerticalStackLayout Spacing="0"
+              <!-- Card A: real Game exists — CFBD has published the title game.
+                   Uses GameResultCardBody (score only, no built-in Details toggle) —
+                   the Details toggle for this card now lives in the shared
+                   Tiebreaker/Details/Contenders row below instead. -->
+              <VerticalStackLayout Spacing="0" IsVisible="{Binding HasGame}"
                                    BindableLayout.ItemsSource="{Binding GameList}"
-                                   BindableLayout.ItemTemplate="{StaticResource GameResultCard}" />
+                                   BindableLayout.ItemTemplate="{StaticResource GameResultCardBody}" />
 
-              <!-- Qualifier rows -->
-              <Grid ColumnDefinitions="*,120" Padding="12,6,16,3">
-                <Label Grid.Column="0" Text="{Binding Qualifier1.TeamName}"
-                       FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                <Label Grid.Column="1"
-                       FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}">
-                  <Label.FormattedText>
-                    <FormattedString>
-                      <Span Text="A: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier1.ActualConferenceRecord}" FontSize="11"
-                            TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
-                      <Span Text="  P: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier1.ConferenceRecord}" />
-                    </FormattedString>
-                  </Label.FormattedText>
-                </Label>
-              </Grid>
+              <!-- Card B: no real Game yet — Sandbox-style end-of-season projection,
+                   built from GetSandboxPredictionAsync + GetPowerRankingsAsync in
+                   PostseasonViewModel.EnrichChampionshipsWithPredictionsAsync. -->
+              <VerticalStackLayout Spacing="0" IsVisible="{Binding NeedsPrediction}">
 
-              <Grid ColumnDefinitions="*,120" Padding="12,3,16,6">
-                <Label Grid.Column="0" Text="{Binding Qualifier2.TeamName}"
-                       FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                <Label Grid.Column="1"
-                       FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}">
-                  <Label.FormattedText>
-                    <FormattedString>
-                      <Span Text="A: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier2.ActualConferenceRecord}" FontSize="11"
-                            TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
-                      <Span Text="  P: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier2.ConferenceRecord}" />
-                    </FormattedString>
-                  </Label.FormattedText>
-                </Label>
-              </Grid>
+                <Grid BackgroundColor="{AppThemeBinding Light=#EBEBEB, Dark=#252525}" Padding="10,4">
+                  <Label Text="Neutral Site · End-of-Season Ratings"
+                         FontSize="11" FontAttributes="Bold"
+                         TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
+                         VerticalOptions="Center" />
+                </Grid>
 
-              <!-- Tiebreaker + Contenders toggles -->
-              <Grid ColumnDefinitions="*,*" Padding="12,2,16,6">
+                <VerticalStackLayout IsVisible="{Binding HasPrediction}" Spacing="0">
+
+                  <Grid ColumnDefinitions="32,*,60,96" Padding="6,5,10,2"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}">
+                    <Label Grid.Column="0" Text="{Binding Prediction.TeamYear}"
+                           FontSize="10"
+                           TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Prediction.TeamName}"
+                           FontSize="13" VerticalOptions="Center"
+                           LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding Prediction.TeamScore}"
+                           FontSize="13" FontAttributes="Bold"
+                           HorizontalOptions="End" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                    <Label Grid.Column="3" Text="{Binding Prediction.MarginDisplay}"
+                           FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
+                  </Grid>
+
+                  <Grid ColumnDefinitions="32,*,60,96" Padding="6,2,10,5"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}">
+                    <Label Grid.Column="0" Text="{Binding Prediction.OpponentYear}"
+                           FontSize="10"
+                           TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Prediction.OpponentName}"
+                           FontSize="13" VerticalOptions="Center"
+                           LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding Prediction.OppScore}"
+                           FontSize="13" FontAttributes="Bold"
+                           HorizontalOptions="End" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                    <Label Grid.Column="3" HorizontalOptions="End" VerticalOptions="Center"
+                           FontSize="11"
+                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="± " />
+                          <Span Text="{Binding Prediction.MarginOfError, StringFormat='{0:F1}'}" />
+                          <Span Text=" pts" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                  </Grid>
+
+                  <BoxView HeightRequest="1" Opacity="0.10"
+                           Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                </VerticalStackLayout>
+
+              </VerticalStackLayout>
+
+              <!-- Tiebreaker + Details + Contenders — one shared row. The Details
+                   slot routes to whichever card is active (real Game or Sandbox)
+                   via ShowDetailsToggle/DetailsToggleIcon/ToggleTitleGameDetailsCommand. -->
+              <Grid ColumnDefinitions="*,*,*" Padding="12,2,16,6">
                 <Border Grid.Column="0" IsVisible="{Binding HasTiebreaker}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
                     <TapGestureRecognizer
@@ -620,7 +919,7 @@
                         CommandParameter="{Binding .}" />
                   </Border.GestureRecognizers>
   <Label
-                       FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                       FontSize="11" LineBreakMode="TailTruncation" TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                   <Label.FormattedText>
                     <FormattedString>
                       <Span Text="{Binding TiebreakerSummary}" />
@@ -630,14 +929,31 @@
                   </Label.FormattedText>
                   </Label>
 </Border>
-                <Border Grid.Column="1" HorizontalOptions="End" IsVisible="{Binding HasContenders}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+                <Border Grid.Column="1" HorizontalOptions="Center" IsVisible="{Binding ShowDetailsToggle}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleTitleGameDetailsCommand}"
+                        CommandParameter="{Binding .}" />
+                  </Border.GestureRecognizers>
+  <Label
+                       FontSize="11" LineBreakMode="TailTruncation"
+                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                  <Label.FormattedText>
+                    <FormattedString>
+                      <Span Text="Details " />
+                      <Span Text="{Binding DetailsToggleIcon}" FontSize="8" />
+                    </FormattedString>
+                  </Label.FormattedText>
+                  </Label>
+</Border>
+                <Border Grid.Column="2" HorizontalOptions="End" IsVisible="{Binding HasContenders}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
                     <TapGestureRecognizer
                         Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleContendersExpandCommand}"
                         CommandParameter="{Binding .}" />
                   </Border.GestureRecognizers>
   <Label
-                       FontSize="11"
+                       FontSize="11" LineBreakMode="TailTruncation"
                        TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                   <Label.FormattedText>
                     <FormattedString>
@@ -649,6 +965,88 @@
                   </Label>
 </Border>
               </Grid>
+
+              <!-- Card A's expanded Details panel (Vegas + team stats), directly
+                   below the toggle row. GameList is the same zero/one-item list
+                   Card A's body uses, so this naturally draws nothing when
+                   Game is null. -->
+              <VerticalStackLayout Spacing="0" IsVisible="{Binding HasGame}"
+                                   BindableLayout.ItemsSource="{Binding GameList}"
+                                   BindableLayout.ItemTemplate="{StaticResource GameResultDetailsPanelOnly}" />
+
+              <!-- Sandbox card's expanded Details panel — directly below its
+                   toggle in the row above, matching how Tiebreaker/Contenders
+                   expand below theirs. IsSandboxDetailsExpanded only ever
+                   flips true via the Sandbox card's own toggle, so this stays
+                   collapsed and harmless on the real-Game (Card A) path. -->
+              <VerticalStackLayout IsVisible="{Binding IsSandboxDetailsExpanded}"
+                                   Spacing="0"
+                                   BackgroundColor="{AppThemeBinding Light={StaticResource PanelBackgroundLight}, Dark={StaticResource PanelBackgroundDark}}">
+
+                <Grid ColumnDefinitions="44,22,*,55,70,60" Padding="8,6,8,2">
+                  <Label Grid.Column="0" Text="Rank" FontSize="9" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+                  <Label Grid.Column="3" Text="Rec" FontSize="9" FontAttributes="Bold" Opacity="0.5" />
+                  <Label Grid.Column="4" Text="Rating" FontSize="9" FontAttributes="Bold" Opacity="0.5" />
+                  <Label Grid.Column="5" Text="SOS" FontSize="9" FontAttributes="Bold" Opacity="0.5" />
+                </Grid>
+
+                <BoxView HeightRequest="1" Opacity="0.08" Margin="8,0"
+                         Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                <!-- Qualifier1 row -->
+                <Grid ColumnDefinitions="44,22,*,55,70,60" Padding="8,4,8,3">
+                  <Grid Grid.Column="0" HeightRequest="26" WidthRequest="40"
+                        HorizontalOptions="Center" VerticalOptions="Center">
+                    <BoxView CornerRadius="3"
+                             Color="{Binding Qualifier1Ranking.IsTop25, Converter={StaticResource BoolToColorConverter}}" />
+                    <Label Text="{Binding Qualifier1Ranking.OverallRank}"
+                           FontSize="10" FontAttributes="Bold" TextColor="White"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                  </Grid>
+                  <Label Grid.Column="1"
+                         Text="{Binding Qualifier1Ranking.IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+                         TextColor="{Binding Qualifier1Ranking.IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+                         FontSize="{StaticResource TeamIconSize}"
+                         VerticalOptions="Center" HorizontalOptions="Center" />
+                  <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
+                    <Label Text="{Binding Qualifier1.TeamName}" FontSize="12" LineBreakMode="TailTruncation" />
+                    <Label Text="{Binding Qualifier1Ranking.DisplayConferenceTier}"
+                           FontSize="9" Opacity="0.6" LineBreakMode="TailTruncation" />
+                  </VerticalStackLayout>
+                  <Label Grid.Column="3" Text="{Binding Qualifier1Ranking.Record}" FontSize="10" VerticalOptions="Center" />
+                  <Label Grid.Column="4" Text="{Binding Qualifier1Ranking.DisplayRank}" FontSize="10" FontAttributes="Bold" VerticalOptions="Center" />
+                  <Label Grid.Column="5" Text="{Binding Qualifier1Ranking.DisplaySOS}" FontSize="10" VerticalOptions="Center" />
+                </Grid>
+
+                <BoxView HeightRequest="1" Opacity="0.05" Margin="8,0"
+                         Color="{AppThemeBinding Light=Black, Dark=White}" />
+
+                <!-- Qualifier2 row -->
+                <Grid ColumnDefinitions="44,22,*,55,70,60" Padding="8,3,8,6">
+                  <Grid Grid.Column="0" HeightRequest="26" WidthRequest="40"
+                        HorizontalOptions="Center" VerticalOptions="Center">
+                    <BoxView CornerRadius="3"
+                             Color="{Binding Qualifier2Ranking.IsTop25, Converter={StaticResource BoolToColorConverter}}" />
+                    <Label Text="{Binding Qualifier2Ranking.OverallRank}"
+                           FontSize="10" FontAttributes="Bold" TextColor="White"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                  </Grid>
+                  <Label Grid.Column="1"
+                         Text="{Binding Qualifier2Ranking.IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+                         TextColor="{Binding Qualifier2Ranking.IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+                         FontSize="{StaticResource TeamIconSize}"
+                         VerticalOptions="Center" HorizontalOptions="Center" />
+                  <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
+                    <Label Text="{Binding Qualifier2.TeamName}" FontSize="12" LineBreakMode="TailTruncation" />
+                    <Label Text="{Binding Qualifier2Ranking.DisplayConferenceTier}"
+                           FontSize="9" Opacity="0.6" LineBreakMode="TailTruncation" />
+                  </VerticalStackLayout>
+                  <Label Grid.Column="3" Text="{Binding Qualifier2Ranking.Record}" FontSize="10" VerticalOptions="Center" />
+                  <Label Grid.Column="4" Text="{Binding Qualifier2Ranking.DisplayRank}" FontSize="10" FontAttributes="Bold" VerticalOptions="Center" />
+                  <Label Grid.Column="5" Text="{Binding Qualifier2Ranking.DisplaySOS}" FontSize="10" VerticalOptions="Center" />
+                </Grid>
+
+              </VerticalStackLayout>
 
               <!-- Tiebreaker log -->
               <VerticalStackLayout IsVisible="{Binding IsExpanded}"
