@@ -21,7 +21,7 @@
       <VerticalStackLayout Spacing="0">
 
         <!-- Game card body -->
-        <Grid ColumnDefinitions="32,28,*,52,96"
+        <Grid ColumnDefinitions="32,28,*,22,52,96"
               RowDefinitions="Auto,Auto"
               Padding="6,5,10,5"
               BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
@@ -58,11 +58,26 @@
 
           <Label Grid.Row="0" Grid.Column="2" Text="{Binding VisitorName}"
                  FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-          <Label Grid.Row="0" Grid.Column="3" Text="{Binding DisplayVisitorScore}"
+
+          <!-- Single-game on-demand refresh — placeholder pending refresh
+               endpoint (2026-08-29). Centered above Details toggle, left of scores. -->
+          <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="3"
+                  HorizontalOptions="Center" VerticalOptions="Center"
+                  Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+            <Border.GestureRecognizers>
+              <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.RefreshGameCommand}"
+                  CommandParameter="{Binding .}" />
+            </Border.GestureRecognizers>
+            <Label Text="&#x27F3;" FontSize="16"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+          </Border>
+
+          <Label Grid.Row="0" Grid.Column="4" Text="{Binding DisplayVisitorScore}"
                  FontSize="13" FontAttributes="Bold"
                  HorizontalOptions="End" VerticalOptions="Center"
                  TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
-          <Label Grid.Row="0" Grid.Column="4" Text="{Binding DisplayMargin}"
+          <Label Grid.Row="0" Grid.Column="5" Text="{Binding DisplayMargin}"
                  FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
                  TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
 
@@ -87,11 +102,11 @@
               </FormattedString>
             </Label.FormattedText>
           </Label>
-          <Label Grid.Row="1" Grid.Column="3" Text="{Binding DisplayHomeScore}"
+          <Label Grid.Row="1" Grid.Column="4" Text="{Binding DisplayHomeScore}"
                  FontSize="13" FontAttributes="Bold"
                  HorizontalOptions="End" VerticalOptions="Center"
                  TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
-          <Label Grid.Row="1" Grid.Column="4" Text="{Binding DisplayOU}"
+          <Label Grid.Row="1" Grid.Column="5" Text="{Binding DisplayOU}"
                  FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
                  TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
 
@@ -100,21 +115,22 @@
         <!-- Details toggle bar -->
         <Grid ColumnDefinitions="*" Padding="6,2,6,2"
               BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
-          <Label FontSize="10" HorizontalOptions="Center"
-                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
-                 IsVisible="{Binding ShowDetails}">
+          <Border HorizontalOptions="Center" IsVisible="{Binding ShowDetails}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+              <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleDetailsCommand}"
+                  CommandParameter="{Binding .}" />
+            </Border.GestureRecognizers>
+  <Label FontSize="11"
+                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
             <Label.FormattedText>
               <FormattedString>
                 <Span Text="Details " />
                 <Span Text="{Binding DetailsExpandIcon}" FontSize="8" />
               </FormattedString>
             </Label.FormattedText>
-            <Label.GestureRecognizers>
-              <TapGestureRecognizer
-                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleDetailsCommand}"
-                  CommandParameter="{Binding .}" />
-            </Label.GestureRecognizers>
-          </Label>
+            </Label>
+</Border>
         </Grid>
 
         <!-- Expanded details panel -->
@@ -307,9 +323,12 @@
           BackgroundColor="{AppThemeBinding Light=#F8F8F8, Dark=#1E1E1E}"
           Padding="8,4">
 
-      <Label Grid.Column="0" Text="Title Games"
-             FontSize="13" FontAttributes="Bold"
-             HorizontalOptions="Center" VerticalOptions="Center">
+      <Border Grid.Column="0" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Championship" />
+        </Border.GestureRecognizers>
+  <Label Text="Title Games"
+             FontSize="14" FontAttributes="Bold">
         <Label.Triggers>
           <DataTrigger TargetType="Label" Binding="{Binding IsChampionshipView}" Value="True">
             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
@@ -320,14 +339,15 @@
             <Setter Property="TextDecorations" Value="None" />
           </DataTrigger>
         </Label.Triggers>
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Championship" />
-        </Label.GestureRecognizers>
-      </Label>
+        </Label>
+</Border>
 
-      <Label Grid.Column="1" Text="Playoffs"
-             FontSize="13" FontAttributes="Bold"
-             HorizontalOptions="Center" VerticalOptions="Center">
+      <Border Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Playoffs" />
+        </Border.GestureRecognizers>
+  <Label Text="Playoffs"
+             FontSize="14" FontAttributes="Bold">
         <Label.Triggers>
           <DataTrigger TargetType="Label" Binding="{Binding IsPlayoffsView}" Value="True">
             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
@@ -338,14 +358,15 @@
             <Setter Property="TextDecorations" Value="None" />
           </DataTrigger>
         </Label.Triggers>
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Playoffs" />
-        </Label.GestureRecognizers>
-      </Label>
+        </Label>
+</Border>
 
-      <Label Grid.Column="2" Text="Bowls"
-             FontSize="13" FontAttributes="Bold"
-             HorizontalOptions="Center" VerticalOptions="Center">
+      <Border Grid.Column="2" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Bowls" />
+        </Border.GestureRecognizers>
+  <Label Text="Bowls"
+             FontSize="14" FontAttributes="Bold">
         <Label.Triggers>
           <DataTrigger TargetType="Label" Binding="{Binding IsBowlsView}" Value="True">
             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
@@ -356,10 +377,8 @@
             <Setter Property="TextDecorations" Value="None" />
           </DataTrigger>
         </Label.Triggers>
-        <Label.GestureRecognizers>
-          <TapGestureRecognizer Command="{Binding SelectViewCommand}" CommandParameter="Bowls" />
-        </Label.GestureRecognizers>
-      </Label>
+        </Label>
+</Border>
 
     </Grid>
 
@@ -594,8 +613,14 @@
 
               <!-- Tiebreaker + Contenders toggles -->
               <Grid ColumnDefinitions="*,*" Padding="12,2,16,6">
-                <Label Grid.Column="0" IsVisible="{Binding HasTiebreaker}"
-                       FontSize="10" TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                <Border Grid.Column="0" IsVisible="{Binding HasTiebreaker}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleMatchupExpandCommand}"
+                        CommandParameter="{Binding .}" />
+                  </Border.GestureRecognizers>
+  <Label
+                       FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                   <Label.FormattedText>
                     <FormattedString>
                       <Span Text="{Binding TiebreakerSummary}" />
@@ -603,14 +628,16 @@
                       <Span Text="{Binding ExpandIcon}" FontSize="8" />
                     </FormattedString>
                   </Label.FormattedText>
-                  <Label.GestureRecognizers>
+                  </Label>
+</Border>
+                <Border Grid.Column="1" HorizontalOptions="End" IsVisible="{Binding HasContenders}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
                     <TapGestureRecognizer
-                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleMatchupExpandCommand}"
+                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleContendersExpandCommand}"
                         CommandParameter="{Binding .}" />
-                  </Label.GestureRecognizers>
-                </Label>
-                <Label Grid.Column="1" IsVisible="{Binding HasContenders}"
-                       FontSize="10" HorizontalOptions="End"
+                  </Border.GestureRecognizers>
+  <Label
+                       FontSize="11"
                        TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
                   <Label.FormattedText>
                     <FormattedString>
@@ -619,12 +646,8 @@
                       <Span Text="{Binding ContendersExpandIcon}" FontSize="8" />
                     </FormattedString>
                   </Label.FormattedText>
-                  <Label.GestureRecognizers>
-                    <TapGestureRecognizer
-                        Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleContendersExpandCommand}"
-                        CommandParameter="{Binding .}" />
-                  </Label.GestureRecognizers>
-                </Label>
+                  </Label>
+</Border>
               </Grid>
 
               <!-- Tiebreaker log -->

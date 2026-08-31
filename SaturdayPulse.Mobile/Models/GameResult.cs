@@ -25,14 +25,54 @@ namespace SaturdayPulse.Models
         public int     HomeId        { get; set; }
         public string  HomeConf      { get; set; } = string.Empty;
         public string  HomeTier      { get; set; } = string.Empty;
-        public int     HomePoints    { get; set; }
+
+        // HomePoints/AwayPoints are full properties (not auto-properties) so that
+        // GameDataApiService.RefreshGameAsync() updates propagate to the bound UI.
+        // Prior to the manual-refresh feature these were plain `{ get; set; }` —
+        // fine when only ever set once during initial mapping, but silent when
+        // updated later on an already-bound instance. Both fire notifications for
+        // every display/derived property that depends on the raw score.
+        private int _homePoints;
+        public int HomePoints
+        {
+            get => _homePoints;
+            set
+            {
+                if (_homePoints == value) return;
+                _homePoints = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HomeScore));
+                OnPropertyChanged(nameof(DisplayHomeScore));
+                OnPropertyChanged(nameof(ActualMargin));
+                OnPropertyChanged(nameof(DisplayMargin));
+                OnPropertyChanged(nameof(HomeIsWinner));
+            }
+        }
+
         public double? HomeProjScore { get; set; }
 
         public string  AwayName      { get; set; } = string.Empty;
         public int     AwayId        { get; set; }
         public string  AwayConf      { get; set; } = string.Empty;
         public string  AwayTier      { get; set; } = string.Empty;
-        public int     AwayPoints    { get; set; }
+
+        private int _awayPoints;
+        public int AwayPoints
+        {
+            get => _awayPoints;
+            set
+            {
+                if (_awayPoints == value) return;
+                _awayPoints = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(VisitorScore));
+                OnPropertyChanged(nameof(DisplayVisitorScore));
+                OnPropertyChanged(nameof(ActualMargin));
+                OnPropertyChanged(nameof(DisplayMargin));
+                OnPropertyChanged(nameof(HomeIsWinner));
+            }
+        }
+
         public double? AwayProjScore { get; set; }
 
         public char    Location  { get; set; }   // 'H' = has home team, 'N' = neutral
@@ -127,7 +167,19 @@ namespace SaturdayPulse.Models
             get => _isGameFavorited;
             set { _isGameFavorited = value; OnPropertyChanged(); }
         }
-        
+
+        // ── Manual refresh state ────────────────────────────────────────
+        // Set true for the duration of GameDataApiService.RefreshGameAsync().
+        // Used by RefreshGameCommand (Schedule/PostseasonViewModel) to no-op a
+        // second tap while a refresh is in flight. Not yet wired into the
+        // refresh-icon XAML (icon doesn't spin), but the guard works regardless.
+        private bool _isRefreshing;
+        public bool IsRefreshing
+        {
+            get => _isRefreshing;
+            set { _isRefreshing = value; OnPropertyChanged(); }
+        }
+
         // ── Game detail expand ────────────────────────────────────────────
 
         private bool _isDetailsExpanded;

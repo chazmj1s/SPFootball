@@ -36,6 +36,11 @@ builder.Services.AddHttpClient("cfbd", (sp, client) =>
 var testSettings = builder.Configuration.GetSection("CfbdApi").Get<CfbdApiSettings>();
 Console.WriteLine($"DEBUG CfbdApi — BaseUrl: '{testSettings?.BaseUrl}' BearerToken empty: {string.IsNullOrEmpty(testSettings?.BearerToken)}");
 
+// ── In-memory cache ───────────────────────────────────────────────────────────
+// Backs ProductionGameDataService.GetGameAsync's 60s per-gameId cache — without
+// this, IMemoryCache fails to resolve at DI time.
+builder.Services.AddMemoryCache();
+
 // ── Auth0 / JWT Bearer ────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -76,6 +81,11 @@ builder.Services.AddScoped<ExperimentalInertiaRatingService>();
 builder.Services.AddScoped<RatingComparisonService>();
 
 builder.Services.AddSingleton<ProjectionCacheService>();
+
+// ── Background services ────────────────────────────────────────────────────────
+// Polls CFBD for score updates every 5 min, only during today's kickoff-to-
+// margin window. See GameScorePollingService remarks for details.
+builder.Services.AddHostedService<GameScorePollingService>();
 
 
 // ── ASP.NET / Swagger ─────────────────────────────────────────────────────────

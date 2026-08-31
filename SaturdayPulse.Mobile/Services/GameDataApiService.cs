@@ -225,6 +225,55 @@ namespace SaturdayPulse.Services
             }
         }
 
+        /// <summary>
+        /// Manually refreshes a single game's score and odds from CFBD.
+        /// Called by RefreshGameCommand (ScheduleViewModel/PostseasonViewModel) when
+        /// the user taps the ⟳ icon on a game card — Season-Pass-gated in XAML.
+        ///
+        /// Maps to: GET /api/productiongamedata/game?gameId=X
+        /// (ProductionGameDataController / ProductionGameDataService.GetGameAsync)
+        ///
+        /// Server-side cached 60s per gameId — a re-tap inside that window returns
+        /// the same cached result rather than forcing a fresh CFBD call. That's
+        /// intentional (spam prevention), not something to work around here.
+        ///
+        /// Returns null on any non-success status (404 not found, 502 CFBD failure,
+        /// 500 otherwise) or on transport/deserialization failure — caller treats
+        /// null as "refresh failed" and shows its own UX (no auto-retry here).
+        /// </summary>
+        public async Task<GameRefreshResponseDto?> RefreshGameAsync(int gameId)
+        {
+            try
+            {
+                var url = $"game?gameId={gameId}";
+                System.Diagnostics.Debug.WriteLine($"[API] Refreshing game: {url}");
+
+                using var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[API] RefreshGameAsync returned {response.StatusCode} for gameId={gameId}");
+                    return null;
+                }
+
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var result = await response.Content.ReadFromJsonAsync<GameRefreshResponseDto>(options);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Refreshed gameId={gameId}: " +
+                    $"{result?.HomePoints ?? 0}-{result?.AwayPoints ?? 0}, " +
+                    $"{result?.Lines?.Count ?? 0} line(s)");
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error refreshing gameId={gameId}: {ex.Message}");
+                return null;
+            }
+        }
+
 
         /// <summary>
         /// Returns the conferences active in a given year, ordered P4 → G5.

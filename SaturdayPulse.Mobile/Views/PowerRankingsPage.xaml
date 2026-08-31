@@ -20,32 +20,42 @@
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
           ColumnDefinitions="44,22,*,76,54,50,46">
 
-      <Label Grid.Column="0" Text="Rank ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
+      <Border Grid.Column="0" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
-        </Label.GestureRecognizers>
-      </Label>
+        </Border.GestureRecognizers>
+  <Label Text="Rank ↕" FontAttributes="Bold" FontSize="11">
+        </Label>
+</Border>
       <Label Grid.Column="1" Text="" />
-      <Label Grid.Column="2" Text="Team ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
+      <Border Grid.Column="2" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="3" Text="Record ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
+        </Border.GestureRecognizers>
+  <Label Text="Team ↕" FontAttributes="Bold" FontSize="11">
+        </Label>
+</Border>
+      <Border Grid.Column="3" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="4" Text="Rating ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
+        </Border.GestureRecognizers>
+  <Label Text="Record ↕" FontAttributes="Bold" FontSize="11">
+        </Label>
+</Border>
+      <Border Grid.Column="4" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
-        </Label.GestureRecognizers>
-      </Label>
-      <Label Grid.Column="5" Text="SOS ↕" FontAttributes="Bold" FontSize="10">
-        <Label.GestureRecognizers>
+        </Border.GestureRecognizers>
+  <Label Text="Rating ↕" FontAttributes="Bold" FontSize="11">
+        </Label>
+</Border>
+      <Border Grid.Column="5" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
-        </Label.GestureRecognizers>
-      </Label>
+        </Border.GestureRecognizers>
+  <Label Text="SOS ↕" FontAttributes="Bold" FontSize="11">
+        </Label>
+</Border>
 
       <!-- Roster Rank — now sortable, same pattern as the other headers. -->
       <VerticalStackLayout Grid.Column="6" Spacing="0" HorizontalOptions="Center">
@@ -93,17 +103,18 @@
         </Grid>
 
         <!-- Heart: follow team -->
-        <Label Grid.Column="1"
-               Text="{Binding IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
-               TextColor="{Binding IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
-               FontSize="{StaticResource TeamIconSize}"
-               VerticalOptions="Center" HorizontalOptions="Center">
-          <Label.GestureRecognizers>
+        <Border Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
             <TapGestureRecognizer
                 Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
                 CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Border.GestureRecognizers>
+  <Label
+               Text="{Binding IsFollowed, Converter={StaticResource FollowTeamGlyphConverter}}"
+               TextColor="{Binding IsFollowed, Converter={StaticResource FollowTeamColorConverter}}"
+               FontSize="{StaticResource TeamIconSize}">
+          </Label>
+</Border>
 
         <!-- Team + Conf · Tier -->
         <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
@@ -131,10 +142,14 @@
 
         <!-- LEFT: Trend / Pedigree — disabled/grayed without Season Pass,
              not tappable, no popup (design locked 2026-07-24). -->
-        <Label Grid.Column="0"
-               IsVisible="{Binding HasTrendData}"
-               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
-               FontSize="10" HorizontalOptions="Start"
+        <Border Grid.Column="0" HorizontalOptions="Start" IsVisible="{Binding HasTrendData}" IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleTrendExpandCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+  <Label
+               FontSize="11"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -150,17 +165,18 @@
               <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
-          <Label.GestureRecognizers>
-            <TapGestureRecognizer
-                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleTrendExpandCommand}"
-                CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Label>
+</Border>
 
         <!-- Season Arc — disabled/grayed without Season Pass -->
-        <Label Grid.Column="1"
-               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
-               FontSize="10" HorizontalOptions="Center"
+        <Border Grid.Column="1" HorizontalOptions="Center" IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleArcExpandCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+  <Label
+               FontSize="11"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -176,20 +192,20 @@
               <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
-          <Label.GestureRecognizers>
-            <TapGestureRecognizer
-                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleArcExpandCommand}"
-                CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Label>
+</Border>
 
         <!-- Offense / Defense — disabled/grayed without Season Pass. Moved from
              HorizontalOptions="End" to "Center": no longer the rightmost column
              now that Roster sits to its right. -->
-        <Label Grid.Column="2"
-               IsVisible="{Binding HasOffenseDefenseData}"
-               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
-               FontSize="10" HorizontalOptions="Center"
+        <Border Grid.Column="2" HorizontalOptions="Center" IsVisible="{Binding HasOffenseDefenseData}" IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleStatsExpandCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+  <Label
+               FontSize="11"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -205,12 +221,8 @@
               <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
-          <Label.GestureRecognizers>
-            <TapGestureRecognizer
-                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleStatsExpandCommand}"
-                CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Label>
+</Border>
 
         <!-- RIGHT: Roster — new. Gated behind Season Pass like Trend/Pedigree and
              Season Arc (confirmed 2026-08). No IsVisible data-presence gate yet
@@ -220,9 +232,14 @@
              The panel itself shows an empty state if RosterCapacityService returns
              no ZRoster for the team/year, per the API's documented null-coverage
              caveat. -->
-        <Label Grid.Column="3"
-               IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}"
-               FontSize="10" HorizontalOptions="End"
+        <Border Grid.Column="3" HorizontalOptions="End" IsEnabled="{Binding Source={x:Reference ThisPage}, Path=BindingContext.HasSeasonPass}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRosterExpandCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+  <Label
+               FontSize="11"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -238,12 +255,8 @@
               <Setter Property="TextColor" Value="{AppThemeBinding Light=#596B4EAE, Dark=#599B7EDE}" />
             </DataTrigger>
           </Label.Triggers>
-          <Label.GestureRecognizers>
-            <TapGestureRecognizer
-                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRosterExpandCommand}"
-                CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Label>
+</Border>
 
       </Grid>
 
@@ -483,7 +496,13 @@
                    Text="{Binding RosterChanges.RosterStrength.RatingChange, StringFormat='{0:+0.0;-0.0;0.0}'}" />
 
             <!-- Recruiting — tappable, opens the shared list below -->
-            <Label Grid.Row="3" Grid.Column="0" FontSize="10" VerticalOptions="Center"
+            <Border Grid.Column="0" Grid.Row="3" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRecruitingListCommand}"
+                    CommandParameter="{Binding .}" />
+              </Border.GestureRecognizers>
+  <Label FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -491,12 +510,8 @@
                   <Span Text="{Binding RecruitingListIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer
-                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRecruitingListCommand}"
-                    CommandParameter="{Binding .}" />
-              </Label.GestureRecognizers>
-            </Label>
+              </Label>
+</Border>
             <Label Grid.Row="3" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.RecruitingComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Row="3" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
@@ -506,7 +521,13 @@
                    Text="{Binding RosterChanges.RecruitingComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
 
             <!-- Portal In — tappable -->
-            <Label Grid.Row="4" Grid.Column="0" FontSize="10" VerticalOptions="Center"
+            <Border Grid.Column="0" Grid.Row="4" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePortalInListCommand}"
+                    CommandParameter="{Binding .}" />
+              </Border.GestureRecognizers>
+  <Label FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource ResultWinLight}, Dark={StaticResource ResultWinDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -514,12 +535,8 @@
                   <Span Text="{Binding PortalInListIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer
-                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePortalInListCommand}"
-                    CommandParameter="{Binding .}" />
-              </Label.GestureRecognizers>
-            </Label>
+              </Label>
+</Border>
             <Label Grid.Row="4" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.PortalInComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Row="4" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"
@@ -529,7 +546,13 @@
                    Text="{Binding RosterChanges.PortalInComposite.Change, StringFormat='{0:+0.0;-0.0;0.0}'}" />
 
             <!-- Portal Out — tappable. Values are pre-negated at the API. -->
-            <Label Grid.Row="5" Grid.Column="0" FontSize="10" VerticalOptions="Center"
+            <Border Grid.Column="0" Grid.Row="5" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePortalOutListCommand}"
+                    CommandParameter="{Binding .}" />
+              </Border.GestureRecognizers>
+  <Label FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource ResultLossLight}, Dark={StaticResource ResultLossDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -537,12 +560,8 @@
                   <Span Text="{Binding PortalOutListIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer
-                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePortalOutListCommand}"
-                    CommandParameter="{Binding .}" />
-              </Label.GestureRecognizers>
-            </Label>
+              </Label>
+</Border>
             <Label Grid.Row="5" Grid.Column="1" FontSize="10" HorizontalOptions="End" TextColor="#B3FFFFFF"
                    Text="{Binding RosterChanges.PortalOutComposite.Prior, StringFormat='{0:F1}'}" />
             <Label Grid.Row="5" Grid.Column="2" FontSize="10" FontAttributes="Bold" HorizontalOptions="End"

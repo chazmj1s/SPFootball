@@ -7,6 +7,7 @@ using SaturdayPulse.Interfaces;
 using SaturdayPulse.Models;
 using SaturdayPulse.ModelViews;
 using SaturdayPulse.Utilities;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -709,6 +710,10 @@ namespace SaturdayPulse.Services
             return teams.Count;
         }
 
+        // Must stay identical to GameScorePollingService.KickoffTimeFormat —
+        // that's the only other place this column gets parsed.
+        private const string KickoffTimeFormat = "HH:mm:ss";
+
         /// <summary>
         /// Fetches games for a given year (and optionally week) from CFBD and upserts into Games table.
         /// Pass week=null to load a full season sequentially with delay to avoid rate limiting.
@@ -725,32 +730,40 @@ namespace SaturdayPulse.Services
             var dtos = await response.Content
                 .ReadFromJsonAsync<List<CfbdGameV2Dto>>(cancellationToken: token) ?? [];
 
-            var games = dtos.Select(d => new Games
+            var games = dtos.Select(d =>
             {
-                GameId         = d.Id,
-                Year           = d.Season,
-                Week           = d.Week,
-                SeasonType     = d.SeasonType,
-                GameDate       = d.StartDate != null
-                                 ? DateTime.TryParse(d.StartDate, out var dt)
-                                   ? dt.ToString("MM/dd/yyyy") : d.StartDate
-                                 : null,
-                GameDay        = d.StartDate != null && DateTime.TryParse(d.StartDate, out var gd)
-                                 ? gd.DayOfWeek.ToString()[..3].ToUpper() : null,
-                HomeId         = d.HomeId,
-                HomeName       = d.HomeTeam,
-                HomePoints     = d.HomePoints,
-                AwayId         = d.AwayId,
-                AwayName       = d.AwayTeam,
-                AwayPoints     = d.AwayPoints,
-                NeutralSite    = d.NeutralSite,
-                ConferenceGame = d.ConferenceGame,
-                Attendance     = d.Attendance,
-                Venue          = d.Venue
+                // Parsed once and reused for GameDate/GameDay/KickoffTime — previously
+                // this parsed the same string twice (once per field) and discarded the
+                // time-of-day entirely. KickoffTime now keeps it (as a fixed-format
+                // string — SQLite/matches GameDate/GameDay convention) for the
+                // game-day score poller's on/off window (see GameScorePollingService).
+                var parsed = d.StartDate != null && DateTime.TryParse(d.StartDate, out var dt)
+                    ? dt : (DateTime?)null;
+
+                return new Games
+                {
+                    GameId         = d.Id,
+                    Year           = d.Season,
+                    Week           = d.Week,
+                    SeasonType     = d.SeasonType,
+                    GameDate       = parsed?.ToString("MM/dd/yyyy") ?? d.StartDate,
+                    GameDay        = parsed != null ? parsed.Value.DayOfWeek.ToString()[..3].ToUpper() : null,
+                    KickoffTime    = parsed?.ToString(KickoffTimeFormat, CultureInfo.InvariantCulture),
+                    HomeId         = d.HomeId,
+                    HomeName       = d.HomeTeam,
+                    HomePoints     = d.HomePoints,
+                    AwayId         = d.AwayId,
+                    AwayName       = d.AwayTeam,
+                    AwayPoints     = d.AwayPoints,
+                    NeutralSite    = d.NeutralSite,
+                    ConferenceGame = d.ConferenceGame,
+                    Attendance     = d.Attendance,
+                    Venue          = d.Venue
+                };
             }).ToList();
 
             await _uow.Games.UpsertRangeAsync(games, token);
-            await _uow.SaveChangesAsync(token);
+            var result = await _uow.SaveChangesAsync(token);
 
             Console.WriteLine($"LoadGamesAsync: upserted {games.Count} games for {year}" +
                               (week.HasValue ? $" week {week}" : " (full season)"));
@@ -816,6 +829,71 @@ namespace SaturdayPulse.Services
             var linesLoaded = await LoadLinesAsync(year, week, token);
             Console.WriteLine($"WeeklyRefreshAsync: {year} week {week} — {gamesLoaded} games, {linesLoaded} lines");
             return gamesLoaded + linesLoaded;
+        }
+
+        /// <summary>
+        /// Manual single-game refresh — backs ProductionGameDataService.GetGameAsync
+        /// (the mobile ⟳ icon). Confirmed live 2026-08-30: CFBD's /lines endpoint
+        /// accepts a gameId filter and returns homeScore/awayScore embedded
+        /// alongside the odds array, so one call covers both — unlike
+        /// LoadGamesAsync/LoadLinesAsync above, which are always year+week scoped
+        /// and need two separate calls. This is the only CFBD call in this
+        /// codebase filtered by gameId alone; every other call goes through
+        /// year+week.
+        ///
+        /// Uses CfbdGameLinesWithScoreDto (not CfbdLinesGameDto) since that DTO's
+        /// field set for homeScore/awayScore wasn't confirmed and this response
+        /// is a distinct, verified shape.
+        /// </summary>
+        public async Task<int> RefreshGameAsync(int gameId, CancellationToken token = default)
+        {
+            var url = $"/lines?gameId={gameId}";
+
+            var response = await CfbdClient.GetAsync(url, token);
+            response.EnsureSuccessStatusCode();
+
+            var dtos = await response.Content
+                .ReadFromJsonAsync<List<CfbdGameLinesWithScoreDto>>(cancellationToken: token) ?? [];
+
+            var dto = dtos.FirstOrDefault(d => d.Id == gameId);
+            if (dto == null)
+            {
+                Console.WriteLine($"RefreshGameAsync: CFBD returned no game for gameId={gameId}");
+                return 0;
+            }
+
+            var existing = await _uow.Games.GetByGameIdAsync(gameId, token);
+            if (existing != null)
+            {
+                existing.HomePoints = dto.HomeScore;
+                existing.AwayPoints = dto.AwayScore;
+            }
+
+            // Delete-then-insert lines — same convention as LoadLinesAsync, so a
+            // refresh is always clean rather than accumulating stale providers.
+            await _uow.Lines.DeleteByGameIdAsync(gameId, token);
+
+            var newLines = dto.Lines.Select(line => new Lines
+            {
+                GameId          = gameId,
+                Provider        = line.Provider.Replace(" ", string.Empty),
+                Spread          = line.Spread,
+                SpreadOpen      = line.SpreadOpen,
+                FormattedSpread = line.FormattedSpread,
+                OverUnder       = line.OverUnder,
+                OverUnderOpen   = line.OverUnderOpen,
+                HomeMoneyline   = line.HomeMoneyline,
+                AwayMoneyline   = line.AwayMoneyline
+            }).ToList();
+
+            await _uow.Lines.AddRangeAsync(newLines, token);
+            await _uow.SaveChangesAsync(token);
+
+            Console.WriteLine($"RefreshGameAsync: gameId={gameId} → " +
+                $"{dto.HomeScore?.ToString() ?? "null"}-{dto.AwayScore?.ToString() ?? "null"}, " +
+                $"{newLines.Count} line(s)");
+
+            return 1;
         }
 
         /// <summary>

@@ -480,6 +480,52 @@ namespace SaturdayPulse.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Manual single-game refresh — re-fetches score + odds for one game
+        /// from CFBD and writes the result back to Games/Lines. Backs the
+        /// mobile ⟳ icon on SchedulePage/PostseasonPage (Season-Pass-gated
+        /// client-side). See ProductionGameDataService.GetGameAsync for the
+        /// CFBD-call design note (year+week scope, not a gameId filter).
+        /// Example: GET /api/productiongamedata/game?gameId=401864570
+        /// </summary>
+        [HttpGet("game")]
+        public async Task<IActionResult> GetGame(
+            [FromQuery] int gameId,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await gameDataService.GetGameAsync(gameId, token);
+                if (result == null)
+                    return NotFound($"Game {gameId} not found.");
+
+                return Ok(new
+                {
+                    gameId     = result.Games.GameId,
+                    homePoints = result.Games.HomePoints ?? 0,
+                    awayPoints = result.Games.AwayPoints ?? 0,
+                    lines      = result.Lines.Select(l => new
+                    {
+                        provider        = l.Provider,
+                        spread          = l.Spread,
+                        formattedSpread = l.FormattedSpread,
+                        overUnder       = l.OverUnder,
+                        homeMoneyline   = l.HomeMoneyline,
+                        awayMoneyline   = l.AwayMoneyline
+                    })
+                });
+            }
+            catch (HttpRequestException ex)
+            {
+                logger.LogError(ex, "CFBD call failed refreshing gameId={GameId}", gameId);
+                return StatusCode(502, "CFBD request failed.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error refreshing gameId={GameId}", gameId);
+                return StatusCode(500, "An error occurred while refreshing the game.");
+            }
+        }
 
         #endregion
 

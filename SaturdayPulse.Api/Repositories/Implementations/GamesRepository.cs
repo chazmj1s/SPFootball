@@ -186,6 +186,7 @@ namespace SaturdayPulse.Repositories.Implementations
                     dbGame.NeutralSite    = game.NeutralSite;
                     dbGame.ConferenceGame = game.ConferenceGame;
                     dbGame.Venue          = game.Venue;
+                    dbGame.KickoffTime    = game.KickoffTime;
                 }
                 else
                     _context.Games.Add(game);
