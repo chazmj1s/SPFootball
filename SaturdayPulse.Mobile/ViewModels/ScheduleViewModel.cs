@@ -10,6 +10,7 @@ namespace SaturdayPulse.ViewModels
 {
     public class ScheduleViewModel : BaseViewModel
     {
+        private readonly GameDataApiService           _apiService;
         private readonly GameDataCacheService         _cache;
         private readonly SharedNavigationStateService _navState;
         private readonly PersonalGameService          _personalGameService;
@@ -23,6 +24,7 @@ namespace SaturdayPulse.ViewModels
         private string _emptyMessage   = "Loading...";
 
         public ScheduleViewModel(
+            GameDataApiService apiService,
             GameDataCacheService cache,
             FollowService followService,
             SharedNavigationStateService navState,
@@ -30,6 +32,7 @@ namespace SaturdayPulse.ViewModels
             EntitlementService entitlementService)
             : base(followService)
         {
+            _apiService          = apiService;
             _cache               = cache;
             _navState            = navState;
             _personalGameService = personalGameService;
@@ -87,6 +90,34 @@ namespace SaturdayPulse.ViewModels
             {
                 if (game == null) return;
                 game.IsRivalryNotesExpanded = !game.IsRivalryNotesExpanded;
+            });
+
+            // Manual single-game refresh (⟳ icon, Season-Pass-gated in XAML).
+            // Guards re-entrancy on GameResult.IsRefreshing rather than IsBusy —
+            // IsBusy drives the page-level "Loading..." state and must stay free
+            // for week/filter navigation while a single-game refresh is in flight.
+            RefreshGameCommand = new Microsoft.Maui.Controls.Command<GameResult>(async game =>
+            {
+                if (game == null || game.IsRefreshing) return;
+
+                game.IsRefreshing = true;
+                try
+                {
+                    var result = await _apiService.RefreshGameAsync(game.Id);
+                    if (result == null)
+                    {
+                        await Shell.Current.DisplayAlert(
+                            "Refresh Failed", "Couldn't refresh this game. Try again in a moment.", "OK");
+                        return;
+                    }
+
+                    game.HomePoints = result.HomePoints;
+                    game.AwayPoints = result.AwayPoints;
+                }
+                finally
+                {
+                    game.IsRefreshing = false;
+                }
             });
 
             // Gated Details paywall message (2026-07-25) — same shared
@@ -174,6 +205,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand TogglePersonalGameCommand { get; }
         public ICommand ToggleDetailsCommand      { get; }
         public ICommand ToggleRivalryNotesCommand { get; }
+        public ICommand RefreshGameCommand        { get; }
         public ICommand SeasonPassCommand         { get; }
 
         // ── Load ──────────────────────────────────────────────────────────

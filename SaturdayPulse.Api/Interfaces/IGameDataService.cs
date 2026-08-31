@@ -16,6 +16,7 @@ namespace SaturdayPulse.Interfaces
         Task<int> LoadGamesAsync(int year, int? week = null, CancellationToken token = default);
         Task<int> LoadLinesAsync(int year, int week, CancellationToken token = default);
         Task<int> WeeklyRefreshAsync(int year, int week, CancellationToken token = default);
+        Task<int> RefreshGameAsync(int gameId, CancellationToken token = default);
         Task<int> AssignPostseasonWeeksAsync(int year, CancellationToken token = default);
         Task<int> LoadRosterCapacityRosterAsync(int season, CancellationToken token = default);
         Task<int> LoadRosterCapacityStatsAsync(int season, CancellationToken token = default);

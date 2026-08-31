@@ -81,16 +81,15 @@
                 Padding="10,7,10,7">
 
             <!-- Star: left of team name, tappable, gold if followed -->
-            <Label Grid.Column="0"
-                   Text="☆"
-                   FontSize="18"
-                   HorizontalOptions="Center"
-                   VerticalOptions="Center">
-              <Label.GestureRecognizers>
+            <Border Grid.Column="0" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
                 <TapGestureRecognizer
                     Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleFollowCommand}"
                     CommandParameter="{Binding .}" />
-              </Label.GestureRecognizers>
+              </Border.GestureRecognizers>
+  <Label
+                   Text="☆"
+                   FontSize="19">
               <Label.Triggers>
                 <DataTrigger TargetType="Label" Binding="{Binding IsFollowed}" Value="True">
                   <Setter Property="Text" Value="★" />
@@ -102,6 +101,7 @@
                 </DataTrigger>
               </Label.Triggers>
             </Label>
+</Border>
 
             <!-- Team name + tier -->
             <StackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">

@@ -1,6 +1,8 @@
+using Microsoft.Extensions.Caching.Memory;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Contracts.Responses;
+using SaturdayPulse.Interfaces;
 using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Services
@@ -9,22 +11,32 @@ namespace SaturdayPulse.Services
     /// Encapsulates all data-access and business logic for the production read-only
     /// endpoints. All legacy methods removed 2026-05-19 — use V2 equivalents in
     /// ProductionGameDataService_V2.cs.
+    ///
+    /// GetGameAsync (manual single-game refresh) lives in the
+    /// ProductionGameDataService.GameRefresh.cs partial — added here only to
+    /// extend the constructor with IGameDataService/IMemoryCache, which every
+    /// partial needs visible since C# primary-constructor parameters can only
+    /// be declared once, on this file.
     /// </summary>
     public partial class ProductionGameDataService(
         IUnitOfWork uow,
+        IGameDataService cfbdLoadService,
         GamePredictionService predictionService,
         ProjectionCacheService projectionCache,
         WeeklyRankingsService weeklyRankingsService,
         RollingAverageService rollingAverageService,
         ConferenceTierService tierService,
+        IMemoryCache memoryCache,
         ILogger<ProductionGameDataService> logger)
     {
         private readonly IUnitOfWork _uow = uow;
+        private readonly IGameDataService _cfbdLoadService = cfbdLoadService;
         private readonly GamePredictionService _predictionService = predictionService;
         private readonly ProjectionCacheService _projectionCache = projectionCache;
         private readonly WeeklyRankingsService _weeklyRankingsService = weeklyRankingsService;
         private readonly RollingAverageService _rollingAverageService = rollingAverageService;
         private readonly ConferenceTierService _tierService = tierService;
+        private readonly IMemoryCache _memoryCache = memoryCache;
         private readonly ILogger<ProductionGameDataService> _logger = logger;
 
         // ── Predictions ──────────────────────────────────────────────────────────

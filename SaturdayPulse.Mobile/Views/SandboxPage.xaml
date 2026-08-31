@@ -90,13 +90,13 @@
         </Grid>
 
         <!-- ── SIMULATE MATCHUP ── -->
-        <Label Text="Simulate Matchup ›"
-               FontSize="13" FontAttributes="Bold"
-               HorizontalOptions="Center"
-               Padding="12,10">
-          <Label.GestureRecognizers>
+        <Border HorizontalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
             <TapGestureRecognizer Command="{Binding RunMatchupCommand}" />
-          </Label.GestureRecognizers>
+          </Border.GestureRecognizers>
+  <Label Text="Simulate Matchup ›"
+               FontSize="14" FontAttributes="Bold"
+               Padding="12,10">
           <Label.Triggers>
             <DataTrigger TargetType="Label" Binding="{Binding CanRunMatchup}" Value="False">
               <Setter Property="TextColor" Value="{AppThemeBinding Light=#AAAAAA, Dark=#555555}" />
@@ -106,6 +106,7 @@
             </DataTrigger>
           </Label.Triggers>
         </Label>
+</Border>
 
         <!-- ── PREDICTION RESULT ── -->
         <VerticalStackLayout IsVisible="{Binding HasPrediction}" Spacing="0">
@@ -236,8 +237,12 @@
           </Grid>
 
           <Grid ColumnDefinitions="*,*,*" Padding="4,2,8,2">
-            <Label Grid.Column="0" IsVisible="{Binding TeamARanking.HasTrendData}"
-                   FontSize="10" HorizontalOptions="Start"
+            <Border Grid.Column="0" HorizontalOptions="Start" IsVisible="{Binding TeamARanking.HasTrendData}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleTrendACommand}" />
+              </Border.GestureRecognizers>
+  <Label
+                   FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -245,11 +250,13 @@
                   <Span Text="{Binding TeamARanking.TrendExpandIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ToggleTrendACommand}" />
-              </Label.GestureRecognizers>
-            </Label>
-            <Label Grid.Column="1" FontSize="10" HorizontalOptions="Center"
+              </Label>
+</Border>
+            <Border Grid.Column="1" HorizontalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleArcACommand}" />
+              </Border.GestureRecognizers>
+  <Label FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -257,12 +264,14 @@
                   <Span Text="{Binding TeamARanking.ArcExpandIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ToggleArcACommand}" />
-              </Label.GestureRecognizers>
-            </Label>
-            <Label Grid.Column="2" IsVisible="{Binding TeamARanking.HasOffenseDefenseData}"
-                   FontSize="10" HorizontalOptions="End"
+              </Label>
+</Border>
+            <Border Grid.Column="2" HorizontalOptions="End" IsVisible="{Binding TeamARanking.HasOffenseDefenseData}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleStatsACommand}" />
+              </Border.GestureRecognizers>
+  <Label
+                   FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -270,10 +279,8 @@
                   <Span Text="{Binding TeamARanking.StatsExpandIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ToggleStatsACommand}" />
-              </Label.GestureRecognizers>
-            </Label>
+              </Label>
+</Border>
           </Grid>
 
           <Border IsVisible="{Binding TeamARanking.IsTrendExpanded}"
@@ -471,8 +478,12 @@
           </Grid>
 
           <Grid ColumnDefinitions="*,*,*" Padding="4,2,8,2">
-            <Label Grid.Column="0" IsVisible="{Binding TeamBRanking.HasTrendData}"
-                   FontSize="10" HorizontalOptions="Start"
+            <Border Grid.Column="0" HorizontalOptions="Start" IsVisible="{Binding TeamBRanking.HasTrendData}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleTrendBCommand}" />
+              </Border.GestureRecognizers>
+  <Label
+                   FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -480,11 +491,13 @@
                   <Span Text="{Binding TeamBRanking.TrendExpandIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ToggleTrendBCommand}" />
-              </Label.GestureRecognizers>
-            </Label>
-            <Label Grid.Column="1" FontSize="10" HorizontalOptions="Center"
+              </Label>
+</Border>
+            <Border Grid.Column="1" HorizontalOptions="Center" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleArcBCommand}" />
+              </Border.GestureRecognizers>
+  <Label FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -492,12 +505,14 @@
                   <Span Text="{Binding TeamBRanking.ArcExpandIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ToggleArcBCommand}" />
-              </Label.GestureRecognizers>
-            </Label>
-            <Label Grid.Column="2" IsVisible="{Binding TeamBRanking.HasOffenseDefenseData}"
-                   FontSize="10" HorizontalOptions="End"
+              </Label>
+</Border>
+            <Border Grid.Column="2" HorizontalOptions="End" IsVisible="{Binding TeamBRanking.HasOffenseDefenseData}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleStatsBCommand}" />
+              </Border.GestureRecognizers>
+  <Label
+                   FontSize="11"
                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
               <Label.FormattedText>
                 <FormattedString>
@@ -505,10 +520,8 @@
                   <Span Text="{Binding TeamBRanking.StatsExpandIcon}" FontSize="8" />
                 </FormattedString>
               </Label.FormattedText>
-              <Label.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ToggleStatsBCommand}" />
-              </Label.GestureRecognizers>
-            </Label>
+              </Label>
+</Border>
           </Grid>
 
           <Border IsVisible="{Binding TeamBRanking.IsTrendExpanded}"

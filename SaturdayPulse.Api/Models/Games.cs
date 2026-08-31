@@ -13,6 +13,7 @@ namespace SaturdayPulse.Models
         public int Week { get; set; }
         public string SeasonType { get; set; } = "regular";
         public string? GameDate { get; set; }
+        public string? KickoffTime { get; set; }
         public string? GameDay { get; set; }
         public int? HomeId { get; set; }
         public string? HomeName { get; set; }

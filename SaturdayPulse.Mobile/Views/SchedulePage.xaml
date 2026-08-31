@@ -46,7 +46,7 @@
       </Grid>
 
       <!-- Game card -->
-      <Grid ColumnDefinitions="32,28,*,52,96"
+      <Grid ColumnDefinitions="32,28,*,22,52,96"
             RowDefinitions="Auto,Auto"
             Padding="6,5,10,5"
             BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
@@ -83,7 +83,22 @@
 
         <Label Grid.Row="0" Grid.Column="2" Text="{Binding VisitorName}"
                FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-        <Label Grid.Row="0" Grid.Column="3"
+
+        <!-- Single-game on-demand refresh — placeholder pending refresh
+             endpoint (2026-08-29). Centered above Details toggle, left of scores. -->
+        <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="3"
+                HorizontalOptions="Center" VerticalOptions="Center"
+                Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+          <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.RefreshGameCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+          <Label Text="&#x27F3;" FontSize="16"
+                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+        </Border>
+
+        <Label Grid.Row="0" Grid.Column="4"
                FontSize="13" FontAttributes="Bold"
                HorizontalOptions="End" VerticalOptions="Center"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}">
@@ -95,7 +110,7 @@
             </MultiBinding>
           </Label.Text>
         </Label>
-        <Label Grid.Row="0" Grid.Column="4"
+        <Label Grid.Row="0" Grid.Column="5"
                FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
                TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
           <Label.Text>
@@ -128,7 +143,7 @@
             </FormattedString>
           </Label.FormattedText>
         </Label>
-        <Label Grid.Row="1" Grid.Column="3"
+        <Label Grid.Row="1" Grid.Column="4"
                FontSize="13" FontAttributes="Bold"
                HorizontalOptions="End" VerticalOptions="Center"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}">
@@ -140,7 +155,7 @@
             </MultiBinding>
           </Label.Text>
         </Label>
-        <Label Grid.Row="1" Grid.Column="4"
+        <Label Grid.Row="1" Grid.Column="5"
                FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
                TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
           <Label.Text>
@@ -163,7 +178,13 @@
              rivalries AND the user is entitled — see
              RivalryNotesVisibilityConverter remarks for why this differs
              from Details' always-visible-with-inner-paywall pattern. -->
-        <Label Grid.Column="0" FontSize="10" HorizontalOptions="Start"
+        <Border Grid.Column="0" HorizontalOptions="Start" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRivalryNotesCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+  <Label FontSize="11"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.IsVisible>
             <MultiBinding Converter="{StaticResource RivalryNotesVisibilityConverter}">
@@ -177,28 +198,25 @@
               <Span Text="{Binding RivalryExpandIcon}" FontSize="8" />
             </FormattedString>
           </Label.FormattedText>
-          <Label.GestureRecognizers>
-            <TapGestureRecognizer
-                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleRivalryNotesCommand}"
-                CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Label>
+</Border>
 
-        <Label Grid.Column="1" FontSize="10" HorizontalOptions="Center"
-               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
-               IsVisible="{Binding ShowDetails}">
+        <Border Grid.Column="1" HorizontalOptions="Center" IsVisible="{Binding ShowDetails}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleDetailsCommand}"
+                CommandParameter="{Binding .}" />
+          </Border.GestureRecognizers>
+  <Label FontSize="11"
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
               <Span Text="Details " />
               <Span Text="{Binding DetailsExpandIcon}" FontSize="8" />
             </FormattedString>
           </Label.FormattedText>
-          <Label.GestureRecognizers>
-            <TapGestureRecognizer
-                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleDetailsCommand}"
-                CommandParameter="{Binding .}" />
-          </Label.GestureRecognizers>
-        </Label>
+          </Label>
+</Border>
       </Grid>
 
       <!-- ══════════════════════════════════════════════ -->
@@ -256,14 +274,16 @@
                for the Settings button and MyTeamsPage). -->
           <Grid IsVisible="{Binding Source={x:Reference ThisPage}, Path=BindingContext.IsNotSeasonPass}"
                 Padding="10,10,10,10">
-            <Label Text="🔒 Season Pass — Game History (1965–present), Vegas Spread, O/U, Money Line, Game Projections, and Sandbox team comparison. $9.95 unlocks the full season."
-                   FontSize="10" HorizontalTextAlignment="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
-              <Label.GestureRecognizers>
+            <Border Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
+  <Border.GestureRecognizers>
                 <TapGestureRecognizer
                     Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.SeasonPassCommand}" />
-              </Label.GestureRecognizers>
-            </Label>
+              </Border.GestureRecognizers>
+  <Label Text="🔒 Season Pass — Game History (1965–present), Vegas Spread, O/U, Money Line, Game Projections, and Sandbox team comparison. $9.95 unlocks the full season."
+                   FontSize="11" HorizontalTextAlignment="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+              </Label>
+</Border>
           </Grid>
 
           <!-- Real Vegas content — Season Pass only -->
