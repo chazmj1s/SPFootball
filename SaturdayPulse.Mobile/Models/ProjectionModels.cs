@@ -233,6 +233,45 @@ namespace SaturdayPulse.Models
         public bool HasStubs      => StubsApplied.Any();
         public bool HasContenders => Contenders.Any();
 
+        // ── Title Games card — real Game vs. Sandbox-projection fallback ──
+        // CFBD doesn't publish the actual championship-game Games row until
+        // participants are locked in. Until then, PostseasonViewModel fetches
+        // a Sandbox prediction + power ratings for both qualifiers and stores
+        // them here so the page can render an end-of-season projection card
+        // instead of the real GameResultCard. Set once during LoadDataAsync,
+        // before the matchup is added to the bound Championships collection —
+        // no change notification needed on these three.
+        public SandboxPrediction? Prediction        { get; set; }
+        public TeamRanking?       Qualifier1Ranking { get; set; }
+        public TeamRanking?       Qualifier2Ranking { get; set; }
+
+        /// <summary>True once CFBD has published the real title game.</summary>
+        public bool HasGame => Game != null;
+
+        /// <summary>
+        /// Whether Card A (real Game) has anything to show in its Details panel.
+        /// Kept separate from ShowDetailsToggle below because Game can be null.
+        /// </summary>
+        private bool ShowGameDetails => Game?.ShowDetails ?? false;
+
+        /// <summary>
+        /// Single Details-toggle surface for the Title Games card. Whichever card
+        /// is active (real Game or Sandbox) owns this slot — there's exactly one
+        /// Details toggle in the shared Tiebreaker/Details/Contenders row, not one
+        /// per card layered on top of each other.
+        /// </summary>
+        public bool ShowDetailsToggle => HasGame ? ShowGameDetails : NeedsPrediction;
+
+        /// <summary>Expand/collapse icon for the single Details toggle, sourced from whichever card is active.</summary>
+        public string DetailsToggleIcon =>
+            HasGame ? (Game?.DetailsExpandIcon ?? "▼") : SandboxDetailsExpandIcon;
+
+        /// <summary>True when no real Game exists yet — card falls back to the Sandbox projection.</summary>
+        public bool NeedsPrediction => Game == null;
+
+        /// <summary>True once a Sandbox prediction has actually been fetched (vs. lookup failure/pending).</summary>
+        public bool HasPrediction => Prediction != null;
+
         public bool IsExpanded
         {
             get => _isExpanded;
@@ -254,6 +293,22 @@ namespace SaturdayPulse.Models
         }
 
         public string ContendersExpandIcon => IsContendersExpanded ? "▲" : "▼";
+
+        // ── Sandbox-card Details toggle (Rec/Rating/SOS grid) ──────────────
+
+        private bool _isSandboxDetailsExpanded;
+        public bool IsSandboxDetailsExpanded
+        {
+            get => _isSandboxDetailsExpanded;
+            set
+            {
+                _isSandboxDetailsExpanded = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SandboxDetailsExpandIcon));
+            }
+        }
+
+        public string SandboxDetailsExpandIcon => IsSandboxDetailsExpanded ? "▲" : "▼";
 
         public string TiebreakerSummary => HasTiebreaker
             ? "Tiebreaker applied"
