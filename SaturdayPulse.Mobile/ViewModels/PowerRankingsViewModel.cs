@@ -164,8 +164,9 @@ namespace SaturdayPulse.ViewModels
             {
                 if (t == null) return;
                 // FollowService fires TeamFollowChanged, which OnTeamFollowChanged already
-                // handles (updates t.IsFollowed on the matching _allTeams entry — Rankings
-                // doesn't re-sort on follow-change, unlike TeamsViewModel.ToggleFollow).
+                // handles (updates t.IsFollowed on the matching _allTeams entry, re-sorts
+                // if ShowFavoritesFirst). No manual state mutation needed here — mirrors
+                // TeamsViewModel.ToggleFollow.
                 _followService.Toggle(t.TeamID);
             });
 
@@ -474,13 +475,10 @@ namespace SaturdayPulse.ViewModels
                 _ => filtered.OrderBy(t => t.OverallRank)
             };
 
-            // Rankings intentionally does NOT float followed teams to top, unlike
-            // Games/Schedule — ShowFavoritesFirst is a shared nav-state flag read
-            // by both pages, but reordering the ranked list by follow status was
-            // confusing users here (the list is expected to reflect rank/sort
-            // order, not favorite status). Games/Schedule's own use of
-            // ShowFavoritesFirst is untouched.
-            var result = sorted.ToList();
+            // ShowFavoritesFirst: float followed teams to top, preserve sort within each group
+            var result = _navState.ShowFavoritesFirst
+                ? sorted.OrderByDescending(t => t.IsFollowed).ToList()
+                : sorted.ToList();
 
             for (int i = 0; i < result.Count; i++)
             {
@@ -525,10 +523,9 @@ namespace SaturdayPulse.ViewModels
             var team = _allTeams.FirstOrDefault(t => t.TeamID == teamId);
             if (team != null)
             {
-                // Just updates the row's own heart icon via TeamRanking's own
-                // INotifyPropertyChanged — no list rebuild needed since Rankings
-                // no longer reorders by follow status (see ApplyFiltersAndSort).
                 team.IsFollowed = isFollowed;
+                if (_navState.ShowFavoritesFirst)
+                    MainThread.BeginInvokeOnMainThread(ApplyFiltersAndSort);
             }
         }
 
