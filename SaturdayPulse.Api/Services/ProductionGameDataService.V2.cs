@@ -845,6 +845,12 @@ namespace SaturdayPulse.Services
             var allGames  = await _uow.Games.GetByYearAsync(year, token);
             var confGames = allGames.Where(g => g.ConferenceGame == true).ToList();
 
+            // Final standings — this builder has no throughWeek of its own,
+            // so the internal rating is looked up for the season's last
+            // available week rather than a caller-supplied week.
+            var lastWeek = allGames.Any() ? allGames.Max(g => g.Week) : (int?)null;
+            var overallRankByTeam = await GetOverallRankLookupAsync(year, lastWeek, token);
+
             var confStandings = fbsTeamsThisYear.Select(t =>
             {
                 confByYear.TryGetValue(t.TeamId, out var confId);
@@ -856,6 +862,7 @@ namespace SaturdayPulse.Services
                     .ToList();
 
                 int confWins = 0, confLosses = 0, ptsFor = 0, ptsAgainst = 0;
+                var gameScores = new List<ConferenceGameScore>();
                 foreach (var g in teamConfGames)
                 {
                     bool isHome  = g.HomeId == t.TeamId;
@@ -865,9 +872,19 @@ namespace SaturdayPulse.Services
                     if (won) confWins++; else confLosses++;
                     ptsFor     += myPts;
                     ptsAgainst += oppPts;
+
+                    var oppId = isHome ? g.AwayId : g.HomeId;
+                    if (oppId.HasValue)
+                        gameScores.Add(new ConferenceGameScore
+                        {
+                            OpponentId    = oppId.Value,
+                            PointsFor     = myPts,
+                            PointsAgainst = oppPts
+                        });
                 }
 
                 recordById.TryGetValue(t.TeamId, out var rec);
+                var overallRank = overallRankByTeam.TryGetValue(t.TeamId, out var orank) ? orank : (int?)null;
 
                 return new ConferenceStanding
                 {
@@ -882,7 +899,9 @@ namespace SaturdayPulse.Services
                     OverallWins            = rec != null ? (int)rec.Wins   : 0,
                     OverallLosses          = rec != null ? (int)rec.Losses : 0,
                     ConfPointsFor          = ptsFor,
-                    ConfPointsAgainst      = ptsAgainst
+                    ConfPointsAgainst      = ptsAgainst,
+                    ConferenceGameScores   = gameScores,
+                    InternalRatingScore    = overallRank
                 };
             }).ToList();
 
@@ -891,7 +910,7 @@ namespace SaturdayPulse.Services
 
             return confStandings
                 .Where(s => !string.IsNullOrEmpty(s.Conference)
-                         && s.Conference != "IND")
+                         && s.Conference.ToUpper() != "IND")
                 .GroupBy(s => s.Conference)
                 .ToDictionary(g => g.Key, g => g.ToList());
         }
@@ -947,6 +966,8 @@ namespace SaturdayPulse.Services
                 return (WinnerId: g.HomeId, LoserId: g.AwayId, GameId: g.GameId);
             }).ToList();
 
+            var overallRankByTeam = await GetOverallRankLookupAsync(year, throughWeek, token);
+
             var confStandings = fbsTeamsThisYear.Select(t =>
             {
                 confByYear.TryGetValue(t.TeamId, out var confId);
@@ -954,6 +975,7 @@ namespace SaturdayPulse.Services
                 var confAbbr = conf?.Abbreviation ?? string.Empty;
 
                 int actualWins = 0, actualLosses = 0, ptsFor = 0, ptsAgainst = 0;
+                var gameScores = new List<ConferenceGameScore>();
                 foreach (var g in playedConfGames.Where(g => g.HomeId == t.TeamId || g.AwayId == t.TeamId))
                 {
                     bool isHome  = g.HomeId == t.TeamId;
@@ -962,6 +984,15 @@ namespace SaturdayPulse.Services
                     if (myPts > oppPts) actualWins++; else actualLosses++;
                     ptsFor     += myPts;
                     ptsAgainst += oppPts;
+
+                    var oppId = isHome ? g.AwayId : g.HomeId;
+                    if (oppId.HasValue)
+                        gameScores.Add(new ConferenceGameScore
+                        {
+                            OpponentId    = oppId.Value,
+                            PointsFor     = myPts,
+                            PointsAgainst = oppPts
+                        });
                 }
 
                 var projWins   = projectedResults.Count(r => r.WinnerId == t.TeamId &&
@@ -970,6 +1001,7 @@ namespace SaturdayPulse.Services
                                      unplayedConfGames.Any(g => g.GameId == r.GameId));
 
                 recordById.TryGetValue(t.TeamId, out var rec);
+                var overallRank = overallRankByTeam.TryGetValue(t.TeamId, out var orank) ? orank : (int?)null;
 
                 return new ConferenceStanding
                 {
@@ -984,7 +1016,9 @@ namespace SaturdayPulse.Services
                     OverallWins = rec != null ? (int)rec.Wins   : 0,
                     OverallLosses     = rec != null ? (int)rec.Losses : 0,
                     ConfPointsFor     = ptsFor,
-                    ConfPointsAgainst = ptsAgainst
+                    ConfPointsAgainst = ptsAgainst,
+                    ConferenceGameScores = gameScores,
+                    InternalRatingScore  = overallRank
                 };
             }).ToList();
 
@@ -1019,12 +1053,89 @@ namespace SaturdayPulse.Services
 
             return confStandings
                 .Where(s => !string.IsNullOrEmpty(s.Conference)
-                         && s.Conference != "IND")
+                         && s.Conference.ToUpper() != "IND")
                 .GroupBy(s => s.Conference)
                 .ToDictionary(g => g.Key, g => g.ToList());
         }
 
         // ── Power Rankings ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns each team's OverallRank (1 = best) for the given year/week
+        /// — the same ordinal GetPowerRankingsV2Async assigns and displays as
+        /// "Rank" in the Rankings UI — without paying for the full
+        /// PowerRankingRowResponse shape (trend history, offensive/defensive
+        /// z-scores, etc.) that a tiebreaker calculation doesn't need.
+        ///
+        /// Deliberately duplicates GetPowerRankingsV2Async's sort key
+        /// (composite actual+projected win% → CombinedSOS → RosterRank) rather
+        /// than refactoring that method to share this directly — GetPowerRankingsV2Async
+        /// is already a large method with two branches (throughWeek vs. not);
+        /// this keeps the extraction low-risk to the existing, live endpoint.
+        /// If the ranking sort key changes, both places need to change —
+        /// worth revisiting as a shared refactor once this has proven out.
+        ///
+        /// Feeds ConferenceStanding.InternalRatingScore in
+        /// BuildConferenceStandingsV2Async / BuildProjectedConferenceStandingsV2Async,
+        /// which in turn replaces every external-ranking tiebreaker step
+        /// (SportSource, CFP/AP polls, computer composites) with the app's own
+        /// algorithmic rank.
+        /// </summary>
+        private async Task<Dictionary<int, int>> GetOverallRankLookupAsync(
+            int year, int? throughWeek, CancellationToken token)
+        {
+            var Teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+
+            var weekly = throughWeek.HasValue
+                ? await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, Math.Max(0, throughWeek.Value), token)
+                : await _uow.WeeklyRankings.GetByYearAsync(year, token);
+
+            if (!weekly.Any())
+                return new Dictionary<int, int>();
+
+            var currentRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
+            var currentRecordLookup = currentRecords.ToDictionary(r => r.TeamID);
+
+            var rosterRankByTeam = currentRecords
+                .Where(r => r.ZRoster.HasValue)
+                .OrderByDescending(r => r.ZRoster!.Value)
+                .Select((r, i) => new { r.TeamID, Rank = i + 1 })
+                .ToDictionary(x => x.TeamID, x => x.Rank);
+
+            var games = await _uow.Games.GetByYearAsync(year, token);
+            var projections = await _projectionCache.GetAllProjections(year, token);
+            var projRecordByTeam = BuildProjectedRecordRollup(games, projections, throughWeek);
+            var actualRecordByTeam = BuildActualRecordRollup(games, throughWeek);
+
+            return weekly
+                .Where(wr => wr.Ranking.HasValue)
+                .Where(wr => currentRecordLookup.ContainsKey(wr.TeamID))
+                .Select(wr =>
+                {
+                    projRecordByTeam.TryGetValue(wr.TeamID, out var projWL);
+                    actualRecordByTeam.TryGetValue(wr.TeamID, out var actualWL);
+                    var rosterRank = rosterRankByTeam.TryGetValue(wr.TeamID, out var rr) ? rr : (int?)null;
+
+                    var compositeWins = actualWL.Wins + projWL.Wins;
+                    var compositeLosses = actualWL.Losses + projWL.Losses;
+                    var compositeTotal = compositeWins + compositeLosses;
+
+                    return new
+                    {
+                        wr.TeamID,
+                        RosterRank = rosterRank,
+                        CombinedSOS = wr.CombinedSOS,
+                        CompositeWinPct = compositeTotal > 0
+                            ? (double)compositeWins / compositeTotal
+                            : 0.0
+                    };
+                })
+                .OrderByDescending(x => x.CompositeWinPct)
+                .ThenByDescending(x => (double?)x.CombinedSOS ?? double.MinValue)
+                .ThenBy(x => x.RosterRank ?? int.MaxValue)
+                .Select((x, i) => new { x.TeamID, Rank = i + 1 })
+                .ToDictionary(x => x.TeamID, x => x.Rank);
+        }
 
         /// <summary>
         /// V2: reads team metadata from Teams + Conferences instead of Team.

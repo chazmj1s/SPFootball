@@ -631,12 +631,18 @@ namespace SaturdayPulse.Services
 
         internal static void EnrichSOS(List<ConferenceStanding> standings)
         {
-            foreach (var standing in standings)
-            {
-                var wins  = standing.HeadToHeadResults.Values.Count(v => v);
-                var total = standing.HeadToHeadResults.Count;
-                standing.CommonOpponentWinPct = total > 0 ? (double)wins / total : 0.0;
-            }
+            // NOTE: this used to also set standing.CommonOpponentWinPct here,
+            // computed as each team's win% across its entire HeadToHeadResults
+            // dictionary — i.e. the same number as ConferenceWinPct. Since the
+            // tiebreaker engine only ever compares that field within a group
+            // already tied ON ConferenceWinPct, it could never separate
+            // anyone; the "common opponents" tiebreaker step was mathematically
+            // inert in every conference that reached it. That field has been
+            // removed from ConferenceStanding — "common opponents" win% is now
+            // computed live, per currently-tied pool, by CommonOpponentsStep,
+            // since the correct intersection of common opponents changes
+            // depending on who's currently tied and can't be precomputed
+            // per-team in isolation.
 
             var recordById = standings.ToDictionary(r => r.TeamId);
             foreach (var standing in standings)
