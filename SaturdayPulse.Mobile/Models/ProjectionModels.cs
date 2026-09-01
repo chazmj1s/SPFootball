@@ -229,7 +229,7 @@ namespace SaturdayPulse.Models
         public List<ChampionshipContender> Contenders { get; set; } = new();
         public GameResult? Game { get; set; }
 
-        public bool HasTiebreaker => TiebreakerLog.Any(l => l.Contains("TB"));
+        public bool HasTiebreaker => TiebreakerLog.Any(l => l.Contains("applying"));
         public bool HasStubs      => StubsApplied.Any();
         public bool HasContenders => Contenders.Any();
 
