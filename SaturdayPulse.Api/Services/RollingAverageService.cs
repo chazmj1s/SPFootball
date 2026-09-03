@@ -26,6 +26,19 @@ namespace SaturdayPulse.Services
     /// </summary>
     public class RollingAverageService
     {
+        // DEV PLACEHOLDER — 4.0 is a starting default (double the old 2.0), not a
+        // validated number. ADDED 2026-09-03: SeedRating's old +-2 std dev clamp
+        // pooled most elite teams near the same ceiling (Georgia/Notre Dame/Texas
+        // all landing 0.74-0.99 despite real differences in quality), compressing
+        // the prediction engine's early-season anchor (RatingBlendingService.
+        // ComputeSeededAnchorUnit reads SeedRating directly). Only SeedRating uses
+        // this — Trend/Pedigree keep the default +-2 std devs (RatingScaling.
+        // ToUnitScale's default), since they feed the Rankings page's Trend/
+        // Pedigree graph, which needs the [0,1] bound. Tune via
+        // RatingComparisonService's backtest output before treating this as final,
+        // same convention MetricsConfiguration.InertiaConstant already documents.
+        private const double SeedClampSigma = 4.0;
+
         private readonly IUnitOfWork          _uow;
         private readonly MetricsConfiguration _config;
 
@@ -144,7 +157,7 @@ namespace SaturdayPulse.Services
             int? week,
             IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear)
         {
-            var seed = ComputeSeed(currentRecord, history, useLiveSwap, leagueStatsByYear);
+            var seed = ComputeSeed(currentRecord, history, useLiveSwap, leagueStatsByYear, SeedClampSigma);
             var trend    = ComputeWeighted(history, MetricsConfiguration.TrendWeights, leagueStatsByYear);
             var pedigree = ComputePedigree(history, leagueStatsByYear);
 
@@ -160,18 +173,19 @@ namespace SaturdayPulse.Services
 
         private static (decimal Rating, IReadOnlyList<decimal> History) ComputeSeed(
             TeamRecord current, List<TeamRecord> history, bool useLiveSwap,
-            IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear)
+            IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear,
+            double clampSigma)
         {
             if (useLiveSwap)
             {
-                var values = new List<double> { NormalizePowerRating(current, leagueStatsByYear) };
-                values.AddRange(history.Take(2).Select(r => NormalizePowerRating(r, leagueStatsByYear)));
+                var values = new List<double> { NormalizePowerRating(current, leagueStatsByYear, clampSigma) };
+                values.AddRange(history.Take(2).Select(r => NormalizePowerRating(r, leagueStatsByYear, clampSigma)));
                 return (ApplyWeights(values, MetricsConfiguration.SeedWeights), []);
             }
             else
             {
                 var values = history.Take(3)
-                    .Select(r => NormalizePowerRating(r, leagueStatsByYear))
+                    .Select(r => NormalizePowerRating(r, leagueStatsByYear, clampSigma))
                     .ToList();
 
                 return (ApplyWeights(values, MetricsConfiguration.SeedWeights), []);
@@ -222,18 +236,23 @@ namespace SaturdayPulse.Services
         /// <summary>
         /// Z-scores a team's PowerRating against its year's FBS-wide mean/stddev, then
         /// maps the result onto [0,1] the same way the old portal signal was mapped —
-        /// clamp to +-2 std devs, then 0.5 + (clamped / 4.0). Falls back to a neutral
-        /// 0.5 if there's no league distribution for that year (e.g. missing data) or
-        /// the record itself has no PowerRating yet.
+        /// clamp to +-clampSigma std devs (default 2.0), then 0.5 + (clamped / 4.0).
+        /// Falls back to a neutral 0.5 if there's no league distribution for that year
+        /// (e.g. missing data) or the record itself has no PowerRating yet.
+        ///
+        /// clampSigma is only ever widened for Seed (see ComputeSeed/SeedClampSigma);
+        /// Trend and Pedigree always call this with the default, so their output stays
+        /// in [0,1] for the Rankings page's Trend/Pedigree graph.
         /// </summary>
         private static double NormalizePowerRating(
-                    TeamRecord r, IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear)
+                    TeamRecord r, IReadOnlyDictionary<short, (double Mean, double StdDev)> leagueStatsByYear,
+                    double clampSigma = 2.0)
         {
             if (!r.PowerRating.HasValue) return 0.5;
             if (!leagueStatsByYear.TryGetValue(r.Year, out var stats) || stats.StdDev <= 0)
                 return 0.5;
 
-            return RatingScaling.ToUnitScale((double)r.PowerRating.Value, stats.Mean, stats.StdDev);
+            return RatingScaling.ToUnitScale((double)r.PowerRating.Value, stats.Mean, stats.StdDev, clampSigma);
         }
         public static decimal ApplyWeights(List<double> values, double[] weights)
         {

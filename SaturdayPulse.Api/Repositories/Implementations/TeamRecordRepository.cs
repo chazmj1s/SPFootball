@@ -169,7 +169,7 @@ namespace SaturdayPulse.Repositories.Implementations
             if (targetYear.HasValue)
                 query = query.Where(g => g.Year == targetYear.Value);
 
-            var games = await query.ToListAsync(token);
+            var games = await query.AsNoTracking().ToListAsync(token);
 
             var unplayedGameIds = games
                 .Where(g => (g.HomePoints ?? 0) == 0 && (g.AwayPoints ?? 0) == 0)

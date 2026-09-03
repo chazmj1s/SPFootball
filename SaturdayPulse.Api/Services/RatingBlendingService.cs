@@ -5,11 +5,14 @@ using Microsoft.Extensions.Options;
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// EXPERIMENTAL — implements the data-volume-weighted ("K=4 inertia") blending
-    /// formula as a parallel comparison path against the production week-6 snapshot
-    /// cliff in GamePredictionService.GetRatingsForWeekAsync. Not wired into any
-    /// production prediction path; used only by ExperimentalInertiaRatingService and
-    /// RatingComparisonService.
+    /// PROMOTED — implements the data-volume-weighted ("K=4 inertia") blending
+    /// formula. Despite the "EXPERIMENTAL"/"parallel comparison path" framing this
+    /// header originally had, this IS the live production rating source —
+    /// GamePredictionService.GetRatingsForWeekAsync delegates to
+    /// ExperimentalInertiaRatingService, which calls this class directly. Confirmed
+    /// 2026-09-02; header corrected same day after nearly misleading a debugging
+    /// session into treating this as dead code. RatingComparisonService still uses
+    /// it too, for backtesting.
     ///
     /// currentSeasonWeight = gamesPlayed / (K + gamesPlayed)
     ///
@@ -21,6 +24,14 @@ namespace SaturdayPulse.Services
     /// STILL a placeholder as of the 2026-08-20 anchor-blend fix below — that fix only
     /// addressed ComputeSeededAnchorUnit's own internal weighting (TrendRating/SeedRating
     /// vs ZRoster), not BlendUnit's K, which is a separate open question.
+    ///
+    /// UPDATED 2026-09-03 — ComputeSeededAnchorUnit's seedUnit now carries more
+    /// dispersion than before at the same call site (RollingAverageService widened
+    /// SeedRating's own clamp specifically; see its SeedClampSigma remarks) — no
+    /// code change needed here, since this method already just reads
+    /// record.SeedRating directly. Fixes the compressed early-season predictions
+    /// this blend was producing (most contenders' SeedRating pooling near the same
+    /// ceiling under the old +-2 std dev clamp).
     ///
     /// NEW FILE — part of the K=4 inertia-blending experimental comparison path.
     /// </summary>

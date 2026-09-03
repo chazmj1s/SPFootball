@@ -392,7 +392,7 @@ namespace SaturdayPulse.Views
         /// </summary>
         private int GetInitialTabIndex()
         {
-            var stored = Preferences.Default.Get(DefaultLandingPageKey, "MyTeams");
+            var stored = Preferences.Default.Get(DefaultLandingPageKey, "Games");
             var index = stored switch
             {
                 "MyTeams"    => 0,

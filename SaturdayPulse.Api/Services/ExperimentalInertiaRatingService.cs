@@ -6,10 +6,14 @@ using SaturdayPulse.Models;
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// EXPERIMENTAL — parallel rating path for comparison against the production
-    /// snapshot-cliff method in GamePredictionService.GetRatingsForWeekAsync.
-    /// Read-only: never writes to WeeklyRankings, TeamRecords, or Projections.
-    /// Not wired into any live prediction path. Delete or promote after backtesting.
+    /// PROMOTED — this IS the live rating source, despite the "EXPERIMENTAL"/
+    /// "parallel...for comparison" framing this header originally had.
+    /// GamePredictionService.GetRatingsForWeekAsync delegates here directly for
+    /// every real prediction. Read-only: never writes to WeeklyRankings,
+    /// TeamRecords, or Projections. Header corrected 2026-09-02, in the same
+    /// debugging session that almost took "not wired into any live prediction
+    /// path" at face value and skipped reading this file as irrelevant.
+    /// RatingComparisonService still uses it for backtesting too.
     ///
     /// Mirrors GetRatingsForWeekAsync's output shape (Dictionary&lt;TeamId, TeamRecord&gt;)
     /// so RatingComparisonService can feed both rating sets through the exact same
@@ -56,6 +60,111 @@ namespace SaturdayPulse.Services
         {
             _uow = uow;
             _ratingBlending = ratingBlending;
+        }
+
+        /// <summary>Per-team anchor/blend breakdown for AnalyzeAnchorAsync's diagnostic output.</summary>
+        public record TeamAnchorDetail(
+            int TeamId, decimal? SeedRating, decimal? ZRoster,
+            double AnchorUnit, double AnchorPowerRating, decimal AnchorRanking,
+            int GamesPlayed, decimal LiveRanking, decimal BlendedRanking);
+
+        /// <summary>
+        /// DIAGNOSTIC — READ-ONLY. Exposes the anchor/blend breakdown
+        /// GetBlendedRatingsForWeekAsync computes internally but doesn't return, for
+        /// exactly the two requested teams. Calls GetBlendedRatingsForWeekAsync
+        /// itself for the final BlendedRanking (guaranteed to match what production
+        /// predictions actually use), then recomputes the intermediate steps
+        /// (SeedRating -> anchorUnit -> anchorPowerRating -> anchorRanking) using
+        /// the exact same shared methods that call already uses (ComputeSeededAnchorUnit,
+        /// BuildLeagueYearStats, RatingScaling.FromUnitScale) — not a second guess
+        /// at the math, just the same steps made visible instead of collapsed.
+        ///
+        /// Added 2026-09-03 to check whether GamePredictionService's projected
+        /// margins for Texas's 2026 schedule made sense given SeedRating's real
+        /// dispersion — liveMean/liveStdDev come from the FULL FBS week's PowerRating
+        /// distribution, not a hand-picked subset, which is exactly the piece a
+        /// manual spot-check can't safely approximate.
+        /// </summary>
+        public async Task<(TeamAnchorDetail Team, TeamAnchorDetail Opponent)> AnalyzeAnchorAsync(
+            int teamId, int opponentId, int year, int week, CancellationToken token = default)
+        {
+            var blended = await GetBlendedRatingsForWeekAsync(year, week, token);
+
+            var currentYearTeamRecords = await _uow.TeamRecords.GetByYearAsync(year, token);
+            var teamsDict = await _uow.Teams.GetByTeamIdsAsync(
+                currentYearTeamRecords.Select(r => r.TeamID).ToList(), token);
+            var leagueStats = RollingAverageService.BuildLeagueYearStats(currentYearTeamRecords, teamsDict);
+            leagueStats.TryGetValue((short)year, out var yearStats);
+            double liveMean = yearStats.Mean;
+            double liveStdDev = yearStats.StdDev;
+
+            // Anchor conversion needs a stable, non-circular distribution — the
+            // current year's own PowerRating column is either freshly seeded or
+            // was itself written by a prior pass of this same FromUnitScale call,
+            // so its stddev converges toward whatever the last pass produced
+            // rather than reflecting real dispersion. SeedRating's z-score was
+            // built off finalized historical years (RollingAverageService.
+            // ComputeSeed), so the reverse mapping needs a matching finalized-
+            // year distribution, not the in-progress one. Falls back to
+            // liveMean/liveStdDev if year-1 has no data (earliest year in a
+            // from-scratch backfill) — same "missing = safe default" convention
+            // already used for anchorBlendCoefficient below.
+            var priorYearRecords = await _uow.TeamRecords.GetHistoricalAsync(
+                fromYear: year - 1, toYearExclusive: year, token);
+            var anchorStats = RollingAverageService.BuildLeagueYearStats(priorYearRecords, teamsDict);
+            anchorStats.TryGetValue((short)(year - 1), out var anchorYearStats);
+            double anchorMean = anchorYearStats.StdDev > 0 ? anchorYearStats.Mean : liveMean;
+            double anchorStdDev = anchorYearStats.StdDev > 0 ? anchorYearStats.StdDev : liveStdDev;
+
+            var lastPlayedWeekByTeam = await _uow.Games.GetLastPlayedWeekByTeamAsync(year, token);
+            int capWeek = Math.Max(week - 1, 0);
+            var anchorBlendCoefficient = await _uow.AnchorBlendCoefficients.GetLatestBySeasonAsync(year, token);
+
+            // Resolve each team's live week first, then fetch both snapshots with
+            // real awaits — avoids blocking on async work inside the local
+            // function below (GetAwaiter().GetResult() risks a deadlock under a
+            // sync context; not worth it just to keep Detail() non-async).
+            int teamLiveWeek = Math.Min(
+                lastPlayedWeekByTeam.TryGetValue(teamId, out var tw) ? tw : 0, capWeek);
+            int oppLiveWeek = Math.Min(
+                lastPlayedWeekByTeam.TryGetValue(opponentId, out var ow) ? ow : 0, capWeek);
+
+            var liveByTeam = new Dictionary<int, WeeklyRanking>();
+            foreach (var w in new[] { teamLiveWeek, oppLiveWeek }.Distinct())
+            {
+                var snapshot = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, w, token);
+                foreach (var wr in snapshot)
+                    if (wr.TeamID == teamId || wr.TeamID == opponentId)
+                        liveByTeam[wr.TeamID] = wr;
+            }
+
+            TeamAnchorDetail Detail(int id)
+            {
+                var teamRecord = currentYearTeamRecords.FirstOrDefault(r => r.TeamID == id);
+                double anchorUnit = teamRecord != null
+                    ? _ratingBlending.ComputeSeededAnchorUnit(teamRecord, anchorBlendCoefficient)
+                    : 0.5;
+                double anchorPowerRating = RatingScaling.FromUnitScale(anchorUnit, anchorMean, anchorStdDev);
+                decimal anchorRanking = 0.5m * (1m + (decimal)anchorPowerRating);
+
+                liveByTeam.TryGetValue(id, out var live);
+                int gamesPlayed = live != null ? live.Wins + live.Losses : 0;
+
+                decimal liveRanking = live != null
+                    ? RatingCalculator.ComputeRanking(live.Wins, live.Losses, live.PowerRating ?? 0m)
+                        ?? anchorRanking
+                    : anchorRanking;
+
+                blended.TryGetValue(id, out var blendedRecord);
+                decimal blendedRanking = blendedRecord?.Ranking ?? anchorRanking;
+
+                return new TeamAnchorDetail(
+                    id, teamRecord?.SeedRating, teamRecord?.ZRoster,
+                    anchorUnit, anchorPowerRating, anchorRanking,
+                    gamesPlayed, liveRanking, blendedRanking);
+            }
+
+            return (Detail(teamId), Detail(opponentId));
         }
 
         /// <summary>
@@ -200,6 +309,21 @@ namespace SaturdayPulse.Services
             // FromUnitScale already handles stdDev<=0 by returning `mean` for
             // every team — safe, if uninformative, rather than a crash or NaN.
 
+            // Anchor conversion needs a stable, non-circular distribution — see
+            // AnalyzeAnchorAsync's identical block above for the full rationale.
+            // currentYearTeamRecords.PowerRating (liveMean/liveStdDev's source)
+            // is either freshly seeded or was itself written by a prior pass of
+            // this same FromUnitScale call, so it converges toward whatever the
+            // last pass produced rather than reflecting SeedRating's real,
+            // finalized-year dispersion. Falls back to liveMean/liveStdDev if
+            // year-1 has no data (earliest year in a from-scratch backfill).
+            var priorYearRecords = await _uow.TeamRecords.GetHistoricalAsync(
+                fromYear: year - 1, toYearExclusive: year, token);
+            var anchorStats = RollingAverageService.BuildLeagueYearStats(priorYearRecords, teamsDict);
+            anchorStats.TryGetValue((short)(year - 1), out var anchorYearStats);
+            double anchorMean = anchorYearStats.StdDev > 0 ? anchorYearStats.Mean : liveMean;
+            double anchorStdDev = anchorYearStats.StdDev > 0 ? anchorYearStats.StdDev : liveStdDev;
+
             // FULL-SEASON (actual + projected) Win/Loss rollup REMOVED 2026-08-21.
             // Previously fed ComputeRanking's wins/losses argument with the whole
             // locked schedule (actual results + Projection rows for every
@@ -300,7 +424,7 @@ namespace SaturdayPulse.Services
                 // Blended with the exact same K=4 curve as PowerRating: pure
                 // talent at gamesPlayed=0, live record dominates once real games
                 // accumulate (≈60% live by week 6, matching PowerRating's curve).
-                double anchorPowerRating = RatingScaling.FromUnitScale(anchorUnit, liveMean, liveStdDev);
+                double anchorPowerRating = RatingScaling.FromUnitScale(anchorUnit, anchorMean, anchorStdDev);
                 decimal anchorRanking = 0.5m * (1m + (decimal)anchorPowerRating);
 
                 decimal liveRanking = live != null

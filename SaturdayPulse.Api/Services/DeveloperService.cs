@@ -1026,6 +1026,29 @@ namespace SaturdayPulse.Services
                 $"Computed weekly rankings for {targetYear} week {week.Value}.", targetYear, week.Value);
         }
 
+        // DIAGNOSTIC — read-only. Delegates to WeeklyRankingsService, which owns all
+        // the context (priorByTeamId, seedByTeamId, avgScoreDifferentials, etc.)
+        // this needs — see its own remarks for why this lives there and not here.
+        // Not AnalyzeTeamGamesAsync above — that one predates the current z-score
+        // pipeline (no ResolveStrength/ExpandStrength/QualityMod/DivWeight) and
+        // won't match production numbers; use this one instead.
+        public Task<WeeklyRankingsService.TeamGameZScoreAnalysis> AnalyzeTeamGameZScoresAsync(
+            int teamId, int year, int week, CancellationToken token = default)
+            => _weeklyRankingsService.AnalyzeTeamGameZScoresAsync(teamId, year, week, token);
+
+        // DIAGNOSTIC — read-only. Delegates to GamePredictionService, which already
+        // has both dependencies (_avgScoreDifferentialService, _blendedRating) this
+        // needs — see its own remarks for why this lives there.
+        public Task<GamePredictionService.PredictionMathDetail> AnalyzePredictionMathAsync(
+            int year, string teamName, string opponentName, char location, int week,
+            double? hfaOverride = null, CancellationToken token = default)
+            => _predictionService.AnalyzePredictionMathAsync(
+                year, teamName, opponentName, location, week, hfaOverride, token);
+
+        public Task<List<GamePredictionService.SeasonPredictionMathGame>> AnalyzeSeasonPredictionMathAsync(
+            int year, int teamId, double? hfaOverride = null, CancellationToken token = default)
+            => _predictionService.AnalyzeSeasonPredictionMathAsync(year, teamId, hfaOverride, token);
+
 
         // BackfillProjectionsStreamAsync removed — the old multi-snapshot-per-game
         // Projections design (one row per (GameId, snapshotWeek) pass) was replaced
