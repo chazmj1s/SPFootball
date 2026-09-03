@@ -123,6 +123,133 @@ namespace SaturdayPulse.Services
             return seedByTeamId.TryGetValue(teamId, out var seed) ? seed : 0m;
         }
 
+        // ── Per-game Z-score — single source of truth ─────────────────────────────
+
+        /// <summary>
+        /// Result of ComputeGameZScore — everything WeeklyRankingsService step 5 needs
+        /// per game, plus everything a diagnostic (DeveloperService.
+        /// AnalyzeTeamGameZScoresAsync) needs to inspect the same computation directly.
+        /// </summary>
+        public record GameZScoreResult(
+            double ZScore, double OffZScore, double DefZScore,
+            double DivWeight, double QualityMod, decimal OppPregameStrength);
+
+        /// <summary>
+        /// Full per-game Z-score pipeline — expected margin, composite/offensive/
+        /// defensive Z-scores, division weight, quality-of-win modifier, and the
+        /// opponent's pregame strength for SOS. Single source of truth: previously
+        /// duplicated inline in WeeklyRankingsService step 5 (added here 2026-09-02,
+        /// finishing the extraction this file's class header already described).
+        ///
+        /// leagueAvgStrength is the caller-supplied expanded-strength value an
+        /// average FBS team presents this week (see WeeklyRankingsService remarks,
+        /// 2026-09-02 fix) — the team's OWN prior strength is deliberately not an
+        /// input here; only the opponent's strength and the league baseline set the
+        /// expectation bar.
+        /// </summary>
+        public static GameZScoreResult ComputeGameZScore(
+            int opponentId,
+            string? opponentDivision,
+            char location,
+            bool isHomeTeam,
+            int teamPoints,
+            int opponentPoints,
+            decimal leagueAvgStrength,
+            WeeklyRanking? oppPrior,
+            IReadOnlyDictionary<int, decimal> seedByTeamId,
+            List<AvgScoreDifferential> avgScoreDifferentials,
+            MatchupHistory? matchup,
+            double homeFieldAdvantage,
+            double leagueAvgScore)
+        {
+            var oppStrength = ExpandStrength(ResolveStrength(opponentId, oppPrior, seedByTeamId));
+            // Differential anchored to a league-average team, not the team's own
+            // prior rating (see WeeklyRankingsService step 5 remarks, 2026-09-02).
+            var rawDiff      = leagueAvgStrength - oppStrength;
+            var clampedDiff  = Math.Max(-3.0m, Math.Min(3.0m, rawDiff));
+            var differential = Math.Round(clampedDiff / 0.05m, MidpointRounding.AwayFromZero) * 0.05m;
+
+            var bucket = GetSmoothedExpectedMargin(avgScoreDifferentials, differential);
+
+            double zScore = 0.0, offZScore = 0.0, defZScore = 0.0;
+
+            // bucket is already from team's perspective (positive = team favored)
+            var expectedFromTeam = (double)bucket;
+            expectedFromTeam     = ApplyHomeField(expectedFromTeam, isHomeTeam, location == 'N', homeFieldAdvantage);
+
+            // Get StdDev from the differential bucket.
+            var bucketRow = avgScoreDifferentials
+                .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
+                .FirstOrDefault();
+
+            var baseStdDev      = bucketRow != null ? (double)bucketRow.StdDevMargin : 14.0;
+            var effectiveStDev  = baseStdDev * RivalryVarianceMultiplier(matchup, baseStdDev);
+
+            if (effectiveStDev > 0)
+            {
+                var delta = teamPoints - opponentPoints;
+                zScore    = DampenZScore((delta - expectedFromTeam) / effectiveStDev);
+
+                var expectedTeamScore = leagueAvgScore + (expectedFromTeam / 2.0);
+                var expectedOppScore  = leagueAvgScore - (expectedFromTeam / 2.0);
+
+                offZScore = DampenZScore((teamPoints    - expectedTeamScore) / effectiveStDev);
+                defZScore = DampenZScore((expectedOppScore - opponentPoints) / effectiveStDev);
+            }
+
+            var divWeight = DivisionWeight(opponentDivision);
+
+            // Smooth quality-of-win modifier — replaces the four-bucket step.
+            //   QualityMod = clamp(1 + z * 0.25, 0.50, 1.50)
+            // Applied to the team's own z-score in PowerRating, NOT to SOS.
+            var qualityMod = Math.Max(0.50, Math.Min(1.50, 1.0 + (zScore * 0.25)));
+
+            // Pregame opponent strength for the new SOS calc.
+            // Chain: WeeklyRankings[opponent, week-1].Ranking → SeedRating → 0
+            // FCS opponents (and any opponent we can't find) get 0 strength.
+            decimal oppPregameStrength = 0m;
+            bool oppIsFcs = string.Equals(opponentDivision, "fcs", StringComparison.OrdinalIgnoreCase);
+            if (!oppIsFcs)
+                oppPregameStrength = ResolveStrength(opponentId, oppPrior, seedByTeamId);
+
+            return new GameZScoreResult(zScore, offZScore, defZScore, divWeight, qualityMod, oppPregameStrength);
+        }
+
+        /// <summary>
+        /// Aggregates a team's per-game Z-scores into a single season AvgZScore —
+        /// a QualityMod/DivWeight-weighted mean, NOT a plain average. QualityMod is
+        /// meant to make decisive games count MORE toward the average, which means
+        /// the denominator must use the same QualityMod*DivWeight weight the
+        /// numerator does — otherwise QualityMod isn't weighting anything, it's
+        /// inflating the whole average's scale, unbounded by the team's own actual
+        /// z-score range.
+        ///
+        /// FIXED 2026-09-02 (Georgia/Notre Dame gap, part 2 — QualityMod). The
+        /// previous inline aggregation (WeeklyRankingsService step 9) used
+        /// QualityMod only in the numerator — Sum(ZScore*QualityMod*DivWeight) /
+        /// Sum(DivWeight) — so a team with more decisive (higher |z|) games had its
+        /// ENTIRE average pushed up by more than its performance distribution
+        /// justified, independent of opponent strength. Confirmed against real 2025
+        /// per-game data (DeveloperService.AnalyzeTeamGameZScoresAsync): properly
+        /// normalizing brought both Georgia's and Notre Dame's average back toward
+        /// their plain (unweighted) mean and shrank the gap between them by ~27%,
+        /// without changing what QualityMod measures or removing the "decisive
+        /// games matter more" intent — it just makes this an actual weighted
+        /// average instead of an unbounded amplification.
+        /// </summary>
+        public static double ComputeWeightedAvgZScore(
+            IEnumerable<(double ZScore, double QualityMod, double DivWeight)> games)
+        {
+            double weightSum = 0.0, numerator = 0.0;
+            foreach (var g in games)
+            {
+                var weight = g.QualityMod * g.DivWeight;
+                weightSum += weight;
+                numerator += g.ZScore * weight;
+            }
+            return weightSum > 0 ? numerator / weightSum : 0.0;
+        }
+
         // ── Ranking — single source of truth ─────────────────────────────────────
 
         /// <summary>

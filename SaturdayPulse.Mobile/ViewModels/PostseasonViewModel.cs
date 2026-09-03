@@ -58,25 +58,6 @@ namespace SaturdayPulse.ViewModels
                 if (matchup != null) matchup.IsContendersExpanded = !matchup.IsContendersExpanded;
             });
 
-            // Title Games "Details" toggle. One command for the one toggle slot
-            // in the shared row — routes to whichever card is actually active
-            // (real Game vs. Sandbox) rather than having two separate toggles
-            // fight over the same spot.
-            ToggleTitleGameDetailsCommand = new Microsoft.Maui.Controls.Command<ChampionshipMatchup>(matchup =>
-            {
-                if (matchup == null) return;
-
-                if (matchup.HasGame)
-                {
-                    if (matchup.Game != null)
-                        matchup.Game.IsDetailsExpanded = !matchup.Game.IsDetailsExpanded;
-                }
-                else
-                {
-                    matchup.IsSandboxDetailsExpanded = !matchup.IsSandboxDetailsExpanded;
-                }
-            });
-
             ToggleDetailsCommand = new Microsoft.Maui.Controls.Command<GameResult>(game =>
             {
                 if (game == null) return;
@@ -188,7 +169,6 @@ namespace SaturdayPulse.ViewModels
         public ICommand SelectViewCommand             { get; }
         public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
-        public ICommand ToggleTitleGameDetailsCommand  { get; }
         public ICommand ToggleDetailsCommand          { get; }
         public ICommand RefreshGameCommand            { get; }
         public ICommand ToggleRoundExpandCommand      { get; }
@@ -204,11 +184,6 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
-                // Games cache first — AttachRealGames below depends on _cache.AllGames
-                // already reflecting the selected year.
-                await Task.Run(async () =>
-                    await _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload));
-
                 if (_navState.SelectedYear >= 2016)
                 {
                     var championships = await Task.Run(async () =>
@@ -217,20 +192,6 @@ namespace SaturdayPulse.ViewModels
                     if (championships != null)
                     {
                         _allChampionships = championships;
-
-                        // Real Games data takes priority. The qualifiers endpoint's
-                        // own Game field isn't reliably populated even once CFBD has
-                        // published the actual game (confirmed 2025 Wk15 SEC — real
-                        // result existed in Games/_cache.AllGames but Game stayed
-                        // null here) — so match against the schedule cache directly
-                        // instead of trusting that field. Only matchups still missing
-                        // a Game after this get a Sandbox projection.
-                        AttachRealGames(_allChampionships, _cache.AllGames, _navState.SelectedYear, _navState.SelectedWeek);
-
-                        await Task.Run(async () =>
-                            await EnrichChampionshipsWithPredictionsAsync(
-                                _allChampionships, _navState.SelectedYear));
-
                         ApplyConferenceFilter();
                     }
                 }
@@ -239,6 +200,9 @@ namespace SaturdayPulse.ViewModels
                     _allChampionships.Clear();
                     Championships.Clear();
                 }
+
+                await Task.Run(async () =>
+                    await _cache.GetGamesForYearAsync(_navState.SelectedYear, forceReload));
 
                 RebuildPostseasonFromCache();
 
@@ -255,212 +219,6 @@ namespace SaturdayPulse.ViewModels
                 IsBusy = false;
             }
         }
-
-        // ── Title Games: attach a real Game from the schedule cache when one exists ──
-
-        private void AttachRealGames(
-            List<ChampionshipMatchup> championships, IReadOnlyList<GameResult>? allGames,
-            int year, int selectedWeek)
-        {
-            if (allGames == null || allGames.Count == 0) return;
-
-            var championshipWeek = DetermineChampionshipWeek(year, allGames);
-            if (championshipWeek == null)
-            {
-                // Can't reliably place championship week yet (schedule cache
-                // doesn't extend that far into the season) — leave every
-                // matchup on the Sandbox path rather than risk matching a
-                // regular-season meeting as if it were the title game.
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Postseason] Could not determine championship week for {year} " +
-                    "from loaded schedule — all matchups stay on Sandbox projection.");
-                return;
-            }
-
-            // "Week" on this page is an as-of scrubber, same convention as
-            // KickoffTime/IsPlayed elsewhere in the app — even when the real
-            // Games row already exists (including for an entire completed
-            // past season, where every week's data technically exists in the
-            // DB already), don't surface it until the selected week has
-            // actually reached championship week. Otherwise browsing an
-            // earlier week of a finished season would show the real result
-            // instead of what would have been known at that point in time.
-            if (selectedWeek < championshipWeek.Value)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Postseason] Selected week {selectedWeek} is before championship " +
-                    $"week {championshipWeek.Value} for {year} — staying on Sandbox projection.");
-                return;
-            }
-
-            foreach (var matchup in championships)
-            {
-                if (matchup.Game != null) continue; // API already gave us one
-                matchup.Game = FindRealGame(matchup, allGames, championshipWeek.Value);
-            }
-        }
-
-        /// <summary>
-        /// Matches a championship matchup's two qualifiers against the schedule
-        /// cache by team name, restricted to the actual championship week. The
-        /// same two teams can legitimately meet twice in a season (an earlier
-        /// regular-season game plus the championship) — without the week
-        /// restriction, a same-team-pair regular-season game gets mistaken for
-        /// the title game whenever the real championship row doesn't exist in
-        /// the Games table yet (confirmed 2026 Wk13 SEC: Georgia/South Carolina's
-        /// Week 12 regular-season meeting was wrongly shown as the title game).
-        /// </summary>
-        private static GameResult? FindRealGame(
-            ChampionshipMatchup matchup, IEnumerable<GameResult> allGames, int championshipWeek)
-        {
-            if (matchup.Qualifier1 == null || matchup.Qualifier2 == null) return null;
-
-            var team1 = matchup.Qualifier1.TeamName;
-            var team2 = matchup.Qualifier2.TeamName;
-
-            return allGames.FirstOrDefault(g =>
-                g.Week == championshipWeek &&
-                ((g.HomeName.Equals(team1, StringComparison.OrdinalIgnoreCase) &&
-                  g.AwayName.Equals(team2, StringComparison.OrdinalIgnoreCase)) ||
-                 (g.HomeName.Equals(team2, StringComparison.OrdinalIgnoreCase) &&
-                  g.AwayName.Equals(team1, StringComparison.OrdinalIgnoreCase))));
-        }
-
-        /// <summary>
-        /// Conference championship weekend is the Saturday one week after
-        /// Thanksgiving weekend (Thanksgiving = 4th Thursday of November;
-        /// rivalry-week Saturday = Thanksgiving + 2 days; championship
-        /// Saturday = rivalry Saturday + 7 days). This app has no direct
-        /// calendar-date-to-internal-Week mapping, so the target date is
-        /// matched against the median GameDate of each Week already present
-        /// in the loaded schedule cache, picking the closest. Returns null
-        /// (rather than a wrong guess) if the closest match is still more
-        /// than 10 days from the target — i.e. the season isn't loaded far
-        /// enough yet to know.
-        /// </summary>
-        private static int? DetermineChampionshipWeek(int year, IReadOnlyList<GameResult> allGames)
-        {
-            var thanksgiving = NthWeekdayOfMonth(year, month: 11, DayOfWeek.Thursday, occurrence: 4);
-            var championshipSaturday = thanksgiving.AddDays(9);
-
-            var weekDates = allGames
-                .Select(g => new { g.Week, Date = g.GameDate.ToDateTime() })
-                .Where(x => x.Date.HasValue)
-                .GroupBy(x => x.Week)
-                .Select(g =>
-                {
-                    var ordered = g.OrderBy(x => x.Date!.Value).ToList();
-                    return new { Week = g.Key, MedianDate = ordered[ordered.Count / 2].Date!.Value };
-                })
-                .ToList();
-
-            if (weekDates.Count == 0) return null;
-
-            var closest = weekDates
-                .OrderBy(w => Math.Abs((w.MedianDate - championshipSaturday).TotalDays))
-                .First();
-
-            return Math.Abs((closest.MedianDate - championshipSaturday).TotalDays) <= 10
-                ? closest.Week
-                : (int?)null;
-        }
-
-        /// <summary>The Nth occurrence of a weekday in a given month/year (e.g. 4th Thursday of November = Thanksgiving).</summary>
-        private static DateTime NthWeekdayOfMonth(int year, int month, DayOfWeek dayOfWeek, int occurrence)
-        {
-            var first = new DateTime(year, month, 1);
-            int offset = ((int)dayOfWeek - (int)first.DayOfWeek + 7) % 7;
-            return first.AddDays(offset + (occurrence - 1) * 7);
-        }
-
-        // ── Title Games: Sandbox-projection fallback for matchups with no real Game ──
-
-        private async Task EnrichChampionshipsWithPredictionsAsync(
-            List<ChampionshipMatchup> championships, int year)
-        {
-            var needsPrediction = championships.Where(c => c.NeedsPrediction).ToList();
-            if (needsPrediction.Count == 0) return;
-
-            // One shared power-rankings fetch for the year instead of one per team
-            // per matchup — Qualifier.TeamName always matches TeamRanking.TeamName
-            // exactly (both source from CFBD; a mismatch is a CFBD data issue, not
-            // something to paper over here).
-            List<TeamRanking>? rankings = null;
-            try
-            {
-                // Passing null here originally routed the API to the season-aggregate
-                // TeamRecords table, which has NULL AvgPointsScored for a chunk of
-                // teams at week 1 and throws a JsonException on deserialization.
-                // Passing an actual week routes to WeeklyRankings instead — same
-                // table the championship-qualifiers call above already uses
-                // successfully, populated with seed/projected values from week 1.
-                rankings = await _apiService.GetPowerRankingsAsync(year, _navState.SelectedWeek);
-            }
-            catch (Exception ex)
-            {
-                // Rankings are a nice-to-have on the Details panel — fall through
-                // with rankings == null so the prediction rows still render, but
-                // log the real cause instead of swallowing it silently.
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Postseason] GetPowerRankingsAsync({year}, {_navState.SelectedWeek}) failed: {ex}");
-            }
-
-            System.Diagnostics.Debug.WriteLine(
-                $"[Postseason] GetPowerRankingsAsync({year}, {_navState.SelectedWeek}) returned {rankings?.Count ?? -1} rankings.");
-
-            var rankingsByName = (rankings ?? new List<TeamRanking>())
-                .GroupBy(r => r.TeamName, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-            // Rankings assigned synchronously first (cheap, no I/O), then every
-            // Sandbox prediction is fetched in parallel rather than one matchup
-            // at a time — a serial chain across several conferences could take
-            // long enough that a fast week-to-week tap lands while IsBusy is
-            // still true and gets silently dropped by LoadDataAsync's guard.
-            var predictionTasks = new List<Task>();
-
-            foreach (var matchup in needsPrediction)
-            {
-                if (matchup.Qualifier1 == null || matchup.Qualifier2 == null) continue;
-
-                rankingsByName.TryGetValue(matchup.Qualifier1.TeamName, out var rank1);
-                rankingsByName.TryGetValue(matchup.Qualifier2.TeamName, out var rank2);
-                matchup.Qualifier1Ranking = rank1;
-                matchup.Qualifier2Ranking = rank2;
-
-                if (rank1 == null)
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[Postseason] No TeamRanking match for '{matchup.Qualifier1.TeamName}' ({matchup.Conference}).");
-                if (rank2 == null)
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[Postseason] No TeamRanking match for '{matchup.Qualifier2.TeamName}' ({matchup.Conference}).");
-
-                predictionTasks.Add(FetchSandboxPredictionAsync(matchup, year));
-            }
-
-            await Task.WhenAll(predictionTasks);
-        }
-
-        private async Task FetchSandboxPredictionAsync(ChampionshipMatchup matchup, int year)
-        {
-            try
-            {
-                matchup.Prediction = await _apiService.GetSandboxPredictionAsync(
-                    matchup.Qualifier1.TeamName, year,
-                    matchup.Qualifier2.TeamName, year);
-            }
-            catch (Exception ex)
-            {
-                // A failed prediction just leaves the Sandbox block empty
-                // (HasPrediction stays false) rather than blocking the rest
-                // of the Title Games load.
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Postseason] GetSandboxPredictionAsync failed for " +
-                    $"{matchup.Qualifier1.TeamName} vs {matchup.Qualifier2.TeamName}: {ex.Message}");
-                matchup.Prediction = null;
-            }
-        }
-
         // ── Build Bowls + Playoffs from cached schedule ───────────────────
 
         private void RebuildPostseasonFromCache()

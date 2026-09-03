@@ -198,6 +198,126 @@ namespace SaturdayPulse.Services
                 rivalries, avgTeamScore, allDifferentials, year, week, null);
         }
 
+        /// <summary>Full margin-calculation breakdown for AnalyzePredictionMathAsync's diagnostic output.</summary>
+        public record PredictionMathDetail(
+            ExperimentalInertiaRatingService.TeamAnchorDetail Team,
+            ExperimentalInertiaRatingService.TeamAnchorDetail Opponent,
+            double StrengthDifferential, double ExpectedMarginBeforeHomeField,
+            double ExpectedMarginAfterHomeField, double StdDev, int BucketSampleSize,
+            double BucketReliability);
+
+        /// <summary>One game's PredictionMathDetail plus the schedule context AnalyzeSeasonPredictionMathAsync loops over.</summary>
+        public record SeasonPredictionMathGame(
+            int Week, int OpponentId, string OpponentName, char Location,
+            PredictionMathDetail Detail);
+
+        /// <summary>
+        /// DIAGNOSTIC — READ-ONLY. Shares all remarks with AnalyzePredictionMathAsync
+        /// below — same math, same real methods, no second implementation. Given
+        /// only a team and a year, loops that team's actual schedule
+        /// (_uow.Games.GetByYearAsync) and runs the same per-game analysis using
+        /// EACH GAME'S OWN NATIVE WEEK — matching exactly how Option C actually
+        /// locked that game's real Projection row (WeeklyRankingsService step 2),
+        /// not a single global week applied to every game. This is why the caller
+        /// doesn't (and shouldn't) pass one week for the whole season: a week-13
+        /// game's locked projection used week-12 information, not week-0's.
+        ///
+        /// Added 2026-09-03, same session as AnalyzePredictionMathAsync — the
+        /// single-game version came first (Ohio State specifically); this is the
+        /// natural next step once the pattern was proven out for one game.
+        /// </summary>
+        public async Task<List<SeasonPredictionMathGame>> AnalyzeSeasonPredictionMathAsync(
+            int year, int teamId, double? hfaOverride = null, CancellationToken token = default)
+        {
+            var allYearGames = await _uow.Games.GetByYearAsync(year, token);
+            var teamsDict    = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+
+            var teamGames = allYearGames
+                .Where(g => (g.HomeId == teamId || g.AwayId == teamId) &&
+                            g.HomeId.HasValue && g.AwayId.HasValue)
+                .OrderBy(g => g.Week)
+                .ToList();
+
+            var results = new List<SeasonPredictionMathGame>(teamGames.Count);
+
+            foreach (var g in teamGames)
+            {
+                bool isHomeTeam = g.HomeId == teamId;
+                int  opponentId = isHomeTeam ? g.AwayId!.Value : g.HomeId!.Value;
+                char location   = g.NeutralSite == true ? 'N' : (isHomeTeam ? 'H' : 'A');
+
+                // Each game locked using its OWN native week — see remarks above.
+                var detail = await AnalyzePredictionMathByIdAsync(
+                    year, teamId, opponentId, location, g.Week, hfaOverride, token);
+
+                var opponentName = teamsDict.TryGetValue(opponentId, out var opp)
+                    ? opp.TeamName : $"Team {opponentId}";
+
+                results.Add(new SeasonPredictionMathGame(g.Week, opponentId, opponentName, location, detail));
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// DIAGNOSTIC — READ-ONLY. Shows every step CalculatePrediction's margin
+        /// calculation actually goes through — SeedRating -> anchorUnit ->
+        /// anchorRanking -> blendedRanking for both teams (via ExperimentalInertia
+        /// RatingService.AnalyzeAnchorAsync), then the same GetStrengthDifferential /
+        /// GetExpectedDistribution calls CalculatePrediction itself makes. Does NOT
+        /// reproduce scoring/total-points/confidence — this is scoped to the margin
+        /// question specifically. Uses the real _avgScoreDifferentialService and
+        /// _blendedRating this class already has injected — no new dependencies,
+        /// no second implementation of any of this math.
+        ///
+        /// Added 2026-09-03 to check Texas's 2026 week-0-locked schedule
+        /// projections — several games showed tight margins and it wasn't possible
+        /// to hand-verify them without the FULL FBS week's PowerRating distribution
+        /// (liveMean/liveStdDev), which a manual spot-check can't safely
+        /// approximate from a handful of teams.
+        /// Example: teamName="Texas", opponentName="Ohio State", week=2 (locked
+        /// using week 1's snapshot). For a whole season at once, use
+        /// AnalyzeSeasonPredictionMathAsync instead — it resolves each game's own
+        /// native week from the real schedule rather than requiring one call per
+        /// opponent.
+        /// </summary>
+        public async Task<PredictionMathDetail> AnalyzePredictionMathAsync(
+            int year, string teamName, string opponentName, char location, int week,
+            double? hfaOverride = null, CancellationToken token = default)
+        {
+            var team     = await _uow.Teams.GetByNameAsync(teamName, token)
+                           ?? throw new ArgumentException($"Team not found: {teamName}");
+            var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
+                           ?? throw new ArgumentException($"Team not found: {opponentName}");
+
+            return await AnalyzePredictionMathByIdAsync(
+                year, team.TeamId, opponent.TeamId, location, week, hfaOverride, token);
+        }
+
+        /// <summary>ID-based core shared by AnalyzePredictionMathAsync and AnalyzeSeasonPredictionMathAsync — no name lookups, no duplicated math.</summary>
+        private async Task<PredictionMathDetail> AnalyzePredictionMathByIdAsync(
+            int year, int teamId, int opponentId, char location, int week,
+            double? hfaOverride, CancellationToken token)
+        {
+            var (teamDetail, oppDetail) = await _blendedRating.AnalyzeAnchorAsync(
+                teamId, opponentId, year, week, token);
+
+            var differential = _avgScoreDifferentialService.GetStrengthDifferential(
+                (double)teamDetail.BlendedRanking, (double)oppDetail.BlendedRanking);
+
+            var distribution = _avgScoreDifferentialService.GetExpectedDistribution(
+                (double)teamDetail.BlendedRanking, (double)oppDetail.BlendedRanking);
+
+            var expectedMarginAfterHfa = RatingCalculator.ApplyHomeField(
+                distribution.ExpectedMargin, location == 'H', location == 'N',
+                hfaOverride ?? _config.HomeFieldAdvantage);
+
+            return new PredictionMathDetail(
+                teamDetail, oppDetail, differential,
+                distribution.ExpectedMargin, expectedMarginAfterHfa, distribution.StdDev,
+                distribution.SampleSize, distribution.Reliability);
+        }
+
         /// <summary>
         /// Sandbox: predicts a matchup between two teams from potentially different years.
         /// Each team's ratings are loaded from their respective year's true final

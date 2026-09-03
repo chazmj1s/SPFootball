@@ -376,79 +376,70 @@ namespace SaturdayPulse.Services
             // Falls back to the raw preseason SeedRating (already on the
             // Ranking scale, not the PowerRating scale) only when there's no
             // prior WeeklyRankings row at all to read a PowerRating from.
+            //
+            // FIXED 2026-09-02 (Georgia/Notre Dame asymmetry). Previously the
+            // expected-margin differential was teamStrength - oppStrength, where
+            // teamStrength came from the SAME ResolveStrength/ExpandStrength
+            // pipeline as oppStrength — meaning a team's own prior rating set half
+            // of its own expectation bar. Combined with ExpandStrength's ^1.35
+            // exponent, this punished consistently elite teams (a high prior rating
+            // inflates the bar disproportionately) and rewarded streaky teams (a
+            // lower prior rating from a recent bad week clears more easily) for
+            // objectively comparable performance. Confirmed against real 2025 data:
+            // Georgia (playoff team, #6 finish) ended the season with a lower
+            // system Ranking (0.9523) than Notre Dame (playoff-snub debate, #10
+            // finish, 1.0685), and week-0 PowerRating for both teams was nearly
+            // identical (0.1421 vs 0.1091) — the divergence was generated entirely
+            // inside the season by this mechanism, not by a preseason gap.
+            //
+            // leagueAvgStrength replaces teamStrength: the expanded-strength value
+            // an average FBS team presents this week, computed once outside the
+            // per-game loop from the same ResolveStrength/ExpandStrength pipeline
+            // every team's own strength already goes through, so it's directly
+            // comparable to oppStrength below. A team's own prior rating no longer
+            // feeds its own bar at all; oppStrength is untouched, so the schedule-
+            // strength correction (an opponent's rating updating as its true
+            // quality is revealed over the season) still works exactly as before —
+            // only the team's own subsequent play no longer re-grades its own past
+            // performances.
+            var leagueAvgStrength = fbsTeams
+                .Select(t =>
+                {
+                    priorByTeamId.TryGetValue(t.TeamId, out var prior);
+                    return RatingCalculator.ExpandStrength(RatingCalculator.ResolveStrength(t.TeamId, prior, seedByTeamId));
+                })
+                .Average();
+
+            // MOVED 2026-09-02 — this block previously duplicated
+            // RatingCalculator.ComputeGameZScore's logic inline (that method was
+            // documented in this file's class header as already existing but had
+            // never actually been extracted). Now calls the shared method directly
+            // — no behavior change, just eliminates the duplicate. The same method
+            // is also what DeveloperService.AnalyzeTeamGameZScoresAsync calls for
+            // per-team diagnostics, so the two can never drift apart.
             var withZScores = gameParticipants.Select(gp =>
             {
                 // Get pregame rankings from prior week snapshot.
                 // Fall back to current win-pct if no prior snapshot (e.g. week 1).
-                priorByTeamId.TryGetValue(gp.TeamId,     out var teamPrior);
                 priorByTeamId.TryGetValue(gp.OpponentId, out var oppPrior);
-
-                var teamStrength = RatingCalculator.ExpandStrength(RatingCalculator.ResolveStrength(gp.TeamId, teamPrior, seedByTeamId));
-                var oppStrength = RatingCalculator.ExpandStrength(RatingCalculator.ResolveStrength(gp.OpponentId, oppPrior, seedByTeamId));
-                // Differential from team's perspective — positive means team is stronger.
-                var rawDiff   = teamStrength - oppStrength;
-                var clampedDiff = Math.Max(-3.0m, Math.Min(3.0m, rawDiff));
-                var differential = Math.Round(clampedDiff / 0.05m, MidpointRounding.AwayFromZero) * 0.05m;
-
-                var bucket = RatingCalculator.GetSmoothedExpectedMargin(avgScoreDifferentials, differential);
-
-                double zScore = 0.0, offZScore = 0.0, defZScore = 0.0;
-
-                // bucket is already from team's perspective (positive = team favored)
-                var expectedFromTeam = (double)bucket;
-                expectedFromTeam     = RatingCalculator.ApplyHomeField(
-                    expectedFromTeam, gp.IsHomeTeam, gp.Location == 'N', hfa);
 
                 var t1 = Math.Min(gp.TeamId, gp.OpponentId);
                 var t2 = Math.Max(gp.TeamId, gp.OpponentId);
                 var matchup = matchupHistories.FirstOrDefault(
                     m => m.Team1Id == t1 && m.Team2Id == t2);
 
-                // Get StdDev from the differential bucket.
-                var bucketRow = avgScoreDifferentials
-                    .OrderBy(b => Math.Abs(b.StrengthDifferential - differential))
-                    .FirstOrDefault();
-
-                var baseStdDev = bucketRow != null ? (double)bucketRow.StdDevMargin : 14.0;
-                var effectiveStDev = baseStdDev * RatingCalculator.RivalryVarianceMultiplier(matchup, baseStdDev);
-
-                if (effectiveStDev > 0)
-                {
-                    var delta = gp.TeamPoints - gp.OpponentPoints;
-                    zScore    = RatingCalculator.DampenZScore((delta - expectedFromTeam) / effectiveStDev);
-
-                    var expectedTeamScore = leagueAvgScore + (expectedFromTeam / 2.0);
-                    var expectedOppScore  = leagueAvgScore - (expectedFromTeam / 2.0);
-
-                    offZScore = RatingCalculator.DampenZScore(
-                        (gp.TeamPoints    - expectedTeamScore) / effectiveStDev);
-                    defZScore = RatingCalculator.DampenZScore(
-                        (expectedOppScore - gp.OpponentPoints) / effectiveStDev);
-                }
-
-                var divWeight = RatingCalculator.DivisionWeight(gp.OpponentDivision);
-
-                // Smooth quality-of-win modifier — replaces the four-bucket step.
-                //   QualityMod = clamp(1 + z * 0.25, 0.50, 1.50)
-                // Applied to the team's own z-score in PowerRating, NOT to SOS.
-                var qualityMod = Math.Max(0.50, Math.Min(1.50, 1.0 + (zScore * 0.25)));
-
-                // Pregame opponent strength for the new SOS calc.
-                // Chain: WeeklyRankings[opponent, week-1].Ranking → SeedRating → 0
-                // FCS opponents (and any opponent we can't find) get 0 strength.
-                decimal oppPregameStrength = 0m;
-                bool oppIsFcs = string.Equals(gp.OpponentDivision, "fcs",
-                                    StringComparison.OrdinalIgnoreCase);
-                if (!oppIsFcs)
-                    oppPregameStrength = RatingCalculator.ResolveStrength(gp.OpponentId, oppPrior, seedByTeamId);
+                var result = RatingCalculator.ComputeGameZScore(
+                    gp.OpponentId, gp.OpponentDivision, gp.Location, gp.IsHomeTeam,
+                    gp.TeamPoints, gp.OpponentPoints, leagueAvgStrength, oppPrior,
+                    seedByTeamId, avgScoreDifferentials, matchup, hfa, leagueAvgScore);
 
                 return new
                 {
                     gp.TeamId, gp.TeamDivision, gp.OpponentId, gp.OpponentDivision,
-                    ZScore = zScore, OffZScore = offZScore, DefZScore = defZScore,
-                    DivWeight = divWeight,
-                    QualityMod = qualityMod,
-                    OppStrength = (double)oppPregameStrength
+                    ZScore = result.ZScore, OffZScore = result.OffZScore, DefZScore = result.DefZScore,
+                    DivWeight = result.DivWeight,
+                    QualityMod = result.QualityMod,
+                    OppStrength = (double)result.OppPregameStrength
                 };
             }).ToList();
 
@@ -587,12 +578,12 @@ namespace SaturdayPulse.Services
             // the whole thing for opponent quality.
             var powerRatings = withZScores
                 .GroupBy(x => x.TeamId)
-                .ToDictionary(g => g.Key, g => g.Sum(x => x.DivWeight) > 0
-                    ? Math.Round(
-                        g.Sum(x => x.ZScore * x.QualityMod * x.DivWeight) /
-                        g.Sum(x => x.DivWeight) *
-                        combinedSOS.GetValueOrDefault(g.Key, 1.0), 4)
-                    : 0.0);
+                .ToDictionary(g => g.Key, g =>
+                {
+                    var avgZScore = RatingCalculator.ComputeWeightedAvgZScore(
+                        g.Select(x => (x.ZScore, x.QualityMod, x.DivWeight)));
+                    return Math.Round(avgZScore * combinedSOS.GetValueOrDefault(g.Key, 1.0), 4);
+                });
 
             // ── 10. Ranking ───────────────────────────────────────────────────────
             //
@@ -755,6 +746,142 @@ namespace SaturdayPulse.Services
                 await _rollingAverageService.ComputeAndPersistAsync(year, week, token);
 
             await _uow.SaveChangesAsync(token);
+        }
+
+        /// <summary>Per-game detail for AnalyzeTeamGameZScoresAsync's diagnostic output.</summary>
+        public record TeamGameZScoreDetail(
+            int Week, int OpponentId, string OpponentDivision, bool IsHomeTeam,
+            int TeamPoints, int OpponentPoints, int Delta,
+            double ZScore, double OffZScore, double DefZScore,
+            double DivWeight, double QualityMod, double OppStrength);
+
+        /// <summary>AnalyzeTeamGameZScoresAsync's full result — one team, one week, all games through it.</summary>
+        public record TeamGameZScoreAnalysis(
+            int TeamId, int Year, int Week,
+            double AvgZScore, decimal? StoredPowerRating, decimal? StoredCombinedSOS,
+            IReadOnlyList<TeamGameZScoreDetail> Games);
+
+        /// <summary>
+        /// DIAGNOSTIC — READ-ONLY, no writes. Replays the exact per-game Z-score
+        /// computation for one team's games through `week`, using
+        /// RatingCalculator.ComputeGameZScore — the SAME method step 5 above calls,
+        /// so results are guaranteed to match production, not a second
+        /// reimplementation that can drift out of sync.
+        ///
+        /// Added 2026-09-02 to debug the Georgia/Notre Dame asymmetry: after the
+        /// teamStrength self-reference fix (step 5 remarks), the season-long
+        /// AvgZScore gap between the two teams didn't close, and CombinedSOS ruled
+        /// itself out (Georgia's was HIGHER than Notre Dame's most of the season).
+        /// This exists to see per-game ZScore/QualityMod/DivWeight directly and find
+        /// where the remaining gap actually comes from — leading suspect is
+        /// QualityMod using the same zScore it's applied to (step 5's qualityMod
+        /// line), not yet fixed.
+        ///
+        /// AvgZScore here should match TeamRecords.PowerRating / CombinedSOS
+        /// (StoredPowerRating included for that spot-check) once CombinedSOS is
+        /// backed out — see whichever conversation thread sent you here for the
+        /// exact math.
+        /// </summary>
+        public async Task<TeamGameZScoreAnalysis> AnalyzeTeamGameZScoresAsync(
+            int teamId, int year, int week, CancellationToken token = default)
+        {
+            var allTeams = await _uow.Teams.GetAllAsync(token);
+            var fbsTeams = allTeams.Where(t =>
+                string.Equals(t.Division, "fbs", StringComparison.OrdinalIgnoreCase)).ToList();
+            var teamById = allTeams.ToDictionary(t => t.TeamId);
+
+            var avgScoreDifferentials = await _uow.Lookups.GetAvgScoreDifferentialsAsync(token);
+            var matchupHistories      = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+
+            // Same "search backward for the nearest week that actually has data"
+            // convention as ComputeAndSaveAsync's own prior-week lookup.
+            var priorWeek = Math.Max(week - 1, 0);
+            var priorRankings = new List<WeeklyRanking>();
+            while (priorWeek > 0)
+            {
+                priorRankings = await _uow.WeeklyRankings.GetByYearAndWeekAsync(year, priorWeek, token);
+                if (priorRankings.Count > 0) break;
+                priorWeek--;
+            }
+            var priorByTeamId = priorRankings.ToDictionary(wr => wr.TeamID);
+
+            var currentYearRecordsForSeed = await _uow.TeamRecords.GetByYearAsync(year, token);
+            var seedByTeamId = currentYearRecordsForSeed
+                .Where(tr => tr.SeedRating.HasValue)
+                .ToDictionary(tr => tr.TeamID, tr => tr.SeedRating!.Value);
+
+            var resolvedGames = await _uow.ResolvedGameResults.GetByYearThroughWeekAsync(year, week, token);
+
+            var hfa = _config.HomeFieldAdvantage;
+            double leagueAvgScore = resolvedGames.Count > 0
+                ? (resolvedGames.Average(g => (double)g.HomePoints) +
+                   resolvedGames.Average(g => (double)g.AwayPoints)) / 2.0
+                : 28.0;
+
+            // Same league-average baseline the 2026-09-02 fix computes in step 5 —
+            // reproduced here rather than shared because it depends on this method's
+            // own priorByTeamId/seedByTeamId, loaded independently above.
+            var leagueAvgStrength = fbsTeams
+                .Select(t =>
+                {
+                    priorByTeamId.TryGetValue(t.TeamId, out var prior);
+                    return RatingCalculator.ExpandStrength(RatingCalculator.ResolveStrength(t.TeamId, prior, seedByTeamId));
+                })
+                .Average();
+
+            var teamGames = resolvedGames
+                .Where(g => g.HomeId == teamId || g.AwayId == teamId)
+                .Select(g =>
+                {
+                    bool isHomeTeam = g.HomeId == teamId;
+                    var opponentId  = isHomeTeam ? (g.AwayId ?? 0) : (g.HomeId ?? 0);
+                    return new GameParticipant
+                    {
+                        TeamId           = teamId,
+                        TeamDivision     = teamById.TryGetValue(teamId, out var t) ? t.Division : "fbs",
+                        OpponentId       = opponentId,
+                        OpponentDivision = teamById.TryGetValue(opponentId, out var o) ? o.Division : "fbs",
+                        TeamPoints       = isHomeTeam ? g.HomePoints : g.AwayPoints,
+                        OpponentPoints   = isHomeTeam ? g.AwayPoints : g.HomePoints,
+                        Location         = g.NeutralSite ? 'N' : (isHomeTeam ? 'H' : 'A'),
+                        IsHomeTeam       = isHomeTeam,
+                        Week             = g.Week
+                    };
+                })
+                .OrderBy(gp => gp.Week)
+                .ToList();
+
+            var details = new List<TeamGameZScoreDetail>(teamGames.Count);
+            foreach (var gp in teamGames)
+            {
+                priorByTeamId.TryGetValue(gp.OpponentId, out var oppPrior);
+
+                var t1 = Math.Min(gp.TeamId, gp.OpponentId);
+                var t2 = Math.Max(gp.TeamId, gp.OpponentId);
+                var matchup = matchupHistories.FirstOrDefault(m => m.Team1Id == t1 && m.Team2Id == t2);
+
+                var result = RatingCalculator.ComputeGameZScore(
+                    gp.OpponentId, gp.OpponentDivision, gp.Location, gp.IsHomeTeam,
+                    gp.TeamPoints, gp.OpponentPoints, leagueAvgStrength, oppPrior,
+                    seedByTeamId, avgScoreDifferentials, matchup, hfa, leagueAvgScore);
+
+                details.Add(new TeamGameZScoreDetail(
+                    gp.Week, gp.OpponentId, gp.OpponentDivision, gp.IsHomeTeam,
+                    gp.TeamPoints, gp.OpponentPoints, gp.TeamPoints - gp.OpponentPoints,
+                    result.ZScore, result.OffZScore, result.DefZScore,
+                    result.DivWeight, result.QualityMod, (double)result.OppPregameStrength));
+            }
+
+            // Calls the SAME method step 9 above uses — see RatingCalculator.
+            // ComputeWeightedAvgZScore remarks for the 2026-09-02 normalization fix.
+            var avgZScore = RatingCalculator.ComputeWeightedAvgZScore(
+                details.Select(d => (d.ZScore, d.QualityMod, d.DivWeight)));
+
+            var teamRecord = await _uow.TeamRecords.GetByTeamAndYearAsync(teamId, year, token);
+
+            return new TeamGameZScoreAnalysis(
+                teamId, year, week, Math.Round(avgZScore, 4),
+                teamRecord?.PowerRating, teamRecord?.CombinedSOS, details);
         }
 
         /// <summary>

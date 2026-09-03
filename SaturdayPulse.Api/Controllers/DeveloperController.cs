@@ -824,6 +824,106 @@ namespace SaturdayPulse.Controllers
         }
 
         /// <summary>
+        /// DIAGNOSTIC — read-only. Shows the exact per-game Z-score pipeline
+        /// (RatingCalculator.ComputeGameZScore — the SAME method WeeklyRankingsService
+        /// step 5 uses to compute production PowerRating) for one team, one week.
+        /// Unlike analyzeTeamGames above, this reflects the CURRENT rating engine
+        /// (ResolveStrength/ExpandStrength/QualityMod/DivWeight) — analyzeTeamGames
+        /// predates that pipeline and won't match production numbers.
+        /// Example: GET /api/developer/analyzeTeamGameZScores?teamId=251&year=2025&week=21
+        /// </summary>
+        [HttpGet("analyzeTeamGameZScores")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> AnalyzeTeamGameZScores(
+            [FromQuery] int teamId,
+            [FromQuery] int year,
+            [FromQuery] int week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.AnalyzeTeamGameZScoresAsync(teamId, year, week, token);
+                return Ok(new
+                {
+                    result.TeamId,
+                    result.Year,
+                    result.Week,
+                    avgZScore         = result.AvgZScore,
+                    storedPowerRating = result.StoredPowerRating,
+                    storedCombinedSOS = result.StoredCombinedSOS,
+                    games             = result.Games
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error analyzing team game Z-scores");
+                return StatusCode(500, "An error occurred during analysis.");
+            }
+        }
+
+        /// <summary>
+        /// DIAGNOSTIC — read-only. Shows every step of CalculatePrediction's margin
+        /// calculation for one matchup — SeedRating -> anchorUnit -> anchorRanking ->
+        /// blendedRanking for both teams, then the strength differential and
+        /// AvgScoreDifferential bucket lookup, using the SAME real methods
+        /// CalculatePrediction itself calls. Location: 'H' (team home), 'A' (team
+        /// away), or 'N' (neutral site).
+        /// Example: GET /api/developer/analyzePredictionMath?year=2026&teamName=Texas&opponentName=Ohio%20State&location=H&week=2
+        /// </summary>
+        [HttpGet("analyzePredictionMath")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> AnalyzePredictionMath(
+            [FromQuery] int year,
+            [FromQuery] string teamName,
+            [FromQuery] string opponentName,
+            [FromQuery] char location,
+            [FromQuery] int week,
+            [FromQuery] double? hfaOverride,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.AnalyzePredictionMathAsync(
+                    year, teamName, opponentName, location, week, hfaOverride, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error analyzing prediction math");
+                return StatusCode(500, "An error occurred during analysis.");
+            }
+        }
+
+        /// <summary>
+        /// DIAGNOSTIC — read-only. Same math as analyzePredictionMath, for a whole
+        /// season at once. Loops the team's real schedule and checks each game
+        /// using ITS OWN native week — matching exactly how that game's Projection
+        /// row was actually locked (Option C) — rather than requiring one call per
+        /// opponent.
+        /// Example: GET /api/developer/analyzeSeasonPredictionMath?year=2026&teamId=251
+        /// </summary>
+        [HttpGet("analyzeSeasonPredictionMath")]
+        [Tags("Analytics and Diagnostics")]
+        public async Task<IActionResult> AnalyzeSeasonPredictionMath(
+            [FromQuery] int year,
+            [FromQuery] int teamId,
+            [FromQuery] double? hfaOverride,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var result = await developerService.AnalyzeSeasonPredictionMathAsync(
+                    year, teamId, hfaOverride, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error analyzing season prediction math");
+                return StatusCode(500, "An error occurred during analysis.");
+            }
+        }
+
+        /// <summary>
         /// Calculates trend projections based on recent performance.
         /// Example: GET /api/developer/calculateTrends?teamId=110&year=2024
         /// </summary>
