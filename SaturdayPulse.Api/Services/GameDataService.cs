@@ -713,6 +713,7 @@ namespace SaturdayPulse.Services
         // Must stay identical to GameScorePollingService.KickoffTimeFormat —
         // that's the only other place this column gets parsed.
         private const string KickoffTimeFormat = "HH:mm:ss";
+        private static readonly TimeZoneInfo EasternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
         /// <summary>
         /// Fetches games for a given year (and optionally week) from CFBD and upserts into Games table.
@@ -737,8 +738,10 @@ namespace SaturdayPulse.Services
                 // time-of-day entirely. KickoffTime now keeps it (as a fixed-format
                 // string — SQLite/matches GameDate/GameDay convention) for the
                 // game-day score poller's on/off window (see GameScorePollingService).
-                var parsed = d.StartDate != null && DateTime.TryParse(d.StartDate, out var dt)
-                    ? dt : (DateTime?)null;
+                var parsed = d.StartDate != null && DateTime.TryParse(
+                                d.StartDate, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                                out var utcDt) ? TimeZoneInfo.ConvertTimeFromUtc(utcDt, EasternTimeZone)
+                                : (DateTime?)null;
 
                 return new Games
                 {

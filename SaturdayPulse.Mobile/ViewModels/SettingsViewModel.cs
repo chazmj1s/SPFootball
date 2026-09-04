@@ -544,13 +544,13 @@ namespace SaturdayPulse.ViewModels
 
                 if (result == "None")
                 {
-                    _followService.SetPrimaryTeam(null);
+                    await _followService.SetPrimaryTeam(null);
                 }
                 else
                 {
                     var team = _teamCache.Teams.FirstOrDefault(t => t.TeamName == result);
                     if (team != null)
-                        _followService.SetPrimaryTeam(team.TeamID);
+                        await _followService.SetPrimaryTeam(team.TeamID);
                 }
 
                 OnPropertyChanged(nameof(DefaultTeamDisplay));
@@ -1017,9 +1017,29 @@ namespace SaturdayPulse.ViewModels
                 var profileTask   = _userApi.GetMeAsync();
                 var contentTask   = _contentApi.GetContentAsync();
 
-                await Task.WhenAll(teamsTask, rivalriesTask, profileTask, contentTask);
+                // DefaultTeamDisplay reads _teamCache.GetTeam(id), not
+                // _allTeams below — a completely separate cache from the
+                // GetTeamsAsync() call above, which only feeds this VM's own
+                // Favorites/Teams tab. If FollowService.GetPrimaryTeamId()
+                // resolves before TeamCacheService finishes loading,
+                // GetTeam(id) returns null and DefaultTeamDisplay silently
+                // falls back to "None" — indistinguishable from "no primary
+                // team set." SelectDefaultTeamCommand already guards against
+                // this for the picker; LoadDataAsync didn't for the display
+                // itself. Awaited alongside the rest so Settings never shows
+                // a stale/empty read on this specific field.
+                var teamCacheTask = _teamCache.EnsureLoadedAsync();
+
+                await Task.WhenAll(teamsTask, rivalriesTask, profileTask, contentTask, teamCacheTask);
                 var (teams, rivalries, profile, content) =
                     (teamsTask.Result, rivalriesTask.Result, profileTask.Result, contentTask.Result);
+
+                // Now that both FollowService's primary team id and
+                // TeamCacheService are guaranteed loaded, force a
+                // re-evaluation regardless of which one happened to resolve
+                // first — covers the race in both directions, not just the
+                // order this method happens to await in.
+                OnPropertyChanged(nameof(DefaultTeamDisplay));
 
                 if (teams != null && teams.Count > 0)
                 {

@@ -25,6 +25,7 @@
          this pass. -->
     <converters:ProjectionGateConverter x:Key="ProjectionGateConverter" />
     <converters:RivalryNotesVisibilityConverter x:Key="RivalryNotesVisibilityConverter" />
+    <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
     <DataTemplate x:Key="GameRowTemplate" x:DataType="viewmodels:MyTeamsGameRow">
   <Grid>
 
@@ -141,6 +142,9 @@
       <!-- Spread / O-U, stacked — fixed-width column, same reason -->
       <VerticalStackLayout Grid.Column="3" Spacing="0"
                            VerticalOptions="Center">
+        <Label Text="{Binding Game.DisplayGameTime}"
+               FontSize="9" TextColor="#80FFFFFF" HorizontalTextAlignment="End"
+               IsVisible="{Binding Game.DisplayGameTime, Converter={StaticResource StringNotEmptyConverter}}" />
         <Label FontSize="10" TextColor="#A6FFFFFF" HorizontalTextAlignment="End">
           <Label.Text>
             <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
@@ -1240,14 +1244,14 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="2" HeightRequest="24" ColumnDefinitions="*,Auto"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
-      <Label Grid.Column="0" Text="{Binding StatusMessage}"
-             Padding="8,0" FontSize="10"
-             VerticalOptions="Center" HorizontalOptions="Start"
-             TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
-      <Label Grid.Column="1" Text="( ) = projected value"
+      <Label Grid.Column="0" Text="( ) = projected value : All times Eastern Time"
              Padding="8,0" FontSize="11" FontAttributes="Italic"
-             VerticalOptions="Center" HorizontalOptions="End"
+             VerticalOptions="Center" HorizontalOptions="Start"
              TextColor="{AppThemeBinding Light=#333333, Dark=#E0E0E0}" />
+      <Label Grid.Column="1" Text="{Binding StatusMessage}"
+             Padding="8,0" FontSize="10"
+             VerticalOptions="Center" HorizontalOptions="End"
+             TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
     </Grid>
 
   </Grid>

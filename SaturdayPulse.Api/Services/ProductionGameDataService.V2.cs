@@ -5,7 +5,9 @@ using SaturdayPulse.Models;
 using SaturdayPulse.Utilities;
 using SQLitePCL;
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
+using System.Timers;
 
 namespace SaturdayPulse.Services
 {
@@ -288,6 +290,7 @@ namespace SaturdayPulse.Services
                     g.Week,
                     GameDate = g.GameDate,
                     GameDay = g.GameDay,
+                    GameTime = g.KickoffTime,
                     HomeName = g.HomeName,
                     HomeId = g.HomeId,
                     HomeConf = homeConfAbbr,

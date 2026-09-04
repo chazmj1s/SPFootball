@@ -17,6 +17,7 @@ namespace SaturdayPulse.Models
                 Week          = dto.Week,
                 GameDate      = dto.GameDate,
                 GameDay       = dto.GameDay,
+                GameTime      = dto.GameTime,
                 SeasonType    = dto.SeasonType,
 
                 HomeName      = dto.HomeName,

@@ -89,13 +89,22 @@ namespace SaturdayPulse.Services
         /// </summary>
         public int? GetPrimaryTeamId() => _primaryTeamId;
 
-        public void SetPrimaryTeam(int? teamId)
+        /// <summary>
+        /// UPDATED — no longer fire-and-forget. Unlike Toggle() (where a lost
+        /// write is a non-event per class remarks), a lost primary-team write
+        /// means the whole "My Team" selection silently reverts on next
+        /// launch — very plausible on mobile if the app backgrounds/gets
+        /// suspended right after the picker closes, before the PATCH lands.
+        /// Caller (SettingsViewModel.SelectDefaultTeamCommand) already awaits
+        /// an async lambda, so awaiting here is cheap and guarantees the
+        /// server write completes before the action sheet flow finishes.
+        /// </summary>
+        public async Task SetPrimaryTeam(int? teamId)
         {
             _primaryTeamId = teamId;
             PrimaryTeamChanged?.Invoke(teamId);
 
-            // Fire-and-forget by design — see class remarks.
-            _ = SyncPrimaryTeamAsync(teamId);
+            await SyncPrimaryTeamAsync(teamId);
         }
 
         private async Task SyncTeamFollowAsync(int teamId, bool nowFollowed)

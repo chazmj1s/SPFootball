@@ -1,5 +1,6 @@
 using Syncfusion.Licensing;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 
 namespace SaturdayPulse.Models
@@ -12,7 +13,8 @@ namespace SaturdayPulse.Models
         public int     Week { get; set; }
 
         public string? GameDate    { get; set; }
-        public string? GameDay     { get; set; }
+        public string? GameDay { get; set; }
+        public string? GameTime { get; set; }
         public string  SeasonType   { get; set; } = "regular";
 
         /// <summary>Sequential position assigned by the ViewModel after load — used for "original order" sort.</summary>
@@ -122,6 +124,21 @@ namespace SaturdayPulse.Models
             : $"O/U: ({DisplayProjOU})";
 
         public string NeutralIndicator => NeutralSite ? " (N)" : string.Empty;
+
+        // ── Display: kickoff time ─────────────────────────────────────────
+        // GameTime carries the raw "HH:mm:ss" (24-hour, invariant) format —
+        // same as the API's Games.KickoffTime column. Deliberately NOT
+        // pre-formatted upstream: a display string round-tripped back
+        // through parsing for sort purposes (see GameDataCacheService.
+        // ParseKickoff) is fragile if the format/culture used to produce it
+        // ever drifts from the one used to parse it. Format only happens
+        // here, with InvariantCulture pinned explicitly on both this parse
+        // and the ToString below — no implicit CurrentCulture dependency.
+        public string DisplayGameTime =>
+            DateTime.TryParseExact(GameTime, "HH:mm:ss", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var t)
+                ? t.ToString("h:mm tt", CultureInfo.InvariantCulture)
+                : string.Empty;
 
         // ── Group header ──────────────────────────────────────────────────
 
