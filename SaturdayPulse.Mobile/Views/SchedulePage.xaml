@@ -16,6 +16,7 @@
          this pass. -->
     <converters:ProjectionGateConverter x:Key="ProjectionGateConverter" />
     <converters:RivalryNotesVisibilityConverter x:Key="RivalryNotesVisibilityConverter" />
+    <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
   </ContentPage.Resources>
 
 
@@ -110,17 +111,23 @@
             </MultiBinding>
           </Label.Text>
         </Label>
-        <Label Grid.Row="0" Grid.Column="5"
-               FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-               TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
-          <Label.Text>
-            <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
-              <Binding Path="DisplayMargin" />
-              <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
-              <Binding Path="Year" />
-            </MultiBinding>
-          </Label.Text>
-        </Label>
+        <VerticalStackLayout Grid.Row="0" Grid.Column="5" Spacing="1"
+               HorizontalOptions="End" VerticalOptions="Center">
+          <Label Text="{Binding DisplayGameTime}"
+                 FontSize="10" HorizontalOptions="End"
+                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
+                 IsVisible="{Binding DisplayGameTime, Converter={StaticResource StringNotEmptyConverter}}" />
+          <Label FontSize="11" HorizontalOptions="End"
+                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
+            <Label.Text>
+              <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
+                <Binding Path="DisplayMargin" />
+                <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
+                <Binding Path="Year" />
+              </MultiBinding>
+            </Label.Text>
+          </Label>
+        </VerticalStackLayout>
 
         <!-- Heart: home -->
         <controls:FollowTeamIcon Grid.Row="1" Grid.Column="1"
@@ -484,7 +491,7 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <Grid Grid.Row="2" HeightRequest="24"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
-      <Label Text="( ) = projected value"
+      <Label Text="( ) = projected value : All times Eastern Time"
              Padding="8,0" FontSize="11" FontAttributes="Italic"
              VerticalOptions="Center" HorizontalOptions="Start"
              TextColor="{AppThemeBinding Light=#333333, Dark=#E0E0E0}" />

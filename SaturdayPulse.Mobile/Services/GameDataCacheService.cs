@@ -1,4 +1,5 @@
 using SaturdayPulse.Models;
+using System.Globalization;
 
 namespace SaturdayPulse.Services
 {
@@ -67,9 +68,25 @@ namespace SaturdayPulse.Services
                 return _allGames;
             }
 
-            // Sequence + flag stamping (moved out of ScheduleViewModel)
-            for (int i = 0; i < games.Count; i++)
-                games[i].SequenceNumber = i + 1;
+            // Sequence + flag stamping (moved out of ScheduleViewModel).
+            // UPDATED — previously just i+1 on raw API response order, which
+            // happened to often be close to chronological but wasn't
+            // guaranteed (e.g. a Thursday game returned after a later
+            // Saturday game on the same week). Now sorts by actual parsed
+            // kickoff (GameDate+GameTime) so ScheduleViewModel's
+            // OrderBy(SequenceNumber) reflects real same-day ordering.
+            // startTimeTBD/unparseable games sort to the end of their date
+            // (23:59) rather than defaulting to midnight and jumping the
+            // queue; ThenBy(originalIndex) keeps ties (including two TBD
+            // games on the same day) in the API's own stable order.
+            var ordered = games
+                .Select((g, idx) => (Game: g, OriginalIndex: idx))
+                .OrderBy(x => ParseKickoff(x.Game.GameDate, x.Game.GameTime))
+                .ThenBy(x => x.OriginalIndex)
+                .ToList();
+
+            for (int i = 0; i < ordered.Count; i++)
+                ordered[i].Game.SequenceNumber = i + 1;
 
             StampFollowAndFavoriteFlags(games);
 
@@ -80,6 +97,20 @@ namespace SaturdayPulse.Services
         }
 
         // ── Flag stamping ────────────────────────────────────────────────
+
+        private static DateTime ParseKickoff(string? gameDate, string? gameTime)
+        {
+            if (string.IsNullOrEmpty(gameDate) ||
+                !DateTime.TryParseExact(gameDate, "MM/dd/yyyy", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var datePart))
+                return DateTime.MaxValue; // no parseable date at all — sort last, don't crash the sort
+
+            if (!string.IsNullOrEmpty(gameTime) &&
+                TimeSpan.TryParseExact(gameTime, "hh\\:mm\\:ss", CultureInfo.InvariantCulture, out var timePart))
+                return datePart.Add(timePart);
+
+            return datePart.AddHours(23).AddMinutes(59); // TBD/missing time — last on that day, not midnight
+        }
 
         private void StampFollowAndFavoriteFlags(IList<GameResult> games)
         {

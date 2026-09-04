@@ -187,6 +187,8 @@ namespace SaturdayPulse.Repositories.Implementations
                     dbGame.ConferenceGame = game.ConferenceGame;
                     dbGame.Venue          = game.Venue;
                     dbGame.KickoffTime    = game.KickoffTime;
+                    dbGame.GameDate       = game.GameDate;
+                    dbGame.GameDay        = game.GameDay;
                 }
                 else
                     _context.Games.Add(game);

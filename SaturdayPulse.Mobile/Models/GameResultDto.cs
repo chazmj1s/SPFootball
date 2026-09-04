@@ -11,7 +11,8 @@ namespace SaturdayPulse.Models
         public int     Year        { get; set; }
         public int     Week        { get; set; }
         public string? GameDate    { get; set; }
-        public string? GameDay     { get; set; }
+        public string? GameDay { get; set; }
+        public string? GameTime { get; set; }
         public string  SeasonType  { get; set; } = "regular";
 
         // Home
