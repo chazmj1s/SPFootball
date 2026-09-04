@@ -19,6 +19,23 @@ namespace SaturdayPulse.Repositories.Implementations
                 .OrderBy(x => x)
                 .ToListAsync(token);
 
+        /// <summary>
+        /// Distinct weeks for a year where a game exists with BOTH HomePoints and
+        /// AwayPoints still null — i.e. not yet played. Ascending order, so the
+        /// highest unplayed week is always the last element. Added for
+        /// GamePredictionService.PredictSandboxMatchupAsync to detect an
+        /// in-progress season and route it through the live K=4 blend instead of
+        /// the raw TeamRecords snapshot (which, for an in-progress year, was last
+        /// synced from WeeklyRankings' locked-projection rows, not real results).
+        /// </summary>
+        public Task<List<int>> GetUnplayedWeeksAsync(int year, CancellationToken token = default)
+            => _context.Games
+                .Where(g => g.Year == year && g.HomePoints == null && g.AwayPoints == null)
+                .Select(g => (int)g.Week)
+                .Distinct()
+                .OrderBy(w => w)
+                .ToListAsync(token);
+
         public Task<List<Games>> GetByYearAsync(int year, CancellationToken token = default)
             => _context.Games.Where(g => g.Year == year).OrderBy(g => g.Week).ToListAsync(token);
         public Task<List<Games>> GetByYearAndWeekAsync(int year, int week, CancellationToken token = default)
