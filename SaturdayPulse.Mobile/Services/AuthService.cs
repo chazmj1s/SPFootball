@@ -17,11 +17,6 @@ namespace SaturdayPulse.Services
     /// Settings, or (indirectly) taps Season Pass while logged out. Everything
     /// else keeps working via the X-User-Id fallback in UserApiService,
     /// exactly as before.
-    ///
-    /// NOTE: this is the login/logout half of item 3 on the handoff list.
-    /// Windows support (item 1) is a separate, still-open piece — GH #2702
-    /// means WebAuthenticator may need extra plumbing on Windows/MSIX that
-    /// hasn't been added here yet.
     /// </summary>
     public class AuthService
     {
@@ -37,6 +32,18 @@ namespace SaturdayPulse.Services
         {
             _auth0Client = auth0Client;
         }
+
+        /// <summary>
+        /// The email claim from the most recent successful LoginAsync's ID
+        /// token, if present — null until a login has succeeded this session,
+        /// or if Auth0 didn't return an email claim for some reason. Read by
+        /// TryCreateAccountAsync immediately after a signup so the server's
+        /// CreateAccountAsync gets the real address instead of falling back
+        /// to the {userId}@unset.local placeholder, which otherwise silently
+        /// defeated the "email already in use" conflict check on every real
+        /// signup. Not persisted — only meaningful right after a fresh login.
+        /// </summary>
+        public string? LastLoginEmail { get; private set; }
 
         /// <summary>
         /// True once a login has ever succeeded on this device — drives the
@@ -95,6 +102,9 @@ namespace SaturdayPulse.Services
                     System.Diagnostics.Debug.WriteLine($"[Auth] Login failed: {result.Error}");
                     return false;
                 }
+
+                LastLoginEmail = result.User.FindFirst("email")?.Value
+                    ?? result.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
 
                 await SecureStorage.Default.SetAsync(AccessTokenKey, result.AccessToken);
                 await SecureStorage.Default.SetAsync(

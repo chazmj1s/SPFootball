@@ -40,6 +40,10 @@ namespace SaturdayPulse.Models
                 ProjOU        = dto.ProjOU,
                 ProjMargin    = dto.ProjMargin,
 
+                Status        = dto.Status,
+                Period        = dto.Period,
+                Clock         = dto.Clock,
+
                 HomeStats     = dto.HomeStats?.ToGameTeamStats(),
                 AwayStats     = dto.AwayStats?.ToGameTeamStats(),
                 VegasLines    = dto.VegasLines?.ToGameLines(),

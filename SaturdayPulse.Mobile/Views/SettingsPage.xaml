@@ -165,6 +165,12 @@
                                         <TapGestureRecognizer Command="{Binding LogoutCommand}" />
                                     </Label.GestureRecognizers>
                                 </Label>
+                                <Label Text="Change Account" FontSize="13" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding ChangeAccountCommand}" />
+                                    </Label.GestureRecognizers>
+                                </Label>
                                 <Label Text="Delete Account" FontSize="13" FontAttributes="Bold"
                                        TextColor="{AppThemeBinding Light=#C0392B, Dark=#E57373}">
                                     <Label.GestureRecognizers>

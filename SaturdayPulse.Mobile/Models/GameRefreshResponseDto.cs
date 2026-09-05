@@ -12,6 +12,9 @@ namespace SaturdayPulse.Models
         public int GameId { get; set; }
         public int HomePoints { get; set; }
         public int AwayPoints { get; set; }
+        public string? Status { get; set; }
+        public int?    Period { get; set; }
+        public string? Clock  { get; set; }
         public List<GameRefreshLineDto> Lines { get; set; } = new();
     }
 

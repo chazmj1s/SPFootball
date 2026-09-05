@@ -836,69 +836,57 @@ namespace SaturdayPulse.Services
 
         /// <summary>
         /// Manual single-game refresh — backs ProductionGameDataService.GetGameAsync
-        /// (the mobile ⟳ icon). Confirmed live 2026-08-30: CFBD's /lines endpoint
-        /// accepts a gameId filter and returns homeScore/awayScore embedded
-        /// alongside the odds array, so one call covers both — unlike
-        /// LoadGamesAsync/LoadLinesAsync above, which are always year+week scoped
-        /// and need two separate calls. This is the only CFBD call in this
-        /// codebase filtered by gameId alone; every other call goes through
-        /// year+week.
-        ///
-        /// Uses CfbdGameLinesWithScoreDto (not CfbdLinesGameDto) since that DTO's
-        /// field set for homeScore/awayScore wasn't confirmed and this response
-        /// is a distinct, verified shape.
+        /// (the mobile ⟳ icon). Switched 2026-09 from CFBD's /lines?gameId=X (which
+        /// bundled score + odds in one call) to /live/plays?gameId=X — /lines
+        /// doesn't update mid-game the way /live/plays does, and the whole point
+        /// of the manual refresh icon is getting a current score during a live
+        /// game. Score-only by design: /live/plays returns no betting-line data
+        /// at all, so this no longer touches Lines. If odds ever need refreshing
+        /// on demand again, that has to be a separate call back to /lines, not
+        /// folded into this one.
         /// </summary>
         public async Task<int> RefreshGameAsync(int gameId, CancellationToken token = default)
         {
-            var url = $"/lines?gameId={gameId}";
+            var url = $"/live/plays?gameId={gameId}";
 
             var response = await CfbdClient.GetAsync(url, token);
             response.EnsureSuccessStatusCode();
 
-            var dtos = await response.Content
-                .ReadFromJsonAsync<List<CfbdGameLinesWithScoreDto>>(cancellationToken: token) ?? [];
+            var dto = await response.Content
+                .ReadFromJsonAsync<CfbdLivePlaysDto>(cancellationToken: token);
 
-            var dto = dtos.FirstOrDefault(d => d.Id == gameId);
-            if (dto == null)
+            if (dto == null || dto.Id != gameId)
             {
-                Console.WriteLine($"RefreshGameAsync: CFBD returned no game for gameId={gameId}");
+                Console.WriteLine($"RefreshGameAsync: CFBD returned no live data for gameId={gameId}");
+                return 0;
+            }
+
+            var homeTeam = dto.Teams.FirstOrDefault(t => t.HomeAway == "home");
+            var awayTeam = dto.Teams.FirstOrDefault(t => t.HomeAway == "away");
+
+            if (homeTeam == null || awayTeam == null)
+            {
+                Console.WriteLine($"RefreshGameAsync: gameId={gameId} live response missing home/away team");
                 return 0;
             }
 
             var existing = await _uow.Games.GetByGameIdAsync(gameId, token);
-            if (existing != null)
+            if (existing == null)
             {
-                existing.HomePoints = dto.HomeScore;
-                existing.AwayPoints = dto.AwayScore;
+                Console.WriteLine($"RefreshGameAsync: no Games row found for gameId={gameId}");
+                return 0;
             }
 
-            // Delete-then-insert lines — same convention as LoadLinesAsync, so a
-            // refresh is always clean rather than accumulating stale providers.
-            await _uow.Lines.DeleteByGameIdAsync(gameId, token);
+            existing.HomePoints = homeTeam.Points;
+            existing.AwayPoints = awayTeam.Points;
 
-            var newLines = dto.Lines.Select(line => new Lines
-            {
-                GameId          = gameId,
-                Provider        = line.Provider.Replace(" ", string.Empty),
-                Spread          = line.Spread,
-                SpreadOpen      = line.SpreadOpen,
-                FormattedSpread = line.FormattedSpread,
-                OverUnder       = line.OverUnder,
-                OverUnderOpen   = line.OverUnderOpen,
-                HomeMoneyline   = line.HomeMoneyline,
-                AwayMoneyline   = line.AwayMoneyline
-            }).ToList();
-
-            await _uow.Lines.AddRangeAsync(newLines, token);
             await _uow.SaveChangesAsync(token);
 
             Console.WriteLine($"RefreshGameAsync: gameId={gameId} → " +
-                $"{dto.HomeScore?.ToString() ?? "null"}-{dto.AwayScore?.ToString() ?? "null"}, " +
-                $"{newLines.Count} line(s)");
+                $"{homeTeam.Points}-{awayTeam.Points} (status: {dto.Status})");
 
             return 1;
         }
-
         /// <summary>
         /// Loads current-season roster for all teams from CFBD. Call once with the
         /// current year (T) and again with the prior year (T-1) — RosterCapacityService
