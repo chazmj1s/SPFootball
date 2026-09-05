@@ -113,6 +113,9 @@ namespace SaturdayPulse.ViewModels
 
                     game.HomePoints = result.HomePoints;
                     game.AwayPoints = result.AwayPoints;
+                    game.Status     = result.Status;
+                    game.Period     = result.Period;
+                    game.Clock      = result.Clock;
                 }
                 finally
                 {

@@ -420,6 +420,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand LoginCommand                   { get; }
         public ICommand CreateAccountCommand           { get; }
         public ICommand LogoutCommand                  { get; }
+        public ICommand ChangeAccountCommand           { get; }
         public ICommand DeleteAccountCommand           { get; }
         public ICommand SeasonPassCommand              { get; }
         public ICommand SetDevEntitlementCommand       { get; }
@@ -656,6 +657,21 @@ namespace SaturdayPulse.ViewModels
                 ClearLocalAccountState();
             });
 
+            // Logout + immediately re-open Auth0's Universal Login, for the
+            // "wrong account is signed in" case. Reuses LogoutAsync/
+            // ClearLocalAccountState (same as LogoutCommand) followed by the
+            // existing TryLoginAsync — no new Auth0-facing logic. LogoutAsync
+            // hits Auth0's own /v2/logout endpoint in the system browser,
+            // which clears the SSO session there too, so the login screen
+            // that follows isn't just silently re-authenticating the same
+            // account via a lingering browser cookie.
+            ChangeAccountCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                await _authService.LogoutAsync();
+                ClearLocalAccountState();
+                await TryLoginAsync();
+            });
+
             // Permanent, server-side deletion (2026-07-26) — confirms first,
             // then calls DeleteAccountAsync (which itself writes a permanent
             // AccountAuditLog entry server-side before removing everything
@@ -872,12 +888,7 @@ namespace SaturdayPulse.ViewModels
                 return false;
             }
 
-            // TODO: pass the Auth0-supplied email through once AuthService
-            // exposes it (LoginResult carries it, but AuthService doesn't
-            // currently surface it) — lets the server catch "that email's
-            // already in use by a different account" instead of always
-            // falling back to the {userId}@unset.local placeholder.
-            var outcome = await _userApi.CreateAccountAsync();
+            var outcome = await _userApi.CreateAccountAsync(_authService.LastLoginEmail);
 
             if (outcome.IsConflict)
             {

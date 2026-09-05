@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Core.Progress;
+using SaturdayPulse.Filters;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 
@@ -10,7 +11,13 @@ namespace SaturdayPulse.Controllers
 {
     /// <summary>
     /// Development-only API for data loading, metric calculations, and diagnostics.
-    /// NOT FOR PRODUCTION USE — these endpoints modify database state.
+    ///
+    /// Admin-only — gated by [Authorize] (valid Auth0 token required) plus
+    /// [AdminOnly] (IsAdmin == true required, see AdminOnlyAttribute). Added
+    /// 2026-09-04: this controller previously had NO authorization at all,
+    /// meaning grantSeasonPass/revokeAccess/users/every data-rebuild endpoint
+    /// was reachable by anyone who knew the URL, unauthenticated. Confirmed
+    /// fixed same day.
     ///
     /// All data-access and business logic lives in DeveloperService.
     /// This controller is a thin HTTP wrapper: validate input, call the service,
@@ -18,6 +25,7 @@ namespace SaturdayPulse.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
+    [AdminKey]
     public class DeveloperController(
         DeveloperService developerService,
         ProjectionAccuracyService _projectionAccuracyService,

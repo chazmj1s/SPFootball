@@ -1,10 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>SaturdayPulse.AdminBlazor</RootNamespace>
+    <UserSecretsId>23f64e88-269e-4a36-82ba-2ac258930dab</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

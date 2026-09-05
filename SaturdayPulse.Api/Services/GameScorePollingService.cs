@@ -1,4 +1,5 @@
 using System.Globalization;
+using SaturdayPulse.Api.Contracts.Responses;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Models;
 
@@ -16,6 +17,12 @@ namespace SaturdayPulse.Services
     /// (ProductionGameDataService.GetGameAsync) is the only path that
     /// touches odds on demand. No rating/ranking/rolling-average
     /// recalculation is triggered by this service.
+    ///
+    /// Switched 2026-09 to CFBD's /scoreboard?classification=fbs — one call
+    /// per tick returns every game in CFBD's current window (not scoped by
+    /// year/week the way /lines is), filtered locally to today's games.
+    /// Confirmed against a real response spanning 2026-08-29 through
+    /// 2026-09-07.
     /// </summary>
     public class GameScorePollingService(
         IServiceScopeFactory scopeFactory,
@@ -28,7 +35,7 @@ namespace SaturdayPulse.Services
         // Must stay identical to GameDataService.LoadGamesAsync's
         // KickoffTimeFormat const — that's the only other place this
         // column gets written.
-        private const string KickoffTimeFormat = "yyyy-MM-dd HH:mm:ss";
+        private const string KickoffTimeFormat = "HH:mm:ss";
 
         // Same "cfbd" named client GameDataService/ProductionGameDataService use.
         private HttpClient CfbdClient => httpClientFactory.CreateClient("cfbd");
@@ -108,34 +115,52 @@ namespace SaturdayPulse.Services
             var todaysGameIds = todaysGames.Select(g => g.GameId).ToHashSet();
             var updatedCount = 0;
 
-            // One CFBD call per distinct (Year, Week) combo present today —
-            // same bulk /lines endpoint GameDataService.LoadLinesAsync uses.
-            // Almost always exactly one combo; the loop just covers the rare
-            // season-boundary case where two combos land on the same date.
-            foreach (var (year, week) in todaysGames.Select(g => (g.Year, g.Week)).Distinct())
+            // /scoreboard returns every game currently in CFBD's window in one
+            // call — unlike /lines, it isn't scoped by year+week, so there's no
+            // per-combo loop needed anymore. Filtered locally to just today's
+            // games, same pattern the old /lines-based approach used.
+            // classification=fbs matches this app's scope (no FCS/other
+            // divisions tracked elsewhere).
+            var response = await CfbdClient.GetAsync("/scoreboard?classification=fbs", token);
+            if (!response.IsSuccessStatusCode)
             {
-                var response = await CfbdClient.GetAsync($"/lines?year={year}&week={week}&seasonType=both", token);
-                if (!response.IsSuccessStatusCode)
-                {
-                    logger.LogWarning(
-                        "GameScorePollingService: CFBD returned {StatusCode} for year={Year} week={Week} — skipping this combo.",
-                        response.StatusCode, year, week);
-                    continue;
-                }
+                logger.LogWarning(
+                    "GameScorePollingService: CFBD /scoreboard returned {StatusCode} — skipping this tick.",
+                    response.StatusCode);
+                return;
+            }
 
-                var lineDtos = await response.Content
-                    .ReadFromJsonAsync<List<CfbdLinesGameDto>>(cancellationToken: token) ?? [];
+            var scoreboardGames = await response.Content
+                .ReadFromJsonAsync<List<CfbdScoreboardGameDto>>(cancellationToken: token) ?? [];
 
-                foreach (var dto in lineDtos)
-                {
-                    if (!todaysGameIds.Contains(dto.Id)) continue;
+            foreach (var dto in scoreboardGames)
+            {
+                if (!todaysGameIds.Contains(dto.Id)) continue;
 
-                    var game = todaysGames.First(g => g.GameId == dto.Id);
-                    game.HomePoints = dto.HomeScore;
-                    game.AwayPoints = dto.AwayScore;
-                    await uow.Games.UpsertAsync(game, token);
-                    updatedCount++;
-                }
+                // Skip games CFBD hasn't started tracking a score for yet
+                // (points is null pre-kickoff in this endpoint) rather than
+                // writing a null over whatever's already in Games — a
+                // deliberate change from the old /lines-based version, which
+                // wrote HomeScore/AwayScore unconditionally.
+                if (dto.HomeTeam?.Points == null || dto.AwayTeam?.Points == null) continue;
+
+                var game = todaysGames.First(g => g.GameId == dto.Id);
+                game.HomePoints = dto.HomeTeam.Points;
+                game.AwayPoints = dto.AwayTeam.Points;
+
+                // Status/Period/Clock (2026-09-05) — written unconditionally
+                // alongside points, unlike the points null-guard above: once
+                // a game has a score being tracked, status/period/clock are
+                // expected to be present too, and skipping just leaves a
+                // stale clock in the row from the previous tick.
+                // REQUIRES: Games.Status (string?), Games.Period (int?),
+                // Games.Clock (string?) columns — not yet added, see seed.
+                game.Status = dto.Status;
+                game.Period = dto.Period;
+                game.Clock = dto.Clock;
+
+                await uow.Games.UpsertAsync(game, token);
+                updatedCount++;
             }
 
             if (updatedCount > 0)

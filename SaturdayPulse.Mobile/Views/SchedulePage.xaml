@@ -162,17 +162,26 @@
             </MultiBinding>
           </Label.Text>
         </Label>
-        <Label Grid.Row="1" Grid.Column="5"
-               FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-               TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
-          <Label.Text>
-            <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
-              <Binding Path="DisplayOU" />
-              <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
-              <Binding Path="Year" />
-            </MultiBinding>
-          </Label.Text>
-        </Label>
+        <VerticalStackLayout Grid.Row="1" Grid.Column="5" Spacing="1"
+               HorizontalOptions="End" VerticalOptions="Center">
+          <Label FontSize="11" HorizontalOptions="End"
+                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
+            <Label.Text>
+              <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
+                <Binding Path="DisplayOU" />
+                <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
+                <Binding Path="Year" />
+              </MultiBinding>
+            </Label.Text>
+          </Label>
+          <!-- Status/period/clock (2026-09-05) — empty string from
+               DisplayGameStatus until the API sends Status/Period/Clock;
+               StringNotEmptyConverter keeps the row collapsed until then. -->
+          <Label Text="{Binding DisplayGameStatus}"
+                 FontSize="10" HorizontalOptions="End"
+                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
+                 IsVisible="{Binding DisplayGameStatus, Converter={StaticResource StringNotEmptyConverter}}" />
+        </VerticalStackLayout>
 
       </Grid>
 

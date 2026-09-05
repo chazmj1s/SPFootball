@@ -21,6 +21,7 @@ namespace SaturdayPulse.Repositories.Interfaces
         Task<List<GameParticipant>> GetGameParticipantsAsync(int year, CancellationToken token = default);
         Task<List<Games>> GetPostSeasonByYear(int year, CancellationToken token = default);
         Task<List<Games>> GetByIds(List<int> gameIds, CancellationToken token = default);
+        Task<List<int>> GetUnplayedWeeksAsync(int year, CancellationToken token = default);
 
     }
 }

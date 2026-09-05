@@ -173,6 +173,7 @@ namespace SaturdayPulse.Services
                 char location = g.NeutralSite == true ? 'N' : 'H';
                 bool homeWon = homePoints >= awayPoints;
 
+
                 double? projHome = null, projAway = null, projMargin = null;
                 bool predWin = false;
                 if (allProjections.TryGetValue(g.GameId, out var pred))
@@ -291,6 +292,9 @@ namespace SaturdayPulse.Services
                     GameDate = g.GameDate,
                     GameDay = g.GameDay,
                     GameTime = g.KickoffTime,
+                    Status = g.Status,
+                    Clock = g.Clock,
+                    period = g.Period,
                     HomeName = g.HomeName,
                     HomeId = g.HomeId,
                     HomeConf = homeConfAbbr,

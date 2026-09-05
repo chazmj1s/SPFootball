@@ -37,6 +37,13 @@ namespace SaturdayPulse.Models
         public double? ProjOU { get; set; }
         public double? ProjMargin { get; set; }
 
+        // Live status (2026-09-05) — API doesn't populate these yet; added
+        // here so deserialization is a no-op (nulls) until it does, rather
+        // than needing a second DTO change later.
+        public string? Status { get; set; }
+        public int?    Period { get; set; }
+        public string? Clock  { get; set; }
+
         // Nested stats — deserialized as raw objects, mapped separately
         public GameTeamStatsDto? HomeStats    { get; set; }
         public GameTeamStatsDto? AwayStats    { get; set; }

@@ -83,6 +83,66 @@ namespace SaturdayPulse.Models
         public double? ProjOU { get; set; }
         public double? ProjMargin { get; set; }
 
+        // ── Live status (scorecard clock line, 2026-09-05) ─────────────────
+        // Not yet populated end-to-end — GetScheduleAsync/RefreshGameAsync's
+        // DTOs don't carry these fields yet, so Status/Period/Clock stay null
+        // until the API side is wired up. DisplayGameStatus resolves to
+        // string.Empty in that case and the XAML row hides itself via
+        // StringNotEmptyConverter (same pattern as DisplayGameTime).
+        // Full properties (not auto-properties), same reasoning as
+        // HomePoints/AwayPoints: a future poll/refresh update on an
+        // already-bound instance needs to repaint the label.
+        private string? _status;
+        public string? Status
+        {
+            get => _status;
+            set
+            {
+                if (_status == value) return;
+                _status = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayGameStatus));
+            }
+        }
+
+        private int? _period;
+        public int? Period
+        {
+            get => _period;
+            set
+            {
+                if (_period == value) return;
+                _period = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayGameStatus));
+            }
+        }
+
+        private string? _clock;
+        public string? Clock
+        {
+            get => _clock;
+            set
+            {
+                if (_clock == value) return;
+                _clock = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayGameStatus));
+            }
+        }
+
+        /// <summary>
+        /// "final" when Status is "completed" (case-insensitive), otherwise
+        /// "{Period} : {Clock}". Empty when Status hasn't been populated —
+        /// used as the visibility gate in XAML rather than a separate bool.
+        /// </summary>
+        public string DisplayGameStatus =>
+            string.IsNullOrEmpty(Status)
+                ? string.Empty
+                : Status.Equals("completed", StringComparison.OrdinalIgnoreCase)
+                    ? "final"
+                    : $"{Period} : {Clock}";
+
         // ── Derived: who won ──────────────────────────────────────────────
         public bool HomeIsWinner => IsPlayed && HomePoints >= AwayPoints;
         public bool NeutralSite  => Location == 'N';

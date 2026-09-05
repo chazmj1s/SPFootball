@@ -320,9 +320,13 @@ namespace SaturdayPulse.Services
 
         /// <summary>
         /// Sandbox: predicts a matchup between two teams from potentially different years.
-        /// Each team's ratings are loaded from their respective year's true final
+        /// For a completed year, ratings are loaded from that year's true final
         /// TeamRecords values (see GetEndOfSeasonRatingsAsync) — not the K=4 blend
-        /// used for live week-to-week predictions elsewhere in this class.
+        /// used for live week-to-week predictions elsewhere in this class. For a
+        /// year with any unplayed games remaining, ratings are instead loaded via
+        /// the same live K=4 blend (ExperimentalInertiaRatingService.
+        /// GetBlendedRatingsForWeekAsync) Rankings uses, anchored to each team's
+        /// own actual last-played week — see the unplayed-weeks check below for why.
         /// Always neutral site (location = 'N'), week = 0.
         /// </summary>
         public async Task<GamePrediction> PredictSandboxMatchupAsync(
@@ -335,9 +339,34 @@ namespace SaturdayPulse.Services
             var opponent = await _uow.Teams.GetByNameAsync(opponentName, token)
                            ?? throw new ArgumentException($"Team not found: {opponentName}");
 
-            // Load each team's end-of-season ratings from their respective year
-            var teamRecords = await GetEndOfSeasonRatingsAsync(teamYear,     token);
-            var oppRecords  = await GetEndOfSeasonRatingsAsync(opponentYear, token);
+            // Any unplayed week for a year means TeamRecords for that year was last
+            // synced from WeeklyRankings' MAX week row (TeamRecordRepository.
+            // UpsertFromWeeklyRankingsAsync), which includes locked PROJECTIONS for
+            // every not-yet-played week under Option C — not real results. Route
+            // in-progress years through the same live K=4 blend Rankings uses
+            // instead, so Sandbox reflects only games actually played. Completed
+            // years keep the direct TeamRecords read (GetEndOfSeasonRatingsAsync) —
+            // real results exist for every week there, so the season-max-week row
+            // is legitimately final.
+            //
+            // The highest unplayed week is passed as GetBlendedRatingsForWeekAsync's
+            // `week` — its capWeek = week - 1 only needs to exceed every team's
+            // real lastPlayedWeek, which the highest currently-unplayed week always
+            // does by definition. Self-adjusts as the schedule grows (e.g.
+            // conference championships arriving at the postseason data drop push
+            // the highest unplayed week higher automatically) — no hardcoded week
+            // ceiling to maintain. GetUnplayedWeeksAsync returns ascending order,
+            // so .Last() is the highest unplayed week.
+            var teamUnplayedWeeks = await _uow.Games.GetUnplayedWeeksAsync(teamYear,     token);
+            var oppUnplayedWeeks  = await _uow.Games.GetUnplayedWeeksAsync(opponentYear, token);
+
+            var teamRecords = teamUnplayedWeeks.Any()
+                ? await _blendedRating.GetBlendedRatingsForWeekAsync(teamYear, teamUnplayedWeeks.Last(), token)
+                : await GetEndOfSeasonRatingsAsync(teamYear, token);
+
+            var oppRecords = oppUnplayedWeeks.Any()
+                ? await _blendedRating.GetBlendedRatingsForWeekAsync(opponentYear, oppUnplayedWeeks.Last(), token)
+                : await GetEndOfSeasonRatingsAsync(opponentYear, token);
 
             if (!teamRecords.TryGetValue(team.TeamId,     out var teamRecord))
                 throw new ArgumentException($"No ratings found for {teamName} in {teamYear}.");

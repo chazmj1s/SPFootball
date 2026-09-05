@@ -664,6 +664,14 @@
 
         </VerticalStackLayout>
 
+        <!-- ── CURRENT-YEAR PROJECTION DISCLAIMER ── -->
+        <Label Text="Current year comparisons may contain projected values in addition to actual data. This can impact results in interesting ways."
+               IsVisible="{Binding HasPrediction}"
+               FontSize="10" Opacity="0.7"
+               Padding="12,10,12,16"
+               LineBreakMode="WordWrap"
+               TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
+
       </VerticalStackLayout>
     </ScrollView>
 
@@ -673,7 +681,7 @@
     <Grid Grid.Row="1" HeightRequest="24"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}">
       <Label Text="{Binding StatusMessage}"
-             Padding="8,0" FontSize="10" Opacity="0.5"
+             Padding="8,0" FontSize="11" Opacity="0.8"
              VerticalOptions="Center" HorizontalOptions="Start"
              TextColor="{AppThemeBinding Light=#444444, Dark=#AAAAAA}" />
     </Grid>

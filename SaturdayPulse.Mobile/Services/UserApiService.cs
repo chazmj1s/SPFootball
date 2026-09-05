@@ -42,17 +42,6 @@ namespace SaturdayPulse.Services
     {
         private const string LocalUserIdKey = "LocalUserId";
 
-        // TEMPORARY: forces every launch onto the seeded dev profile
-        // (6c753c66-a2e2-43f2-91ac-efdee1cbec90 — Handle Chazmj1sTx) instead
-        // of whatever random GUID happens to be sitting in this device's
-        // Preferences. Unblocks testing against real data pre-Auth0. Delete
-        // this override (and the two lines that use it below) once Auth0
-        // login is wired on every target platform (Windows still pending —
-        // see handoff item 1) — that's the real fix for "how does it know
-        // who I am."
-        private static readonly Guid ForcedDevUserId =
-            Guid.Parse("6c753c66-a2e2-43f2-91ac-efdee1cbec90");
-
         private readonly HttpClient _httpClient;
         private readonly AuthService _authService;
         private readonly JsonSerializerOptions _jsonOptions = new()
@@ -79,13 +68,17 @@ namespace SaturdayPulse.Services
             {
                 if (_cachedUserId.HasValue) return _cachedUserId.Value;
 
-                // TEMPORARY override — see ForcedDevUserId above. Also
-                // writes it to Preferences so anything that reads the raw
-                // pref directly (there shouldn't be anything, but just in
-                // case) sees the same value.
-                Preferences.Default.Set(LocalUserIdKey, ForcedDevUserId.ToString());
-                _cachedUserId = ForcedDevUserId;
-                return ForcedDevUserId;
+                var stored = Preferences.Default.Get(LocalUserIdKey, string.Empty);
+                if (Guid.TryParse(stored, out var existing))
+                {
+                    _cachedUserId = existing;
+                    return existing;
+                }
+
+                var newId = Guid.NewGuid();
+                Preferences.Default.Set(LocalUserIdKey, newId.ToString());
+                _cachedUserId = newId;
+                return newId;
             }
         }
 
