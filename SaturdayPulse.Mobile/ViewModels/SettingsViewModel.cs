@@ -140,6 +140,35 @@ namespace SaturdayPulse.ViewModels
             _            => "My Teams"
         };
 
+        // ── User preference: App theme (Light/Dark/System) ────────────────
+        // Stored value drives Application.Current.UserAppTheme directly, so
+        // the switch applies live without restart. "System" maps to
+        // AppTheme.Unspecified, which tells MAUI to follow the OS theme.
+        // See App.xaml.cs note in chat for the one line needed at startup
+        // to re-apply this on launch (Preferences alone doesn't do that).
+        private const string AppThemeKey = "AppTheme";
+
+        public string AppTheme
+        {
+            get => Preferences.Default.Get(AppThemeKey, "System");
+            set
+            {
+                if (AppTheme == value) return;
+                Preferences.Default.Set(AppThemeKey, value);
+                OnPropertyChanged();
+
+                if (Application.Current != null)
+                {
+                    Application.Current.UserAppTheme = value switch
+                    {
+                        "Light" => Microsoft.Maui.ApplicationModel.AppTheme.Light,
+                        "Dark"  => Microsoft.Maui.ApplicationModel.AppTheme.Dark,
+                        _       => Microsoft.Maui.ApplicationModel.AppTheme.Unspecified
+                    };
+                }
+            }
+        }
+
         // ── User preference: Handle (label shown as "User Name" in XAML) ──
         // Sourced from UserProfile via UserApiService — no local Preferences
         // copy. Populated by LoadDataAsync alongside teams/rivalries.
@@ -410,6 +439,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleFollowCommand            { get; }
         public ICommand RefreshCommand                 { get; }
         public ICommand SelectDefaultWeekCommand       { get; }
+        public ICommand SelectAppThemeCommand          { get; }
         public ICommand SelectDefaultConferenceCommand { get; }
         public ICommand SelectDefaultTeamCommand         { get; }
         public ICommand SelectDefaultLandingPageCommand  { get; }
@@ -515,6 +545,11 @@ namespace SaturdayPulse.ViewModels
             SelectDefaultWeekCommand = new Microsoft.Maui.Controls.Command<string>(value =>
             {
                 DefaultWeek = value;
+            });
+
+            SelectAppThemeCommand = new Microsoft.Maui.Controls.Command<string>(value =>
+            {
+                AppTheme = value;
             });
 
             SelectDefaultConferenceCommand = new Microsoft.Maui.Controls.Command(async () =>

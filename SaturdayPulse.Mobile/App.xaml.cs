@@ -1,5 +1,6 @@
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Storage;
 using Auth0.OidcClient;
 
 
@@ -15,6 +16,18 @@ public partial class App : Application
 #endif
 
         InitializeComponent();
+
+        // Restore the theme SettingsViewModel.AppTheme persisted via
+        // Preferences — that setter only applies UserAppTheme live during
+        // the session it's changed in; nothing re-applies it on a cold
+        // launch until now. Key/default ("System") must stay identical to
+        // SettingsViewModel.AppThemeKey.
+        UserAppTheme = Preferences.Default.Get("AppTheme", "System") switch
+        {
+            "Light" => AppTheme.Light,
+            "Dark"  => AppTheme.Dark,
+            _       => AppTheme.Unspecified
+        };
     }
 
     protected override Window CreateWindow(IActivationState? activationState)

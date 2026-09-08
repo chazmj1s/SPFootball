@@ -50,13 +50,24 @@
       <!-- Game card -->
       <Grid ColumnDefinitions="32,28,*,52,96"
             RowDefinitions="Auto,Auto"
-            Padding="6,5,10,5"
-            BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
+            Padding="6,5,10,5">
 
         <!-- Cross-tab highlight (2026-09-05) — My Teams' opponent-name
              navigation target. Overrides the odd-row background while
-             active; reverts automatically once IsHighlighted goes false. -->
+             active; reverts automatically once IsHighlighted goes false.
+             IsHighlighted MUST stay declared last in this block — with
+             multiple simultaneously-true DataTriggers on the same
+             property, MAUI applies them in declaration order, so the
+             last one wins. Un-converted from OddRowBackgroundConverter
+             2026-09 (see chat) — same AppThemeBinding pattern, no color
+             values changed. -->
         <Grid.Triggers>
+          <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF8F0, Dark=#2A2A2A}" />
+          </DataTrigger>
+          <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="False">
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#1A1A1A}" />
+          </DataTrigger>
           <DataTrigger TargetType="Grid" Binding="{Binding IsHighlighted}" Value="True">
             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF3CD, Dark=#4A3B00}" />
           </DataTrigger>
@@ -182,8 +193,15 @@
       </Grid>
 
       <!-- ── Toggle bar ── -->
-      <Grid ColumnDefinitions="Auto,*" Padding="6,2,6,2"
-            BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
+      <Grid ColumnDefinitions="Auto,*" Padding="6,2,6,2">
+        <Grid.Triggers>
+          <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF8F0, Dark=#2A2A2A}" />
+          </DataTrigger>
+          <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="False">
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#1A1A1A}" />
+          </DataTrigger>
+        </Grid.Triggers>
 
         <!-- Rivalry Notes link — left of Details. Hidden entirely (not just
              the inner content) unless the pair is one of the 52 curated

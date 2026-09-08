@@ -271,7 +271,8 @@ namespace SaturdayPulse.ViewModels
             if (_navState.ShowFavoritesFirst)
             {
                 sorted = filtered
-                    .OrderByDescending(g => g.IsGameFavorited)
+                    .OrderByDescending(g => g.IsInProgress)
+                    .ThenByDescending(g => g.IsGameFavorited)
                     .ThenByDescending(g => g.HomeIsFollowed || g.VisitorIsFollowed)
                     .ThenBy(g => g.IsFinal)
                     .ThenBy(g => g.SequenceNumber)
@@ -280,16 +281,28 @@ namespace SaturdayPulse.ViewModels
             else
             {
                 sorted = filtered
-                    .OrderBy(g => g.IsFinal)
+                    .OrderByDescending(g => g.IsInProgress)
+                    .ThenBy(g => g.IsFinal)
                     .ThenBy(g => g.SequenceNumber)
                     .ToList();
             }
 
+            // IsOddRow assigned here — same loop, same "final display order"
+            // guarantee as ShowGroupHeader above — rather than derived from
+            // SequenceNumber (fixed at load, unrelated to rendered position).
+            // rowIndex counts only real game rows, not day-group headers, so
+            // shading alternates strictly row-to-row regardless of how many
+            // headers fall between them (headers aren't part of this visual
+            // rhythm at all — matches PowerRankingsViewModel's flat `i % 2`,
+            // just adapted for Schedule's grouped/filtered list).
             string? lastHeader = null;
+            var rowIndex = 0;
             foreach (var g in sorted)
             {
                 g.ShowGroupHeader = g.GroupHeader != lastHeader;
                 lastHeader = g.GroupHeader;
+                g.IsOddRow = rowIndex % 2 == 1;
+                rowIndex++;
             }
 
             // ReplaceRange fires single Reset notification — much faster than
