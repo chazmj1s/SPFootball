@@ -74,16 +74,15 @@ namespace SaturdayPulse.Services
             // service layer; a season is small enough (a few hundred rows)
             // that filtering in-memory here beats adding a new by-date
             // repository method just for this.
-            var seasonGames = await uow.Games.GetByYearAsync(yearNow, token);
-            var todaysGames = seasonGames.Where(g => g.GameDate == today).ToList();
+            var seasonGames = await uow.Games.GetGamesForCurrentWeekAsync(yearNow, token);
 
-            if (todaysGames.Count == 0)
+            if (seasonGames.Count == 0)
             {
                 logger.LogDebug("GameScorePollingService: no games today ({Today}) — skipping.", today);
                 return;
             }
 
-            var kickoffTimes = todaysGames
+            var kickoffTimes = seasonGames              
                 .Select(g => TryParseKickoffTime(g.KickoffTime, out var kt) ? kt : (DateTime?)null)
                 .Where(kt => kt.HasValue)
                 .Select(kt => kt!.Value)
@@ -96,7 +95,7 @@ namespace SaturdayPulse.Services
                 // window without it — skip rather than guess.
                 logger.LogWarning(
                     "GameScorePollingService: {Count} game(s) today ({Today}) but none have KickoffTime set — skipping until re-loaded.",
-                    todaysGames.Count, today);
+                    seasonGames.Count, today);
                 return;
             }
 
@@ -112,7 +111,7 @@ namespace SaturdayPulse.Services
                 return;
             }
 
-            var todaysGameIds = todaysGames.Select(g => g.GameId).ToHashSet();
+            var todaysGameIds = seasonGames.Select(g => g.GameId).ToHashSet();
             var updatedCount = 0;
 
             // /scoreboard returns every game currently in CFBD's window in one
@@ -144,7 +143,7 @@ namespace SaturdayPulse.Services
                 // wrote HomeScore/AwayScore unconditionally.
                 if (dto.HomeTeam?.Points == null || dto.AwayTeam?.Points == null) continue;
 
-                var game = todaysGames.First(g => g.GameId == dto.Id);
+                var game = seasonGames.First(g => g.GameId == dto.Id);
                 game.HomePoints = dto.HomeTeam.Points;
                 game.AwayPoints = dto.AwayTeam.Points;
 
@@ -168,7 +167,7 @@ namespace SaturdayPulse.Services
                 await uow.SaveChangesAsync(token);
                 logger.LogInformation(
                     "GameScorePollingService: refreshed {Count} of {Total} game(s) for {Today}.",
-                    updatedCount, todaysGames.Count, today);
+                    updatedCount, seasonGames.Count, today);
             }
         }
 
