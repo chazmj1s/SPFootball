@@ -23,8 +23,15 @@
         <!-- Game card body -->
         <Grid ColumnDefinitions="32,28,*,52,96"
               RowDefinitions="Auto,Auto"
-              Padding="6,5,10,5"
-              BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
+              Padding="6,5,10,5">
+          <Grid.Triggers>
+            <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
+              <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF8F0, Dark=#2A2A2A}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="False">
+              <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#1A1A1A}" />
+            </DataTrigger>
+          </Grid.Triggers>
 
           <!-- Wk label + star game follow -->
           <VerticalStackLayout Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
@@ -99,8 +106,15 @@
         </Grid>
 
         <!-- Details toggle bar -->
-        <Grid ColumnDefinitions="*" Padding="6,2,6,2"
-              BackgroundColor="{Binding IsOddRow, Converter={StaticResource OddRowBackgroundConverter}}">
+        <Grid ColumnDefinitions="*" Padding="6,2,6,2">
+          <Grid.Triggers>
+            <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
+              <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF8F0, Dark=#2A2A2A}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="False">
+              <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#1A1A1A}" />
+            </DataTrigger>
+          </Grid.Triggers>
           <Border HorizontalOptions="Center" IsVisible="{Binding ShowDetails}" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
               <TapGestureRecognizer

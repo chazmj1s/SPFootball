@@ -17,9 +17,22 @@ namespace SaturdayPulse.Models
         public string? GameTime { get; set; }
         public string  SeasonType   { get; set; } = "regular";
 
-        /// <summary>Sequential position assigned by the ViewModel after load — used for "original order" sort.</summary>
+        /// <summary>Sequential position assigned by the ViewModel after load — used for "original order" sort tiebreaker only, NOT display order.</summary>
         public int  SequenceNumber { get; set; }
-        public bool IsOddRow => SequenceNumber % 2 == 1;
+
+        // Was `=> SequenceNumber % 2 == 1` — SequenceNumber is fixed at load
+        // time and only ever used as a sort tiebreaker (see ScheduleViewModel
+        // BuildFilteredList's ThenBy), so it has no relationship to a game's
+        // actual rendered row position once IsFinal/favorited/followed
+        // ordering and day-grouping are applied. Now assigned explicitly by
+        // ScheduleViewModel after final sort, same as TeamRanking.IsOddRow
+        // in PowerRankingsViewModel — see 2026-09 chat.
+        private bool _isOddRow;
+        public bool IsOddRow
+        {
+            get => _isOddRow;
+            set { _isOddRow = value; OnPropertyChanged(); }
+        }
 
         // ── Home / Away identity ──────────────────────────────────────────
 
@@ -103,6 +116,7 @@ namespace SaturdayPulse.Models
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplayGameStatus));
                 OnPropertyChanged(nameof(IsFinal));
+                OnPropertyChanged(nameof(IsInProgress));
             }
         }
 
@@ -366,6 +380,19 @@ namespace SaturdayPulse.Models
             !string.IsNullOrEmpty(Status)
                 ? Status.Equals("completed", StringComparison.OrdinalIgnoreCase)
                 : IsPlayed;
+
+        /// <summary>
+        /// True only while a game is actively being played right now — used
+        /// to pin live games to the very top of Schedule regardless of
+        /// favorited/followed status (see ScheduleViewModel.BuildFilteredList).
+        /// Requires Status to be populated and to be neither "scheduled" nor
+        /// "completed"; games from before the live-status pipeline (Status
+        /// null) or not yet kicked off are never "in progress" here.
+        /// </summary>
+        public bool IsInProgress =>
+            !string.IsNullOrEmpty(Status)
+            && !Status.Equals("completed", StringComparison.OrdinalIgnoreCase)
+            && !Status.Equals("scheduled", StringComparison.OrdinalIgnoreCase);
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null)

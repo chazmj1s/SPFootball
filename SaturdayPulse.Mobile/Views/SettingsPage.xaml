@@ -378,6 +378,174 @@
                             </Grid>
                         </Grid>
 
+                        <!-- App theme -->
+                        <Grid ColumnDefinitions="90,*" ColumnSpacing="8">
+                            <Label Grid.Column="0" Text="Theme" FontSize="13" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
+
+                                <!-- Light -->
+                                <Ellipse Grid.Column="0" WidthRequest="14" HeightRequest="14" VerticalOptions="Center">
+                                    <Ellipse.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectAppThemeCommand}"
+                                                              CommandParameter="Light" />
+                                    </Ellipse.GestureRecognizers>
+                                    <Ellipse.Triggers>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="Light">
+                                            <Setter Property="Fill"
+                                                    Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                                            <Setter Property="StrokeThickness" Value="0" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="Dark">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="System">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Label Grid.Column="1" Text="Light" FontSize="13" VerticalOptions="Center">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectAppThemeCommand}"
+                                                              CommandParameter="Light" />
+                                    </Label.GestureRecognizers>
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="Light">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="Dark">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="System">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+
+                                <!-- Dark -->
+                                <Ellipse Grid.Column="2" WidthRequest="14" HeightRequest="14" VerticalOptions="Center">
+                                    <Ellipse.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectAppThemeCommand}"
+                                                              CommandParameter="Dark" />
+                                    </Ellipse.GestureRecognizers>
+                                    <Ellipse.Triggers>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="Dark">
+                                            <Setter Property="Fill"
+                                                    Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                                            <Setter Property="StrokeThickness" Value="0" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="Light">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="System">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Label Grid.Column="3" Text="Dark" FontSize="13" VerticalOptions="Center">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectAppThemeCommand}"
+                                                              CommandParameter="Dark" />
+                                    </Label.GestureRecognizers>
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="Dark">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="Light">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="System">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+
+                                <!-- System -->
+                                <Ellipse Grid.Column="4" WidthRequest="14" HeightRequest="14" VerticalOptions="Center">
+                                    <Ellipse.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectAppThemeCommand}"
+                                                              CommandParameter="System" />
+                                    </Ellipse.GestureRecognizers>
+                                    <Ellipse.Triggers>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="System">
+                                            <Setter Property="Fill"
+                                                    Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                                            <Setter Property="StrokeThickness" Value="0" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="Light">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Ellipse"
+                                                     Binding="{Binding AppTheme}" Value="Dark">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Setter Property="Stroke"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Label Grid.Column="5" Text="System" FontSize="13" VerticalOptions="Center">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding SelectAppThemeCommand}"
+                                                              CommandParameter="System" />
+                                    </Label.GestureRecognizers>
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="System">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="Light">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding AppTheme}" Value="Dark">
+                                            <Setter Property="TextColor"
+                                                    Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+
+                            </Grid>
+                        </Grid>
+
                     </VerticalStackLayout>
 
                     <!-- Divider -->
@@ -1052,7 +1220,7 @@
                                            FontSize="11" Opacity="0.5"
                                            HorizontalOptions="Center"
                                            Padding="0,20"
-                                           TextColor="#888888" />
+                                           TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
                                 </CollectionView.EmptyView>
                             </CollectionView>
                         </ScrollView>
