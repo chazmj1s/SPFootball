@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Data;
+using SaturdayPulse.Extensions;
 using SaturdayPulse.Models;
 using SaturdayPulse.Repositories.Interfaces;
+using System.Globalization;
 
 namespace SaturdayPulse.Repositories.Implementations
 {
@@ -40,6 +42,45 @@ namespace SaturdayPulse.Repositories.Implementations
             => _context.Games.Where(g => g.Year == year).OrderBy(g => g.Week).ToListAsync(token);
         public Task<List<Games>> GetByYearAndWeekAsync(int year, int week, CancellationToken token = default)
             => _context.Games.Where(g => g.Year == year && g.Week == week).ToListAsync(token);
+
+        public async Task<List<Games>> GetGamesForCurrentWeekAsync(int year, CancellationToken token = default)
+        {
+            var weekMins = await _context.Games
+                    .Where(g => g.Year == year && g.GameDate != null)
+                    .GroupBy(g => g.Week)
+                    .Select(gr => new { Week = gr.Key, MinDate = gr.Min(g => g.GameDate) })
+                    .OrderBy(w => w.Week)
+                    .ToListAsync(token);
+
+            if (weekMins.Count == 0) return new List<Games>();
+
+            var todayStr = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            int? activeWeek = null;
+            for (int i = 0; i < weekMins.Count; i++)
+            {
+                var currentMin = weekMins[i].MinDate;
+                if (currentMin == null) continue;
+
+                var nextMin = i + 1 < weekMins.Count ? weekMins[i + 1].MinDate : null;
+
+                if (nextMin == null) continue;
+
+                if (string.Compare(todayStr, currentMin, StringComparison.Ordinal) >= 0 &&
+                    string.Compare(todayStr, nextMin, StringComparison.Ordinal) < 0)
+                {
+                    activeWeek = weekMins[i].Week;
+                    break;
+                }
+            }
+
+            if (activeWeek == null) return new List<Games>();
+
+            return await _context.Games
+                .Where(g => g.Year == year && (int)g.Week == activeWeek.Value)
+                .ToListAsync(token);
+        }
+
 
         public Task<Games?> GetByGameIdAsync(int gameId, CancellationToken token = default)
             => _context.Games.FirstOrDefaultAsync(g => g.GameId == gameId, token);
