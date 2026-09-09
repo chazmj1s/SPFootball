@@ -9,7 +9,7 @@ public static class ApiConfiguration
 #else
     const string LocalApiUrl = "https://localhost:7010/api/productiongamedata/";
 #endif
-    const string ProductionApiUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/productionGameData/";
+    const string ProductionApiUrl = "https://api.j1stx.com/productionGameData/";
     public static string BaseUrl =>
 #if DEBUG
          LocalApiUrl;
@@ -25,7 +25,7 @@ public static class ApiConfiguration
 #else
     const string LocalApiRootUrl = "https://localhost:7010/api/";
 #endif
-    const string ProductionApiRootUrl = "https://ncaa-power-ratings-api-ftdyg2bxhpfxc9an.westus2-01.azurewebsites.net/api/";
+    const string ProductionApiRootUrl = "https://api.j1stx.com";
     public static string ApiRootUrl =>
 #if DEBUG
          LocalApiRootUrl;
