@@ -12,10 +12,10 @@ jobs:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Stop Existing Containers
+      - name: Sync Files to Production Directory
         run: |
-          cd ~/football-stack
-          docker compose down --remove-orphans || true
+          mkdir -p ~/football-stack/src
+          rsync -av --delete ./ ~/football-stack/src/
 
       - name: Build and Launch Updated Stack
         run: |
