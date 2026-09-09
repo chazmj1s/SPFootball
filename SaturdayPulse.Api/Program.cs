@@ -128,6 +128,13 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<NCAAContext>();
     db.Database.Migrate();
+
+    // Force WAL Mode and performance tuning commands straight to the engine
+    using var connection = db.Database.GetDbConnection();
+    connection.Open();
+    using var command = connection.CreateCommand();
+    command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;";
+    command.ExecuteNonQuery();
 }
 
 app.UseSwagger();
