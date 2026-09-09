@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using SaturdayPulse;
@@ -17,7 +18,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── Database ──────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<NCAAContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
+           .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.CommandExecuted))
+);
 
 // ── CFBD HTTP Client ──────────────────────────────────────────────────────────
 builder.Services.Configure<CfbdApiSettings>(
