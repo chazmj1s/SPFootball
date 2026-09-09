@@ -108,13 +108,27 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "SaturdayPulse API", Version = "v1" });
     c.OperationFilter<XUserIdHeaderFilter>();
+    c.OperationFilter<AdminKeyHeaderFilter>();
 
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste a raw Auth0 access token (no 'Bearer ' prefix needed)."
+    });
+
+    c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+    });
 });
 
 builder.Services.AddLogging(loggingBuilder =>
 {
     loggingBuilder.AddConsole()
-        .AddFilter(DbLoggerCategory.Database.Command.Name, LogLevel.Information);
+        .AddFilter(DbLoggerCategory.Database.Command.Name, LogLevel.Warning);
     loggingBuilder.AddDebug();
 });
 
