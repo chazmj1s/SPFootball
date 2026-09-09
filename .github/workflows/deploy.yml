@@ -1,0 +1,23 @@
+name: Production CI/CD Deployment Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Stop Existing Containers
+        run: |
+          cd ~/football-stack
+          docker compose down --remove-orphans || true
+
+      - name: Build and Launch Updated Stack
+        run: |
+          cd ~/football-stack
+          docker compose up --build -d
