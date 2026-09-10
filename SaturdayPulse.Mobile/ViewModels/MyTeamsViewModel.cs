@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Threading;
 using System.Windows.Input;
 using Microsoft.Maui.Controls;
 using SaturdayPulse.Helpers;
@@ -49,6 +50,8 @@ namespace SaturdayPulse.ViewModels
         private int             _selectedTeamId;
         private TeamRanking?    _selectedTeamRanking;
         private bool            _isBusy;
+        private bool            _isActive;
+        private CancellationTokenSource? _autoRefreshCts;
         private string          _statusMessage = "Loading...";
         private string          _emptyMessage  = "Follow a team, or set a default team in Settings, to get started.";
 
@@ -318,9 +321,21 @@ namespace SaturdayPulse.ViewModels
 
         /// <summary>
         /// True only while My Teams is the visible tab. Set by MainPage on tab
-        /// switch — same role as PowerRankingsViewModel.IsActive.
+        /// switch — same role as PowerRankingsViewModel.IsActive. Also starts/
+        /// stops the client-side timed refresh (see StartAutoRefresh/
+        /// StopAutoRefresh below), same pattern added to ScheduleViewModel.
         /// </summary>
-        public bool IsActive { get; set; }
+        public bool IsActive
+        {
+            get => _isActive;
+            set
+            {
+                if (_isActive == value) return;
+                _isActive = value;
+                if (_isActive) StartAutoRefresh();
+                else StopAutoRefresh();
+            }
+        }
 
         /// <summary>
         /// Set true once InitializeAsync/LoadForYearOrWeekChangeAsync has
@@ -423,6 +438,50 @@ namespace SaturdayPulse.ViewModels
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        // ── Client-side timed refresh (My Teams tab only) ───────────────────
+        // Re-pulls the current year's rankings + games from OUR OWN API every
+        // AutoRefreshInterval while My Teams is the visible tab — same
+        // pattern/rationale as ScheduleViewModel's version (never calls CFBD
+        // directly; GameScorePollingService owns that server-side). Started/
+        // stopped by the IsActive setter above.
+
+        private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(60);
+
+        private void StartAutoRefresh()
+        {
+            StopAutoRefresh(); // defensive — never run two loops at once
+            _autoRefreshCts = new CancellationTokenSource();
+            _ = AutoRefreshLoopAsync(_autoRefreshCts.Token);
+        }
+
+        private void StopAutoRefresh()
+        {
+            _autoRefreshCts?.Cancel();
+            _autoRefreshCts?.Dispose();
+            _autoRefreshCts = null;
+        }
+
+        private async Task AutoRefreshLoopAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    await Task.Delay(AutoRefreshInterval, token);
+                    if (token.IsCancellationRequested) break;
+
+                    // LoadForYearOrWeekChangeAsync's own IsBusy/SelectedTeamId
+                    // guards prevent overlap with a manual refresh or firing
+                    // before a team's actually selected.
+                    await LoadForYearOrWeekChangeAsync(forceReload: true);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected — StopAutoRefresh cancels this on tab switch away.
             }
         }
 

@@ -431,6 +431,129 @@ namespace SaturdayPulse.ViewModels
 
         public int LogEntryCount => AppLogger.Entries.Count;
 
+        // ── Health tiles (uptime / polling / CFBD / DB) ─────────────────────
+        // Populated by RefreshLogCommand alongside the log entries — see
+        // ApplyHealth below. StatusLevel values are "ok" | "bad" | "unknown",
+        // bound via DataTrigger in SettingsPage.xaml the same way
+        // IsDebugLogExpanded drives the expand/collapse arrow.
+
+        private string _uptimeDisplay = "—";
+        public string UptimeDisplay
+        {
+            get => _uptimeDisplay;
+            private set { _uptimeDisplay = value; OnPropertyChanged(); }
+        }
+
+        private string _pollingStatusDisplay = "Not checked";
+        public string PollingStatusDisplay
+        {
+            get => _pollingStatusDisplay;
+            private set { _pollingStatusDisplay = value; OnPropertyChanged(); }
+        }
+
+        private string _pollingStatusLevel = "unknown";
+        public string PollingStatusLevel
+        {
+            get => _pollingStatusLevel;
+            private set { _pollingStatusLevel = value; OnPropertyChanged(); }
+        }
+
+        private string _cfbdStatusDisplay = "Not checked";
+        public string CfbdStatusDisplay
+        {
+            get => _cfbdStatusDisplay;
+            private set { _cfbdStatusDisplay = value; OnPropertyChanged(); }
+        }
+
+        private string _cfbdStatusLevel = "unknown";
+        public string CfbdStatusLevel
+        {
+            get => _cfbdStatusLevel;
+            private set { _cfbdStatusLevel = value; OnPropertyChanged(); }
+        }
+
+        private string _dbStatusDisplay = "Not checked";
+        public string DbStatusDisplay
+        {
+            get => _dbStatusDisplay;
+            private set { _dbStatusDisplay = value; OnPropertyChanged(); }
+        }
+
+        private string _dbStatusLevel = "unknown";
+        public string DbStatusLevel
+        {
+            get => _dbStatusLevel;
+            private set { _dbStatusLevel = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// Translates a HealthStatusDto (or null, on a failed fetch) into
+        /// the display/level pairs the tiles bind to. A null health leaves
+        /// every tile on its existing values — same "don't blank on
+        /// failure" behavior as RefreshLogCommand's log-merge path.
+        /// </summary>
+        private void ApplyHealth(HealthStatusDto? health)
+        {
+            if (health == null) return;
+
+            var uptime = TimeSpan.FromSeconds(health.UptimeSeconds);
+            UptimeDisplay = uptime.TotalDays >= 1
+                ? $"{(int)uptime.TotalDays}d {uptime.Hours}h"
+                : uptime.TotalHours >= 1
+                    ? $"{(int)uptime.TotalHours}h {uptime.Minutes}m"
+                    : $"{uptime.Minutes}m {uptime.Seconds}s";
+
+            if (health.PollingLastErrorUtc.HasValue)
+            {
+                PollingStatusDisplay = $"Error {Ago(health.PollingLastErrorUtc.Value)}";
+                PollingStatusLevel = "bad";
+            }
+            else if (!health.PollingLastTickUtc.HasValue)
+            {
+                PollingStatusDisplay = "Not started";
+                PollingStatusLevel = "unknown";
+            }
+            else if (health.PollingLastSkipReason != null)
+            {
+                PollingStatusDisplay = $"{health.PollingLastSkipReason} ({Ago(health.PollingLastTickUtc.Value)})";
+                PollingStatusLevel = "unknown";
+            }
+            else
+            {
+                PollingStatusDisplay = $"Active ({Ago(health.PollingLastTickUtc.Value)})";
+                PollingStatusLevel = "ok";
+            }
+
+            if (!health.CfbdLastCallUtc.HasValue)
+            {
+                CfbdStatusDisplay = "No poll yet today";
+                CfbdStatusLevel = "unknown";
+            }
+            else if (health.CfbdLastCallSucceeded == true)
+            {
+                CfbdStatusDisplay = $"OK ({Ago(health.CfbdLastCallUtc.Value)})";
+                CfbdStatusLevel = "ok";
+            }
+            else
+            {
+                CfbdStatusDisplay = $"Failed ({Ago(health.CfbdLastCallUtc.Value)})";
+                CfbdStatusLevel = "bad";
+            }
+
+            DbStatusDisplay = health.DbConnected ? "Connected" : "Unreachable";
+            DbStatusLevel = health.DbConnected ? "ok" : "bad";
+        }
+
+        /// <summary>Short "Xm ago" / "Xh ago" string against server-clock UTC time.</summary>
+        private static string Ago(DateTime utcTimestamp)
+        {
+            var elapsed = DateTime.UtcNow - utcTimestamp;
+            if (elapsed.TotalMinutes < 1) return "just now";
+            if (elapsed.TotalHours < 1) return $"{(int)elapsed.TotalMinutes}m ago";
+            if (elapsed.TotalDays < 1) return $"{(int)elapsed.TotalHours}h ago";
+            return $"{(int)elapsed.TotalDays}d ago";
+        }
+
         // ── Commands ──────────────────────────────────────────────────────
         public ICommand LoadDataCommand                { get; }
         public ICommand SelectViewCommand              { get; }
@@ -836,10 +959,16 @@ namespace SaturdayPulse.ViewModels
             // etc. — see ServerLogService/InMemoryLoggerProvider on the Api
             // side) and merges them alongside on-device entries. A failed
             // fetch (network error, non-admin, etc.) leaves existing entries
-            // untouched rather than clearing anything.
+            // untouched rather than clearing anything. Also refreshes the
+            // health tiles in parallel — same admin gate, same "leave stale
+            // values on failure" behavior.
             RefreshLogCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
-                var remote = await _userApi.GetServerLogsAsync();
+                var logsTask = _userApi.GetServerLogsAsync();
+                var healthTask = _userApi.GetServerHealthAsync();
+                await Task.WhenAll(logsTask, healthTask);
+
+                var remote = logsTask.Result;
                 if (remote != null)
                 {
                     AppLogger.MergeRemote(remote);
@@ -849,6 +978,8 @@ namespace SaturdayPulse.ViewModels
                 {
                     StatusMessage = "Couldn't refresh server logs.";
                 }
+
+                ApplyHealth(healthTask.Result);
             });
 
             // Keep LogEntryCount in sync as entries are added/removed

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SaturdayPulse.Data;
 using SaturdayPulse.Filters;
 using SaturdayPulse.Services;
 
@@ -19,7 +20,10 @@ namespace SaturdayPulse.Controllers
     [Route("api/[controller]")]
     [Authorize]
     [AdminOnly]
-    public class LogsController(ServerLogService serverLogService) : ControllerBase
+    public class LogsController(
+        ServerLogService serverLogService,
+        PollingStatusService pollingStatus,
+        NCAAContext db) : ControllerBase
     {
         /// <summary>
         /// GET /api/logs?take=200 — most recent server log entries, newest
@@ -30,6 +34,32 @@ namespace SaturdayPulse.Controllers
         {
             var entries = serverLogService.GetRecent(take);
             return Ok(entries);
+        }
+
+        /// <summary>
+        /// GET /api/logs/health — mini admin health snapshot for the Debug
+        /// Log tiles: uptime, GameScorePollingService's live status, and a
+        /// real-time DB connectivity check. CFBD connectivity is reported as
+        /// PollingStatusService's last-known call outcome rather than a
+        /// fresh probe — see that class's remarks for why.
+        /// </summary>
+        [HttpGet("health")]
+        public async Task<IActionResult> GetHealth(CancellationToken token)
+        {
+            var dbConnected = await db.Database.CanConnectAsync(token);
+
+            return Ok(new
+            {
+                UptimeSeconds = (long)(DateTime.UtcNow - pollingStatus.StartedAtUtc).TotalSeconds,
+                ServerTimeUtc = DateTime.UtcNow,
+                PollingLastTickUtc = pollingStatus.LastTickUtc,
+                PollingLastSkipReason = pollingStatus.LastSkipReason,
+                PollingLastErrorUtc = pollingStatus.LastErrorUtc,
+                CfbdLastCallUtc = pollingStatus.LastCfbdCallUtc,
+                CfbdLastCallSucceeded = pollingStatus.LastCfbdCallSucceeded,
+                DbConnected = dbConnected,
+                DbCheckedUtc = DateTime.UtcNow
+            });
         }
     }
 }

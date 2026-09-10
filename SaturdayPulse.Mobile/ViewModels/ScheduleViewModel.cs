@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Threading;
 using System.Windows.Input;
 using SaturdayPulse.Helpers;
 using SaturdayPulse.Models;
@@ -17,6 +18,8 @@ namespace SaturdayPulse.ViewModels
 
         private ObservableRangeCollection<GameResult> _games = new();
         private bool   _isBusy;
+        private bool   _isActive;
+        private CancellationTokenSource? _autoRefreshCts;
         private string _activeFilter   = "All";
         private string _selectedFilter = "All";
         private string _statusMessage  = "Loading...";
@@ -164,6 +167,25 @@ namespace SaturdayPulse.ViewModels
         public bool   IsLoading => _isBusy;
         public bool   HasLoaded { get; set; }
 
+        /// <summary>
+        /// True only while Games is the visible tab. Set by MainPage on tab
+        /// switch — same pattern as MyTeamsViewModel/PowerRankingsViewModel/
+        /// PostseasonViewModel's IsActive. Also starts/stops the client-side
+        /// timed refresh (see StartAutoRefresh/StopAutoRefresh below) so it
+        /// only runs while someone's actually looking at this tab.
+        /// </summary>
+        public bool IsActive
+        {
+            get => _isActive;
+            set
+            {
+                if (_isActive == value) return;
+                _isActive = value;
+                if (_isActive) StartAutoRefresh();
+                else StopAutoRefresh();
+            }
+        }
+
         // ── Season Pass gating (2026-07-25) ─────────────────────────────
         // Sourced from the shared EntitlementService. Schedule has no
         // ranking toggle bar (that's MyTeams/Rankings' concern) — this
@@ -231,6 +253,50 @@ namespace SaturdayPulse.ViewModels
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        // ── Client-side timed refresh (Games tab only) ──────────────────────
+        // Re-pulls this year's games from OUR OWN API every AutoRefreshInterval
+        // while Games is the visible tab — never calls CFBD directly, that's
+        // GameScorePollingService's job server-side. This just picks up
+        // whatever it already wrote (scores, Status/Period/Clock) via the
+        // same forceReload path RefreshCommand already uses manually. Started/
+        // stopped by the IsActive setter above.
+
+        private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(150);
+
+        private void StartAutoRefresh()
+        {
+            StopAutoRefresh(); // defensive — never run two loops at once
+            _autoRefreshCts = new CancellationTokenSource();
+            _ = AutoRefreshLoopAsync(_autoRefreshCts.Token);
+        }
+
+        private void StopAutoRefresh()
+        {
+            _autoRefreshCts?.Cancel();
+            _autoRefreshCts?.Dispose();
+            _autoRefreshCts = null;
+        }
+
+        private async Task AutoRefreshLoopAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    await Task.Delay(AutoRefreshInterval, token);
+                    if (token.IsCancellationRequested) break;
+
+                    // LoadDataAsync's own IsBusy guard prevents overlap with a
+                    // manual pull-to-refresh or an in-flight tick.
+                    await LoadDataAsync(forceReload: true);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected — StopAutoRefresh cancels this on tab switch away.
             }
         }
 
