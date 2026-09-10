@@ -95,6 +95,12 @@ builder.Services.AddSingleton<ServerLogService>();
 builder.Services.AddSingleton<ILoggerProvider>(sp =>
     new InMemoryLoggerProvider(sp.GetRequiredService<ServerLogService>()));
 
+// ── Health tiles support (Debug Log, uptime/polling/CFBD/DB status) ────────────
+// See PollingStatusService remarks — written by GameScorePollingService,
+// read by LogsController.GetHealth. Eagerly resolved below (after the app
+// is built) so StartedAtUtc reflects true process start.
+builder.Services.AddSingleton<PollingStatusService>();
+
 // ── Background services ────────────────────────────────────────────────────────
 // Polls CFBD for score updates every 5 min, only during today's kickoff-to-
 // margin window. See GameScorePollingService remarks for details.
@@ -139,6 +145,10 @@ builder.Services.AddCors();
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+// Eagerly resolve so PollingStatusService.StartedAtUtc reflects true process
+// start, not the timestamp of the first health-check request to touch it.
+app.Services.GetRequiredService<PollingStatusService>();
 
 // Apply any pending migrations on startup
 using (var scope = app.Services.CreateScope())

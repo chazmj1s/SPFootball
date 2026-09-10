@@ -528,6 +528,37 @@ namespace SaturdayPulse.Services
             }
         }
 
+        /// <summary>
+        /// GET /logs/health — server health snapshot (uptime, polling
+        /// status, CFBD/DB connectivity) backing the Debug Log section's
+        /// health tiles. Same [Authorize]+[AdminOnly] gate as
+        /// GetServerLogsAsync above. Returns null on any failure so callers
+        /// can leave existing tile values untouched rather than blanking
+        /// them on a failed refresh.
+        /// </summary>
+        public async Task<HealthStatusDto?> GetServerHealthAsync()
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, "logs/health");
+                await AttachAuthAsync(request);
+
+                using var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UserAPI] GetServerHealth failed: {response.StatusCode}");
+                    return null;
+                }
+
+                return await response.Content.ReadFromJsonAsync<HealthStatusDto>(_jsonOptions);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UserAPI] Error GetServerHealth: {ex.Message}");
+                return null;
+            }
+        }
+
         // ── Auth plumbing ──────────────────────────────────────────────
 
         /// <summary>

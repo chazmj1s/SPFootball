@@ -500,6 +500,8 @@ namespace SaturdayPulse.Views
                 // work instead of loading/rendering behind another tab.
                 if (_myTeamsPage.BindingContext is MyTeamsViewModel mActive)
                     mActive.IsActive = index == 0;
+                if (_schedulePage.BindingContext is ScheduleViewModel sActive)
+                    sActive.IsActive = index == 1;
                 if (_rankingsPage.BindingContext is PowerRankingsViewModel rActive)
                     rActive.IsActive = index == 2;
                 if (_postseasonPage.BindingContext is PostseasonViewModel pActive)

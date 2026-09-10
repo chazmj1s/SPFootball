@@ -27,7 +27,8 @@ namespace SaturdayPulse.Services
     public class GameScorePollingService(
         IServiceScopeFactory scopeFactory,
         IHttpClientFactory httpClientFactory,
-        ILogger<GameScorePollingService> logger) : BackgroundService
+        ILogger<GameScorePollingService> logger,
+        PollingStatusService status) : BackgroundService
     {
         private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan PostKickoffMargin = TimeSpan.FromHours(5);
@@ -46,6 +47,8 @@ namespace SaturdayPulse.Services
 
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
+                status.RecordTick();
+
                 try
                 {
                     await PollIfInWindowAsync(stoppingToken);
@@ -55,6 +58,7 @@ namespace SaturdayPulse.Services
                     // A bad tick should never take the whole background loop down —
                     // log and wait for the next PeriodicTimer tick.
                     logger.LogError(ex, "GameScorePollingService: unhandled error during poll tick");
+                    status.RecordError(ex);
                 }
             }
         }
@@ -79,6 +83,7 @@ namespace SaturdayPulse.Services
             if (seasonGames.Count == 0)
             {
                 logger.LogDebug("GameScorePollingService: no games today ({Today}) — skipping.", today);
+                status.RecordSkip("No games today");
                 return;
             }
 
@@ -96,6 +101,7 @@ namespace SaturdayPulse.Services
                 logger.LogWarning(
                     "GameScorePollingService: {Count} game(s) today ({Today}) but none have KickoffTime set — skipping until re-loaded.",
                     seasonGames.Count, today);
+                status.RecordSkip("Games today but no KickoffTime set");
                 return;
             }
 
@@ -108,6 +114,7 @@ namespace SaturdayPulse.Services
                 logger.LogDebug(
                     "GameScorePollingService: outside today's window ({Start}–{End}), now={Now} — skipping.",
                     windowStart, windowEnd, now);
+                status.RecordSkip("Outside today's kickoff window");
                 return;
             }
 
@@ -121,6 +128,7 @@ namespace SaturdayPulse.Services
             // classification=fbs matches this app's scope (no FCS/other
             // divisions tracked elsewhere).
             var response = await CfbdClient.GetAsync("/scoreboard?classification=fbs", token);
+            status.RecordCfbdCall(response.IsSuccessStatusCode);
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(

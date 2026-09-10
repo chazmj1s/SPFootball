@@ -387,15 +387,16 @@ namespace SaturdayPulse.Services
         // ════════════════════════════════════════════════════════════════════════
 
         internal static object? BuildRivalryNotes(
-     MatchupHistory? rivalry,
-     bool isPlayed,
-     double? actualMargin,
-     double? actualTotal,
-     double? projectedMargin,
-     double? projectedTotal,
-     string team1,
-     string team2,
-     string winner)
+             MatchupHistory? rivalry,
+             bool isFinal,
+             bool isInProgress,
+             double? actualMargin,
+             double? actualTotal,
+             double? projectedMargin,
+             double? projectedTotal,
+             string team1,
+             string team2,
+             string winner)
         {
             if (rivalry == null) return null;
 
@@ -404,7 +405,7 @@ namespace SaturdayPulse.Services
             var threshold = avgMargin * 0.25;
 
             string blurb;
-            if (isPlayed && actualMargin.HasValue && actualTotal.HasValue)
+            if (isFinal && actualMargin.HasValue && actualTotal.HasValue)
             {
                 var margin = actualMargin.Value;
                 var total = actualTotal.Value;
@@ -431,7 +432,17 @@ namespace SaturdayPulse.Services
                         $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
                 }
             }
-            else if (!isPlayed && projectedMargin.HasValue && projectedTotal.HasValue)
+            else if (isInProgress && actualMargin.HasValue && actualTotal.HasValue)
+            {
+                var margin = actualMargin.Value;
+                var total = actualTotal.Value;
+
+                blurb =
+                    $"In progress. {winner} currently leads by {margin:F0} points " +
+                    $"on {total:F0} combined so far — the series norm is " +
+                    $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+            }
+            else if (!isFinal && !isInProgress && projectedMargin.HasValue && projectedTotal.HasValue)
             {
                 var margin = projectedMargin.Value;
                 var total = projectedTotal.Value;
@@ -439,21 +450,21 @@ namespace SaturdayPulse.Services
                 if (margin < avgMargin - threshold)
                 {
                     blurb =
-                        $"Tighter than history suggests. {winner} projects to win by " +
+                        $"Tighter than history suggests. {winner} is projected to win by " +
                         $"{margin:F0} points on {total:F0} combined — below the " +
                         $"series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
                 }
                 else if (margin > avgMargin + threshold)
                 {
                     blurb =
-                        $"More decisive than history suggests. {winner} projects to win " +
+                        $"More decisive than history suggests. {winner} is projected to win " +
                         $"by {margin:F0} points on {total:F0} combined — wider than " +
                         $"the series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
                 }
                 else
                 {
                     blurb =
-                        $"Right in line with history. {winner} projects to win by " +
+                        $"Right in line with history. {winner} is projected to win by " +
                         $"{margin:F0} points on {total:F0} combined — consistent " +
                         $"with the series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
                 }
@@ -480,7 +491,6 @@ namespace SaturdayPulse.Services
                 Series = $"Series: {Math.Max(rivalry.Team1Wins, rivalry.Team2Wins)} - {Math.Min(rivalry.Team1Wins, rivalry.Team2Wins)} - {rivalry.Ties}, {favored}"
             };
         }
-
 
         // ════════════════════════════════════════════════════════════════════════
         // Helper — builds a single game object in the same shape as
