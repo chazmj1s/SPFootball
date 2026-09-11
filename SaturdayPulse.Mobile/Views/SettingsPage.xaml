@@ -1139,7 +1139,7 @@
                                                   CommandParameter="DebugLog" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0"
-                               Text="Debug Log"
+                               Text="Status"
                                FontSize="15" FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
@@ -1308,6 +1308,17 @@
                             </CollectionView>
                         </ScrollView>
 
+                    </VerticalStackLayout>
+
+                    <!-- CFBD data attribution -->
+                    <VerticalStackLayout Padding="12,16" Spacing="4" HorizontalOptions="Center">
+                        <Image Source="{AppThemeBinding Light=cfbd_watermark.png, Dark=cfbd_watermark_dark.png}"
+                               HeightRequest="20"
+                               HorizontalOptions="Center" />
+                        <Label Text="Data provided by CollegeFootballData.com"
+                               FontSize="10" Opacity="0.5"
+                               HorizontalOptions="Center"
+                               TextColor="{AppThemeBinding Light=#888888, Dark=#AAAAAA}" />
                     </VerticalStackLayout>
 
                 </VerticalStackLayout>
