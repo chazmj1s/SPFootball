@@ -339,12 +339,7 @@ namespace SaturdayPulse.ViewModels
             _navState.ApplyStartupDefaults(
                 gameWeeks,
                 g => g.Week,
-                g =>
-                {
-                    if (string.IsNullOrWhiteSpace(g.GameDate)) return null;
-                    var dateStr = $"{g.GameDate} {year}";
-                    return DateTime.TryParse(dateStr, out var d) ? d : (DateTime?)null;
-                });
+                g => g.GameDate);
 
             var resolved =
                 IsConferenceValid(_navState.DefaultConference)  ? _navState.DefaultConference

@@ -235,7 +235,7 @@ namespace SaturdayPulse.Services
         public void ApplyStartupDefaults<T>(
             IEnumerable<T> schedule,
             Func<T, int>       getWeek,
-            Func<T, DateTime?> getDate)
+            Func<T, string> getDate)
         {
             if (_defaultWeek == "Week1")
             {
@@ -245,12 +245,12 @@ namespace SaturdayPulse.Services
 
             // Single parse pass: (week, date) per game.
             var dated = schedule
-                .Select(g => (Week: getWeek(g), Date: getDate(g)?.Date))
+                .Select(g => (Week: getWeek(g), Date: getDate(g)))
                 .ToList();
 
             var seasonStart = dated
-                .Where(x => x.Date.HasValue)
-                .Select(x => x.Date!.Value)
+                .Where(x => !string.IsNullOrWhiteSpace(x.Date))
+                .Select(x => DateTime.Parse(x.Date))
                 .DefaultIfEmpty(DateTime.MaxValue)
                 .Min();
 
@@ -261,9 +261,19 @@ namespace SaturdayPulse.Services
                 return;
             }
 
-            // Highest week that has at least one game on or before today.
+            // Highest week that has at least one game on or before the Tuesday the first game of the week.
             var currentWeek = dated
-                .Where(x => x.Date.HasValue && x.Date.Value <= today)
+                .Where(x =>
+                {
+                    if (string.IsNullOrWhiteSpace(x.Date)) return false;
+
+                    var weekStart = DateTime.Parse(x.Date);
+
+                    var daysSinceTuesday = ((int)weekStart.DayOfWeek - (int)DayOfWeek.Tuesday + 7) % 7;
+                    var weekTuesday = weekStart.AddDays(-daysSinceTuesday);
+
+                    return weekTuesday <= today;
+                })
                 .Select(x => x.Week)
                 .DefaultIfEmpty(1)
                 .Max();

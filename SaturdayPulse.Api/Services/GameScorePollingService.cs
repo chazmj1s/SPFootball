@@ -36,7 +36,7 @@ namespace SaturdayPulse.Services
         // Must stay identical to GameDataService.LoadGamesAsync's
         // KickoffTimeFormat const — that's the only other place this
         // column gets written.
-        private const string KickoffTimeFormat = "HH:mm:ss";
+        private const string KickoffTimeFormat = "yyyy-MM-dd HH:mm:ss";
 
         // Same "cfbd" named client GameDataService/ProductionGameDataService use.
         private HttpClient CfbdClient => httpClientFactory.CreateClient("cfbd");
@@ -88,9 +88,10 @@ namespace SaturdayPulse.Services
             }
 
             var kickoffTimes = seasonGames              
-                .Select(g => TryParseKickoffTime(g.KickoffTime, out var kt) ? kt : (DateTime?)null)
+                .Select(g => TryParseKickoffTime($"{g.GameDate} {g.KickoffTime}", out var kt) ? kt : (DateTime?)null)
                 .Where(kt => kt.HasValue)
                 .Select(kt => kt!.Value)
+                .Distinct()
                 .ToList();
 
             if (kickoffTimes.Count == 0)

@@ -11,11 +11,11 @@ public static class ApiConfiguration
 #endif
     const string ProductionApiUrl = "https://api.j1stx.com/api/productionGameData/";
     public static string BaseUrl =>
-#if DEBUG
-             LocalApiUrl;
-#else
+    //#if DEBUG
+    //             LocalApiUrl;
+    //#else
         ProductionApiUrl;
-#endif
+    //#endif
 
     // Sibling of BaseUrl, one level up — for controllers that don't sit
     // under [Route("api/productiongamedata")], e.g. UserController at
@@ -27,11 +27,11 @@ public static class ApiConfiguration
 #endif
     const string ProductionApiRootUrl = "https://api.j1stx.com/api/";
     public static string ApiRootUrl =>
-#if DEBUG
-             LocalApiRootUrl;
-#else
+    //#if DEBUG
+    //             LocalApiRootUrl;
+    //#else
         ProductionApiRootUrl;
-#endif
+    //#endif
 
     public const string Audience = "https://api.j1stx.com";
     public const string DiscordWebhook = "https://discordapp.com/api/webhooks/1529270867761168395/l8QXZRf3nk8vPdKucQWddTHobsf8ebDC4S7PCij4V9ugg5GXJztq_jYkj7i33fLDEv0j";
