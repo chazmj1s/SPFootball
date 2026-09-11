@@ -7,10 +7,12 @@ namespace SaturdayPulse.Services
 {
     /// <summary>
     /// Polls CFBD for score updates every 5 minutes, but only while at
-    /// least one of today's games is plausibly in progress — the window is
-    /// [earliest KickoffTime today, latest KickoffTime today + 5 hours].
-    /// Outside that window (including any day with no games) this does
-    /// nothing and makes no CFBD call.
+    /// least one of today's games is individually inside its own
+    /// [KickoffTime, KickoffTime + 5 hours] window — not a single window
+    /// spanning today's earliest-to-latest kickoff, which would keep
+    /// polling through the dead gap between an early game ending and a
+    /// late game starting. Outside any game's window (including any day
+    /// with no games) this does nothing and makes no CFBD call.
     ///
     /// Scores only (HomePoints/AwayPoints) — Vegas odds are deliberately
     /// left alone here. The Season-Pass-gated manual single-game refresh
@@ -71,18 +73,38 @@ namespace SaturdayPulse.Services
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            var todayDate = DateTime.Now.Date;
+            var today = todayDate.ToString("yyyy-MM-dd");
+            var yesterday = todayDate.AddDays(-1).ToString("yyyy-MM-dd");
             var yearNow = DateTime.Now.Year;
 
             // GetByYearAsync already exists and is proven elsewhere in this
             // service layer; a season is small enough (a few hundred rows)
             // that filtering in-memory here beats adding a new by-date
             // repository method just for this.
-            var seasonGames = await uow.Games.GetGamesForCurrentWeekAsync(yearNow, token);
+            var weekGames = await uow.Games.GetGamesForCurrentWeekAsync(yearNow, token);
+
+            // GetGamesForCurrentWeekAsync returns the WHOLE CFB week (can span
+            // Tue–Mon), not just today — bracketing the poll window off every
+            // game in that whole set (the previous version's bug) meant
+            // windowStart/windowEnd spanned the entire week, so this ran
+            // continuously for days at a time, not just across today's games.
+            // Filtering to today first is what the `today` var above was
+            // always meant to do but never actually did.
+            //
+            // Includes yesterday too — a late West Coast/Hawaii kickoff (e.g.
+            // 10 PM Eastern) keeps GameDate stamped as the day it started,
+            // but its [KickoffTime, KickoffTime + PostKickoffMargin] window
+            // can extend past local midnight. The date filter here only
+            // narrows the candidate set; anyGameInProgress below is what
+            // actually decides "in progress," and it's fully time-aware, so
+            // a stale yesterday's game correctly falls out once its own
+            // window has passed — this isn't reintroducing the whole-week bug.
+            var seasonGames = weekGames.Where(g => g.GameDate == today || g.GameDate == yesterday).ToList();
 
             if (seasonGames.Count == 0)
             {
-                logger.LogDebug("GameScorePollingService: no games today ({Today}) — skipping.", today);
+                logger.LogDebug("GameScorePollingService: no games today or carrying over from yesterday ({Today}) — skipping.", today);
                 status.RecordSkip("No games today");
                 return;
             }
@@ -106,16 +128,21 @@ namespace SaturdayPulse.Services
                 return;
             }
 
-            var windowStart = kickoffTimes.Min();
-            var windowEnd = kickoffTimes.Max() + PostKickoffMargin;
             var now = DateTime.Now;
 
-            if (now < windowStart || now > windowEnd)
+            // In progress means NOW falls inside at least one individual
+            // game's own [kickoff, kickoff + PostKickoffMargin] window — NOT
+            // today's earliest-kickoff-to-latest-kickoff span, which is what
+            // was polling straight through the dead gap between, say, a noon
+            // game ending and a primetime game starting.
+            var anyGameInProgress = kickoffTimes.Any(kt => now >= kt && now <= kt + PostKickoffMargin);
+
+            if (!anyGameInProgress)
             {
                 logger.LogDebug(
-                    "GameScorePollingService: outside today's window ({Start}–{End}), now={Now} — skipping.",
-                    windowStart, windowEnd, now);
-                status.RecordSkip("Outside today's kickoff window");
+                    "GameScorePollingService: no game today currently in its kickoff window (now={Now}) — skipping.",
+                    now);
+                status.RecordSkip("No game currently in its kickoff window");
                 return;
             }
 

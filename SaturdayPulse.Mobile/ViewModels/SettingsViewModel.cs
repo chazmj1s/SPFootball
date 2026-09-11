@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Windows.Input;
 using SaturdayPulse.Core.Content;
 using SaturdayPulse.Helpers;
@@ -431,6 +432,8 @@ namespace SaturdayPulse.ViewModels
 
         public int LogEntryCount => AppLogger.Entries.Count;
 
+        private CancellationTokenSource? _statusAutoRefreshCts;
+
         // ── Health tiles (uptime / polling / CFBD / DB) ─────────────────────
         // Populated by RefreshLogCommand alongside the log entries — see
         // ApplyHealth below. StatusLevel values are "ok" | "bad" | "unknown",
@@ -554,6 +557,74 @@ namespace SaturdayPulse.ViewModels
             return $"{(int)elapsed.TotalDays}d ago";
         }
 
+        /// <summary>
+        /// Pulls recent server-side log entries and the health snapshot,
+        /// merging/applying both. Shared by RefreshLogCommand (manual tap)
+        /// and the automated clock below (ToggleSectionCommand starts it
+        /// when Status is expanded). A failed logs fetch leaves existing
+        /// entries untouched rather than clearing anything.
+        /// </summary>
+        private async Task RefreshStatusAsync()
+        {
+            var logsTask = _userApi.GetServerLogsAsync();
+            var healthTask = _userApi.GetServerHealthAsync();
+            await Task.WhenAll(logsTask, healthTask);
+
+            var remote = logsTask.Result;
+            if (remote != null)
+            {
+                AppLogger.MergeRemote(remote);
+                OnPropertyChanged(nameof(LogEntryCount));
+            }
+            else
+            {
+                StatusMessage = "Couldn't refresh server logs.";
+            }
+
+            ApplyHealth(healthTask.Result);
+        }
+
+        // ── Automated Status refresh (Status section only) ──────────────────
+        // Runs on the same clock as GameScorePollingService's CFBD poll
+        // (PollInterval = 5 minutes, server-side) — no reason to check
+        // Status more often than the data it reflects can actually change.
+        // Started/stopped by ToggleSectionCommand as the Status section
+        // expands/collapses, not tied to the Settings page's own
+        // visibility (Settings has no IsActive-style signal today).
+
+        private static readonly TimeSpan StatusAutoRefreshInterval = TimeSpan.FromMinutes(5);
+
+        private void StartStatusAutoRefresh()
+        {
+            StopStatusAutoRefresh(); // defensive — never run two loops at once
+            _statusAutoRefreshCts = new CancellationTokenSource();
+            _ = StatusAutoRefreshLoopAsync(_statusAutoRefreshCts.Token);
+        }
+
+        private void StopStatusAutoRefresh()
+        {
+            _statusAutoRefreshCts?.Cancel();
+            _statusAutoRefreshCts?.Dispose();
+            _statusAutoRefreshCts = null;
+        }
+
+        private async Task StatusAutoRefreshLoopAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    await Task.Delay(StatusAutoRefreshInterval, token);
+                    if (token.IsCancellationRequested) break;
+                    await RefreshStatusAsync();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected — StopStatusAutoRefresh cancels this on collapse.
+            }
+        }
+
         // ── Commands ──────────────────────────────────────────────────────
         public ICommand LoadDataCommand                { get; }
         public ICommand SelectViewCommand              { get; }
@@ -655,6 +726,8 @@ namespace SaturdayPulse.ViewModels
 
             ToggleSectionCommand = new Command<string>(section =>
             {
+                var wasDebugLogExpanded = IsDebugLogExpanded;
+
                 _expandedSection = _expandedSection == section ? null : section;
                 OnPropertyChanged(nameof(IsUserProfileExpanded));
                 OnPropertyChanged(nameof(IsUserConfigExpanded));
@@ -663,6 +736,11 @@ namespace SaturdayPulse.ViewModels
                 OnPropertyChanged(nameof(IsContentExpanded));
                 OnPropertyChanged(nameof(IsFeedbackExpanded));
                 OnPropertyChanged(nameof(IsDebugLogExpanded));
+
+                if (IsDebugLogExpanded && !wasDebugLogExpanded)
+                    StartStatusAutoRefresh();
+                else if (!IsDebugLogExpanded && wasDebugLogExpanded)
+                    StopStatusAutoRefresh();
             });
 
             SelectDefaultWeekCommand = new Microsoft.Maui.Controls.Command<string>(value =>
@@ -957,30 +1035,10 @@ namespace SaturdayPulse.ViewModels
 
             // Pulls recent server-side log entries (GameScorePollingService,
             // etc. — see ServerLogService/InMemoryLoggerProvider on the Api
-            // side) and merges them alongside on-device entries. A failed
-            // fetch (network error, non-admin, etc.) leaves existing entries
-            // untouched rather than clearing anything. Also refreshes the
-            // health tiles in parallel — same admin gate, same "leave stale
-            // values on failure" behavior.
-            RefreshLogCommand = new Microsoft.Maui.Controls.Command(async () =>
-            {
-                var logsTask = _userApi.GetServerLogsAsync();
-                var healthTask = _userApi.GetServerHealthAsync();
-                await Task.WhenAll(logsTask, healthTask);
-
-                var remote = logsTask.Result;
-                if (remote != null)
-                {
-                    AppLogger.MergeRemote(remote);
-                    OnPropertyChanged(nameof(LogEntryCount));
-                }
-                else
-                {
-                    StatusMessage = "Couldn't refresh server logs.";
-                }
-
-                ApplyHealth(healthTask.Result);
-            });
+            // side) and merges them alongside on-device entries. Also
+            // refreshes the health tiles. Body lives in RefreshStatusAsync so
+            // the automated clock (below) can share it.
+            RefreshLogCommand = new Microsoft.Maui.Controls.Command(async () => await RefreshStatusAsync());
 
             // Keep LogEntryCount in sync as entries are added/removed
             AppLogger.Entries.CollectionChanged += (s, e) =>
