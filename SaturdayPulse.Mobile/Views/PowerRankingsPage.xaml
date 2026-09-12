@@ -18,13 +18,13 @@
     <Grid Grid.Row="0"
           Padding="4,3"
           BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
-          ColumnDefinitions="44,22,*,76,54,50,46">
+          ColumnDefinitions="52,22,*,76,54,50,54">
 
       <Border Grid.Column="0" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rank"/>
         </Border.GestureRecognizers>
-  <Label Text="Rank ↕" FontAttributes="Bold" FontSize="11">
+  <Label Text="Rank ↕" FontAttributes="Bold" FontSize="11" LineBreakMode="NoWrap">
         </Label>
 </Border>
       <Label Grid.Column="1" Text="" />
@@ -32,28 +32,28 @@
   <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Team"/>
         </Border.GestureRecognizers>
-  <Label Text="Team ↕" FontAttributes="Bold" FontSize="11">
+  <Label Text="Team ↕" FontAttributes="Bold" FontSize="11" LineBreakMode="NoWrap">
         </Label>
 </Border>
       <Border Grid.Column="3" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Record"/>
         </Border.GestureRecognizers>
-  <Label Text="Record ↕" FontAttributes="Bold" FontSize="11">
+  <Label Text="Record ↕" FontAttributes="Bold" FontSize="11" LineBreakMode="NoWrap">
         </Label>
 </Border>
       <Border Grid.Column="4" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="Rating"/>
         </Border.GestureRecognizers>
-  <Label Text="Rating ↕" FontAttributes="Bold" FontSize="11">
+  <Label Text="Rating ↕" FontAttributes="Bold" FontSize="11" LineBreakMode="NoWrap">
         </Label>
 </Border>
       <Border Grid.Column="5" Padding="4,6" StrokeThickness="0" BackgroundColor="Transparent">
   <Border.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="SOS"/>
         </Border.GestureRecognizers>
-  <Label Text="SOS ↕" FontAttributes="Bold" FontSize="11">
+  <Label Text="SOS ↕" FontAttributes="Bold" FontSize="11" LineBreakMode="NoWrap">
         </Label>
 </Border>
 
@@ -62,8 +62,8 @@
         <VerticalStackLayout.GestureRecognizers>
           <TapGestureRecognizer Command="{Binding SortColumnCommand}" CommandParameter="RosterRank"/>
         </VerticalStackLayout.GestureRecognizers>
-        <Label Text="Roster" FontAttributes="Bold" FontSize="9" HorizontalTextAlignment="Center" />
-        <Label Text="Rank ↕" FontAttributes="Bold" FontSize="9" HorizontalTextAlignment="Center" />
+        <Label Text="Roster" FontAttributes="Bold" FontSize="9" HorizontalTextAlignment="Center" LineBreakMode="NoWrap" />
+        <Label Text="Rank ↕" FontAttributes="Bold" FontSize="9" HorizontalTextAlignment="Center" LineBreakMode="NoWrap" />
       </VerticalStackLayout>
 
     </Grid>
@@ -85,7 +85,7 @@
 
       <!-- ── Main row ── -->
       <Grid Padding="4,3"
-            ColumnDefinitions="44,22,*,76,54,50,46">
+            ColumnDefinitions="52,22,*,76,54,50,54">
         <Grid.Triggers>
           <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF8F0, Dark=#2A2A2A}" />
@@ -143,7 +143,7 @@
       </Grid>
 
       <!-- ── Toggle bar: Trend/Pedigree | Season Arc | Offense/Defense | Roster ── -->
-      <Grid ColumnDefinitions="1.6*,1*,1.6*,0.8*"
+      <Grid ColumnDefinitions="1.5*,1.2*,1.4*,0.9*"
             Padding="4,2,8,2">
         <Grid.Triggers>
           <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
@@ -164,6 +164,7 @@
           </Border.GestureRecognizers>
   <Label
                FontSize="11"
+               LineBreakMode="NoWrap"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -191,6 +192,7 @@
           </Border.GestureRecognizers>
   <Label
                FontSize="11"
+               LineBreakMode="NoWrap"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -220,6 +222,7 @@
           </Border.GestureRecognizers>
   <Label
                FontSize="11"
+               LineBreakMode="NoWrap"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
@@ -254,6 +257,7 @@
           </Border.GestureRecognizers>
   <Label
                FontSize="11"
+               LineBreakMode="NoWrap"
                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
           <Label.FormattedText>
             <FormattedString>
