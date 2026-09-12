@@ -1,6 +1,7 @@
 using SaturdayPulse.Models;
+using SaturdayPulse.Repositories.Interfaces;
 
-namespace SaturdayPulse.Contracts
+namespace SaturdayPulse.Repositories.Interfaces
 {
     /// <summary>
     /// Read-only data access for the ResolvedGameResults view — real result if

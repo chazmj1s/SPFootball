@@ -1,4 +1,3 @@
-using SaturdayPulse.Api.Repositories.Implementations;
 using SaturdayPulse.Contracts;
 using SaturdayPulse.Data;
 using SaturdayPulse.Repositories;
@@ -31,6 +30,7 @@ namespace SaturdayPulse.Infrastructure
 
         /// <summary>Real-or-projected resolved game results — see ResolvedGameResult remarks. Read-only.</summary>
         public IResolvedGameResultRepository ResolvedGameResults { get; }
+        public IYearlySpreadMultiplierRepository YearlySpreadMultipliers { get; }
 
         // ── Roster Capacity Modifier repositories ─────────────────────────────
         public IRosterPlayerRepository RosterPlayers { get; }
@@ -70,6 +70,7 @@ namespace SaturdayPulse.Infrastructure
             TeamsConferenceHistory = new TeamsConferenceHistoryRepository(_context);
             Portal = new PortalRepository(_context);
             ResolvedGameResults = new ResolvedGameResultRepository(_context);
+            YearlySpreadMultipliers = new YearlySpreadMultiplierRepository(_context);
 
             RosterPlayers = new RosterPlayerRepository(_context);
             PlayerStats   = new PlayerStatRepository(_context);

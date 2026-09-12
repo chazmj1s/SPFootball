@@ -29,8 +29,7 @@ namespace SaturdayPulse.Services
     public class GameScorePollingService(
         IServiceScopeFactory scopeFactory,
         IHttpClientFactory httpClientFactory,
-        ILogger<GameScorePollingService> logger,
-        PollingStatusService status) : BackgroundService
+        ILogger<GameScorePollingService> logger) : BackgroundService
     {
         private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan PostKickoffMargin = TimeSpan.FromHours(5);
@@ -49,7 +48,12 @@ namespace SaturdayPulse.Services
 
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                status.RecordTick();
+                // 🚀 FIXED: Pull the status manager out via the factory provider per tick
+                using (var scope = scopeFactory.CreateScope())
+                {
+                    var status = scope.ServiceProvider.GetRequiredService<PollingStatusService>();
+                    status.RecordTick();
+                }
 
                 try
                 {
@@ -57,10 +61,13 @@ namespace SaturdayPulse.Services
                 }
                 catch (Exception ex)
                 {
-                    // A bad tick should never take the whole background loop down —
-                    // log and wait for the next PeriodicTimer tick.
                     logger.LogError(ex, "GameScorePollingService: unhandled error during poll tick");
-                    status.RecordError(ex);
+
+                    using (var scope = scopeFactory.CreateScope())
+                    {
+                        var status = scope.ServiceProvider.GetRequiredService<PollingStatusService>();
+                        status.RecordError(ex);
+                    }
                 }
             }
         }
@@ -72,6 +79,8 @@ namespace SaturdayPulse.Services
             // consumer of scoped services in ASP.NET Core.
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            var status = scope.ServiceProvider.GetRequiredService<PollingStatusService>();
 
             var todayDate = DateTime.Now.Date;
             var today = todayDate.ToString("yyyy-MM-dd");

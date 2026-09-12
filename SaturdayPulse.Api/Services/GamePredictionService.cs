@@ -189,13 +189,16 @@ namespace SaturdayPulse.Services
             var avgTeamScore    = await GetAverageTeamScoreAsync(year, token);
             var allDifferentials = await GetAllDifferentialsAsync(token);
 
+            var eraMultiplierRecord = (await _uow.YearlySpreadMultipliers.GetByYearAsync(year, token)).FirstOrDefault();
+            var eraMultiplier = (double)eraMultiplierRecord.Multiplier; 
+
             if (!recordsById.TryGetValue(team.TeamId,     out var teamRecord) ||
                 !recordsById.TryGetValue(opponent.TeamId, out var oppRecord))
                 throw new ArgumentException("Team records not found for specified year.");
 
             return CalculatePrediction(
                 teamRecord, oppRecord, team, opponent, location,
-                rivalries, avgTeamScore, allDifferentials, year, week, null);
+                rivalries, avgTeamScore, allDifferentials, year, week, null, eraMultiplier);
         }
 
         /// <summary>Full margin-calculation breakdown for AnalyzePredictionMathAsync's diagnostic output.</summary>
@@ -378,10 +381,16 @@ namespace SaturdayPulse.Services
             var avgTeamScore    = await GetAverageTeamScoreAsync(Math.Min(teamYear, opponentYear), token);
             var allDifferentials = await GetAllDifferentialsAsync(token);
 
+            var teamEraMultiplierRecord = (await _uow.YearlySpreadMultipliers.GetByYearAsync(teamYear, token)).FirstOrDefault();
+            var oppEraMultiplierRecord  = (await _uow.YearlySpreadMultipliers.GetByYearAsync(opponentYear, token)).FirstOrDefault();
+
+            var eraMultiplier = ((double)teamEraMultiplierRecord.Multiplier + (double)oppEraMultiplierRecord.Multiplier) / 2.0;
+
             return CalculatePrediction(
                 teamRecord, oppRecord, team, opponent, 'N',
                 rivalries, avgTeamScore, allDifferentials,
                 Math.Max(teamYear, opponentYear), 0, null,
+                eraMultiplier,
                 applyWeeklyScoringAdjustments: false,
                 isSandboxContext: true);
         }
@@ -420,6 +429,7 @@ namespace SaturdayPulse.Services
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
             var allDifferentials = await GetAllDifferentialsAsync(token);
+            var eraMultiplier = (await _uow.YearlySpreadMultipliers.GetByYearAsync(year, token)).FirstOrDefault();
 
             var predictions = new List<GamePrediction>();
 
@@ -433,7 +443,7 @@ namespace SaturdayPulse.Services
 
                 predictions.Add(CalculatePrediction(
                     teamRecord, oppRecord, team, opponent, matchup.Location,
-                    rivalries, avgTeamScore, allDifferentials, year, matchup.Week, null));
+                    rivalries, avgTeamScore, allDifferentials, year, matchup.Week, null, (double)eraMultiplier.Multiplier));
             }
 
             return predictions.OrderByDescending(p => Math.Abs(p.ExpectedMargin)).ToList();
@@ -467,6 +477,7 @@ namespace SaturdayPulse.Services
             var rivalries    = await _uow.Lookups.GetMatchupHistoriesAsync(token);
             var avgTeamScore = await GetAverageTeamScoreAsync(year, token);
             var allDifferentials = await GetAllDifferentialsAsync(token);
+            var eraMultiplier = (await _uow.YearlySpreadMultipliers.GetByYearAsync(year, token)).FirstOrDefault();
 
             var predictions = new List<GamePrediction>();
 
@@ -480,7 +491,7 @@ namespace SaturdayPulse.Services
 
                 predictions.Add(CalculatePrediction(
                     teamRecord, oppRecord, team, opponent, matchup.Location,
-                    rivalries, avgTeamScore, allDifferentials, year, matchup.Week, hfaOverride));
+                    rivalries, avgTeamScore, allDifferentials, year, matchup.Week, hfaOverride, (double)eraMultiplier.Multiplier));
             }
 
             return predictions.OrderByDescending(p => Math.Abs(p.ExpectedMargin)).ToList();
@@ -745,6 +756,7 @@ namespace SaturdayPulse.Services
             List<AvgScoreDifferential> allDifferentials,
             int year, int week,
             double? hfaOverride,
+            double eraMultiplier = 1,
             bool applyWeeklyScoringAdjustments = true,
             bool isSandboxContext = false)
         {
@@ -759,9 +771,19 @@ namespace SaturdayPulse.Services
                 (double)(teamRecord.Ranking ?? 0m),
                 (double)(oppRecord.Ranking  ?? 0m));
 
+            var powerRatingDifference = (double)(teamRecord.PowerRating ?? 0m) - (double)(oppRecord.PowerRating ?? 0m);
+            if (Math.Abs(powerRatingDifference) > 0.5)
+            {
+                // Smooths out the curve for blowout games so they don't break the scoreboard boundary
+                powerRatingDifference = Math.Sign(powerRatingDifference) * (0.5 + Math.Log(1 + Math.Abs(powerRatingDifference) - 0.5) * 0.2);
+            }
+
+            var baseExpectedMargin = powerRatingDifference * eraMultiplier;
+
             var expectedMargin = RatingCalculator.ApplyHomeField(
-                distribution.ExpectedMargin, location == 'H', location == 'N',
+                baseExpectedMargin, location == 'H', location == 'N',
                 hfaOverride ?? _config.HomeFieldAdvantage);
+
 
             var normalizedT1 = Math.Min(team.TeamId, opponent.TeamId);
             var normalizedT2 = Math.Max(team.TeamId, opponent.TeamId);

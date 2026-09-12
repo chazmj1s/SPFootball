@@ -28,6 +28,7 @@ namespace SaturdayPulse.Data
         /// ResolvedGameResult.cs remarks.
         /// </summary>
         public DbSet<ResolvedGameResult>    ResolvedGameResults     { get; set; } = null!;
+        public DbSet<YearlySpreadMultiplier> YearlySpreadMultiplier { get; set; } = null!;
 
         // Roster Capacity Modifier tables — PK/index config lives on the entities themselves
         // via [PrimaryKey]/[Index] attributes (see RosterPlayer.cs, PlayerStat.cs, CoachRecord.cs,
@@ -102,6 +103,10 @@ namespace SaturdayPulse.Data
             modelBuilder.Entity<ResolvedGameResult>()
                 .HasNoKey()
                 .ToView("ResolvedGameResults");
+
+            modelBuilder.Entity<YearlySpreadMultiplier>()
+                .ToView("YearlySpreadMultiplier")
+                .HasKey(y => y.Targetyear);
 
             // --- UserProfile ---
             // Handle is case-insensitive unique — SQLite NOCASE collation
