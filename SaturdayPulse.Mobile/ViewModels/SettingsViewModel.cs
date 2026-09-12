@@ -1015,7 +1015,8 @@ namespace SaturdayPulse.ViewModels
 
                 try
                 {
-                    await Launcher.Default.OpenAsync(new Uri($"mailto:{SupportEmail}"));
+                    var subject = Uri.EscapeDataString("J1S Sports feedback");
+                    await Launcher.Default.OpenAsync(new Uri($"mailto:{SupportEmail}?subject={subject}"));
                 }
                 catch (Exception ex)
                 {
