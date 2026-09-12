@@ -42,7 +42,25 @@ namespace SaturdayPulse.ViewModels
             // fetch inside it is offloaded via Task.Run and the continuation
             // (ApplyFiltersAndSort) returns to the main thread.
             LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync(forceReload: true));
+
+            // Explicitly owns IsRefreshing rather than reusing IsBusy — see
+            // the property's doc comment above for why sharing IsBusy here
+            // would leave the spinner stuck. If LoadDataAsync no-ops because
+            // IsBusy is already true (e.g. an auto-refresh tick was already
+            // in flight), this still clears IsRefreshing in the finally, so
+            // the spinner dismisses immediately rather than hanging.
+            RefreshCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                IsRefreshing = true;
+                try
+                {
+                    await LoadDataAsync(forceReload: true);
+                }
+                finally
+                {
+                    IsRefreshing = false;
+                }
+            });
 
             SelectFilterCommand = new Microsoft.Maui.Controls.Command(async () =>
             {
@@ -166,6 +184,23 @@ namespace SaturdayPulse.ViewModels
 
         public bool   IsLoading => _isBusy;
         public bool   HasLoaded { get; set; }
+
+        // ── Pull-to-refresh spinner ──────────────────────────────────────
+        // Deliberately separate from IsBusy, not a two-way bind of IsBusy
+        // itself. RefreshView.IsRefreshing defaults to TwoWay - if bound
+        // directly to IsBusy, the native pull gesture would push IsBusy=true
+        // into the VM before RefreshCommand's handler runs, and
+        // LoadDataAsync's own "if (IsBusy) return;" guard would bail out
+        // immediately without ever reaching the finally that clears it,
+        // leaving the spinner stuck permanently. This property is set/cleared
+        // explicitly by RefreshCommand below and bound OneWay in XAML so the
+        // ViewModel is the sole source of truth for it.
+        private bool _isRefreshing;
+        public bool IsRefreshing
+        {
+            get => _isRefreshing;
+            private set { _isRefreshing = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// True only while Games is the visible tab. Set by MainPage on tab

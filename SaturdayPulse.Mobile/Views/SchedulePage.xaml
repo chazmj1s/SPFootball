@@ -27,7 +27,7 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <RefreshView Grid.Row="1"
                  Command="{Binding RefreshCommand}"
-                 IsRefreshing="False">
+                 IsRefreshing="{Binding IsRefreshing, Mode=OneWay}">
 
             <CollectionView x:Name="GamesCollectionView"
                             ItemsSource="{Binding Games}"
