@@ -23,6 +23,7 @@ namespace SaturdayPulse.Contracts
         /// remarks. Backed by the ResolvedGameResults DB view; read-only.
         /// </summary>
         IResolvedGameResultRepository ResolvedGameResults { get; }
+        IYearlySpreadMultiplierRepository YearlySpreadMultipliers { get; }
 
         // ── Roster Capacity Modifier repositories ─────────────────────────────
         IRosterPlayerRepository RosterPlayers { get; }

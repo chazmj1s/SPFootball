@@ -146,10 +146,6 @@ builder.Services.AddCors();
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-// Eagerly resolve so PollingStatusService.StartedAtUtc reflects true process
-// start, not the timestamp of the first health-check request to touch it.
-app.Services.GetRequiredService<PollingStatusService>();
-
 // Apply any pending migrations on startup
 using (var scope = app.Services.CreateScope())
 {
@@ -162,6 +158,8 @@ using (var scope = app.Services.CreateScope())
     using var command = connection.CreateCommand();
     command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;";
     command.ExecuteNonQuery();
+
+    app.Services.GetRequiredService<PollingStatusService>();
 }
 
 app.UseSwagger();

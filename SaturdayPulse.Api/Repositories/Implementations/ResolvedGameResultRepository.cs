@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using SaturdayPulse.Contracts;
 using SaturdayPulse.Data;
 using SaturdayPulse.Models;
+using SaturdayPulse.Repositories.Interfaces;
 
-namespace SaturdayPulse.Repositories
+namespace SaturdayPulse.Repositories.Implementations
 {
     /// <summary>
     /// EF Core repository for the read-only ResolvedGameResults view.

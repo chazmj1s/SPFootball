@@ -3,7 +3,7 @@ using SaturdayPulse.Data;
 using SaturdayPulse.Models;
 using SaturdayPulse.Repositories.Interfaces;
 
-namespace SaturdayPulse.Api.Repositories.Implementations
+namespace SaturdayPulse.Repositories.Implementations
 {
     public class AnchorBlendCoefficientRepository : IAnchorBlendCoefficientRepository
     {

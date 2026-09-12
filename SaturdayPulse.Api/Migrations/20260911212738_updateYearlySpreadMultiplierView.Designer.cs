@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SaturdayPulse.Data;
 
@@ -10,9 +11,11 @@ using SaturdayPulse.Data;
 namespace SaturdayPulse.Api.Migrations
 {
     [DbContext(typeof(NCAAContext))]
-    partial class NCAAContextModelSnapshot : ModelSnapshot
+    [Migration("20260911212738_updateYearlySpreadMultiplierView")]
+    partial class updateYearlySpreadMultiplierView
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.16");
@@ -1285,7 +1288,8 @@ namespace SaturdayPulse.Api.Migrations
                     b.Property<decimal>("Multiplier")
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Targetyear");
+                    b.HasKey("Targetyear")
+                        .HasName("PK_YearlySpreadMultiplier_Targetyear");
 
                     b.ToTable((string)null);
 
