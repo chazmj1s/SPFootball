@@ -1198,7 +1198,7 @@ namespace SaturdayPulse.ViewModels
                 ContentSections.Add(new ContentSectionViewModel
                 {
                     Title = string.IsNullOrWhiteSpace(section.Title) ? fallbackTitle : section.Title,
-                    Html = Markdig.Markdown.ToHtml(section.Content)
+                    Html = WrapContentHtml(Markdig.Markdown.ToHtml(section.Content))
                 });
             }
 
@@ -1209,6 +1209,40 @@ namespace SaturdayPulse.ViewModels
             AddSection("FAQ", content.Faq);
             AddSection("Announcements", content.Announcements);
             AddSection("Release Notes", content.ReleaseNotes);
+        }
+
+        /// <summary>
+        /// Wraps Markdig's raw HTML fragment in a minimal document with
+        /// explicit colors matched to the app's current effective theme.
+        /// HtmlWebViewSource has no AppThemeBinding equivalent, so without
+        /// this the WebView renders browser-default black text on a
+        /// transparent background - unreadable once the ContentPage itself
+        /// goes dark. Colors picked here are read once, at ApplyContent time
+        /// (i.e. once per LoadDataAsync) - if the user flips the in-app
+        /// theme while Settings is already open, already-rendered sections
+        /// won't re-color until the next load. Swap the hex values below for
+        /// the app's actual TextPrimaryLight/Dark + AccentPrimaryLight/Dark
+        /// resource colors if you want an exact match rather than this
+        /// approximation.
+        /// </summary>
+        private static string WrapContentHtml(string bodyHtml)
+        {
+            var isDark = Application.Current?.RequestedTheme
+                == Microsoft.Maui.ApplicationModel.AppTheme.Dark;
+
+            var textColor = isDark ? "#EAEAEA" : "#1A1A1A";
+            var linkColor = isDark ? "#B39DDB" : "#6A4FB3";
+
+            return "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                 + "<style>"
+                 + "html,body{margin:0;padding:8px 4px;background-color:transparent;"
+                 + $"color:{textColor};font-family:-apple-system,Roboto,sans-serif;"
+                 + "font-size:15px;line-height:1.4;}"
+                 + $"a{{color:{linkColor};}}"
+                 + $"h1,h2,h3{{color:{textColor};}}"
+                 + "</style></head><body>"
+                 + bodyHtml
+                 + "</body></html>";
         }
 
         /// <summary>
