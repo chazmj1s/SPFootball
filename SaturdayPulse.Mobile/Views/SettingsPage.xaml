@@ -38,7 +38,7 @@
         <!-- ═══════════════════════════════════════════════════ -->
         <RefreshView Grid.Row="1"
                      Command="{Binding RefreshCommand}"
-                     IsRefreshing="False">
+                     IsRefreshing="{Binding IsRefreshing, Mode=OneWay}">
             <ScrollView>
                 <VerticalStackLayout Spacing="0">
 

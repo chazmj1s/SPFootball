@@ -761,7 +761,10 @@ namespace SaturdayPulse.Services
                     NeutralSite    = d.NeutralSite,
                     ConferenceGame = d.ConferenceGame,
                     Attendance     = d.Attendance,
-                    Venue          = d.Venue
+                    Venue          = d.Venue,
+                    HomeLineScores = d.HomeLineScores == null ? string.Empty : string.Join(",", d.HomeLineScores),
+                    AwayLineScores = d.AwayLineScores == null ? string.Empty : string.Join(",", d.AwayLineScores)
+
                 };
             }).ToList();
 

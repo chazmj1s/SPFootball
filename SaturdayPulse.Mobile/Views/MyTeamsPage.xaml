@@ -243,10 +243,46 @@
     <!-- own Auto row above the CollectionView — it no longer  -->
     <!-- scrolls with the game list.                            -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto">
+    <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*,Auto">
+
+      <!-- Preview banner (2026-09-13) — shown only for a team reached via a
+           team-name tap in Games/Power Rankings, not for a real followed
+           chip. Chip strip above is untouched by design; Follow here
+           promotes the preview to a real chip (see
+           MyTeamsViewModel.OnTeamFollowChanged) and this banner then hides
+           itself via IsPreviewing going false. -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto"
+            Padding="10,6" IsVisible="{Binding IsPreviewing}"
+            BackgroundColor="{AppThemeBinding Light=#F0EBFF, Dark=#2A2040}">
+        <Label Grid.Column="0"
+               FontSize="12" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+          <Label.FormattedText>
+            <FormattedString>
+              <Span Text="Previewing " />
+              <Span Text="{Binding PreviewTeamName}" FontAttributes="Bold" />
+              <Span Text=" — not followed" TextColor="{AppThemeBinding Light=#B3000000, Dark=#B3FFFFFF}" />
+            </FormattedString>
+          </Label.FormattedText>
+        </Label>
+        <Border Grid.Column="1" Padding="10,4" StrokeThickness="1"
+                Stroke="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
+                BackgroundColor="Transparent">
+          <Border.StrokeShape>
+            <RoundRectangle CornerRadius="10" />
+          </Border.StrokeShape>
+          <Border.GestureRecognizers>
+            <TapGestureRecognizer
+                Command="{Binding ToggleFollowCommand}"
+                CommandParameter="{Binding PreviewTeamId}" />
+          </Border.GestureRecognizers>
+          <Label Text="Follow" FontSize="12" FontAttributes="Bold"
+                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+        </Border>
+      </Grid>
 
       <!-- Pinned team card -->
-      <Grid Grid.Row="0" x:Name="PinnedTeamCardGrid" IsVisible="{Binding HasSelectedTeamRanking}">
+      <Grid Grid.Row="1" x:Name="PinnedTeamCardGrid" IsVisible="{Binding HasSelectedTeamRanking}">
 
     <VerticalStackLayout Spacing="0">
 
@@ -910,7 +946,7 @@
     </VerticalStackLayout>
         </Grid>
 
-      <RefreshView Grid.Row="1"
+      <RefreshView Grid.Row="2"
                    Command="{Binding RefreshCommand}"
                    IsRefreshing="{Binding IsBusy}">
 
@@ -934,7 +970,7 @@
       <!-- Postseason — collapsible, only shown once    -->
       <!-- postseason games are actually loaded         -->
       <!-- ═══════════════════════════════════════════ -->
-      <VerticalStackLayout Grid.Row="2" IsVisible="{Binding HasPostseasonGames}">
+      <VerticalStackLayout Grid.Row="3" IsVisible="{Binding HasPostseasonGames}">
 
         <Grid ColumnDefinitions="*,24"
               Padding="12,5"

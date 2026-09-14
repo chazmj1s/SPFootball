@@ -44,11 +44,31 @@ namespace SaturdayPulse.Models
                 Period        = dto.Period,
                 Clock         = dto.Clock,
 
-                HomeStats     = dto.HomeStats?.ToGameTeamStats(),
+                HomeLineScores = dto.HomeLineScores?.ToIntList() ?? new List<int>(),
+                AwayLineScores = dto.AwayLineScores?.ToIntList() ?? new List<int>(),
+
+                HomeStats = dto.HomeStats?.ToGameTeamStats(),
                 AwayStats     = dto.AwayStats?.ToGameTeamStats(),
                 VegasLines    = dto.VegasLines?.ToGameLines(),
                 RivalryNotes  = dto.RivalryNotes?.ToRivalryNotes(),
             };
+        }
+
+        public static List<int> ToIntList(this string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return new List<int>();
+            }
+
+            // Split by comma and remove surrounding whitespace from each item
+            var segments = input.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+            return segments
+                .Select(s => (Success: int.TryParse(s.Trim(), out int val), Value: val))
+                .Where(pair => pair.Success)
+                .Select(pair => pair.Value)
+                .ToList();
         }
 
         public static List<GameResult> ToGameResults(this IEnumerable<GameResultDto> dtos)

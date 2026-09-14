@@ -48,8 +48,18 @@
       </Grid>
 
       <!-- Game card -->
-      <Grid ColumnDefinitions="32,28,*,52,96"
-            RowDefinitions="Auto,Auto"
+      <!-- Columns: 0=heart 1=name 2-5=Q1-Q4 6=OT(Auto,
+           collapses to ~0 width when HasOvertime is false and the
+           label text is empty) 7=Total(actual/proj score) 8=Margin:O/U
+           + time/status. Star moved to Grid.Row="0" Grid.Column="0"
+           (2026-09-13) — same column as the hearts, header row above
+           them. Week label dropped; that column's width now goes to
+           the name column ('*'). 2-5/7/8 widths are estimated from the
+           mockup screenshots, not measured on a real device — the name
+           column will absorb whatever's wrong; expect to need a pass
+           once this renders. -->
+      <Grid ColumnDefinitions="18,*,20,20,20,20,Auto,52,100"
+            RowDefinitions="Auto,Auto,Auto"
             Padding="6,5,10,5">
 
         <!-- Cross-tab highlight (2026-09-05) — My Teams' opponent-name
@@ -73,27 +83,36 @@
           </DataTrigger>
         </Grid.Triggers>
 
-        <!-- Wk label + star game follow -->
-        <VerticalStackLayout Grid.Row="0" Grid.Column="0" Grid.RowSpan="2"
-                             Spacing="2" VerticalOptions="Center"
-                             HorizontalOptions="Start">
-          <Label Text="{Binding Week, StringFormat='Wk{0}'}"
-                 FontSize="10"
-                 TextColor="{AppThemeBinding Light=#AAAAAA, Dark=#555555}"
-                 HorizontalOptions="Start" />
-          <controls:FollowGameIcon
-                IsFollowed="{Binding IsGameFavorited}"
-                VerticalOptions="Center" HorizontalOptions="Start">
-            <controls:FollowGameIcon.GestureRecognizers>
-              <TapGestureRecognizer
-                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalGameCommand}"
-                    CommandParameter="{Binding .}" />
-            </controls:FollowGameIcon.GestureRecognizers>
-          </controls:FollowGameIcon>
-        </VerticalStackLayout>
+        <!-- Star game follow — moved into the header row, directly above
+             the hearts column (2026-09-13). Week label dropped entirely
+             (redundant with the week strip/tab); the column it and the
+             star used to occupy is gone too, so its width goes straight
+             to the name column ('*') instead of sitting unused. -->
+        <controls:FollowGameIcon Grid.Row="0" Grid.Column="0"
+              IsFollowed="{Binding IsGameFavorited}"
+              VerticalOptions="Center" HorizontalOptions="Start">
+          <controls:FollowGameIcon.GestureRecognizers>
+            <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.TogglePersonalGameCommand}"
+                  CommandParameter="{Binding .}" />
+          </controls:FollowGameIcon.GestureRecognizers>
+        </controls:FollowGameIcon>
+
+        <!-- ── Row 0: quarter / total / margin-OU column headers ── -->
+        <Label Grid.Row="0" Grid.Column="1" Text="        Team" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Start" />
+        <Label Grid.Row="0" Grid.Column="2" Text="1" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+        <Label Grid.Row="0" Grid.Column="3" Text="2" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+        <Label Grid.Row="0" Grid.Column="4" Text="3" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+        <Label Grid.Row="0" Grid.Column="5" Text="4" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+        <Label Grid.Row="0" Grid.Column="6" Text="{Binding OvertimeHeaderText}" FontSize="8" FontAttributes="Bold" Opacity="0.5"
+               HorizontalOptions="Center" IsVisible="{Binding HasOvertime}" />
+        <Label Grid.Row="0" Grid.Column="7" Text="Total" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+        <Label Grid.Row="0" Grid.Column="8" Text="Margin : O/U" FontSize="8" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="End" />
+
+        <!-- ── Row 1: visitor (away) ── -->
 
         <!-- Heart: visitor -->
-        <controls:FollowTeamIcon Grid.Row="0" Grid.Column="1"
+        <controls:FollowTeamIcon Grid.Row="1" Grid.Column="0"
               IsFollowed="{Binding VisitorIsFollowed}"
               VerticalOptions="Center" HorizontalOptions="Start">
           <controls:FollowTeamIcon.GestureRecognizers>
@@ -103,12 +122,36 @@
           </controls:FollowTeamIcon.GestureRecognizers>
         </controls:FollowTeamIcon>
 
-        <Label Grid.Row="0" Grid.Column="2" Text="{Binding VisitorName}"
-               FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+        <Label Grid.Row="1" Grid.Column="1" Text="{Binding VisitorName}"
+               FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation"
+               TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+          <Label.GestureRecognizers>
+            <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.NavigateToTeamCommand}"
+                  CommandParameter="{Binding AwayId}" />
+          </Label.GestureRecognizers>
+        </Label>
 
-        <Label Grid.Row="0" Grid.Column="3"
+        <Label Grid.Row="1" Grid.Column="2" Text="{Binding AwayQ1}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="1" Grid.Column="3" Text="{Binding AwayQ2}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="1" Grid.Column="4" Text="{Binding AwayQ3}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="1" Grid.Column="5" Text="{Binding AwayQ4}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="1" Grid.Column="6" Text="{Binding AwayOT}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}"
+               IsVisible="{Binding HasOvertime}" />
+
+        <Label Grid.Row="1" Grid.Column="7"
                FontSize="13" FontAttributes="Bold"
-               HorizontalOptions="End" VerticalOptions="Center"
+               HorizontalOptions="Center" VerticalOptions="Center"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}">
           <Label.Text>
             <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
@@ -118,26 +161,11 @@
             </MultiBinding>
           </Label.Text>
         </Label>
-        <VerticalStackLayout Grid.Row="0" Grid.Column="4" Spacing="1"
-               HorizontalOptions="End" VerticalOptions="Center">
-          <Label Text="{Binding DisplayGameTime}"
-                 FontSize="10" HorizontalOptions="End"
-                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
-                 IsVisible="{Binding DisplayGameTime, Converter={StaticResource StringNotEmptyConverter}}" />
-          <Label FontSize="11" HorizontalOptions="End"
-                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
-            <Label.Text>
-              <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
-                <Binding Path="DisplayMargin" />
-                <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
-                <Binding Path="Year" />
-              </MultiBinding>
-            </Label.Text>
-          </Label>
-        </VerticalStackLayout>
+
+        <!-- ── Row 2: home ── -->
 
         <!-- Heart: home -->
-        <controls:FollowTeamIcon Grid.Row="1" Grid.Column="1"
+        <controls:FollowTeamIcon Grid.Row="2" Grid.Column="0"
               IsFollowed="{Binding HomeIsFollowed}"
               VerticalOptions="Center" HorizontalOptions="Start">
           <controls:FollowTeamIcon.GestureRecognizers>
@@ -147,19 +175,43 @@
           </controls:FollowTeamIcon.GestureRecognizers>
         </controls:FollowTeamIcon>
 
-        <Label Grid.Row="1" Grid.Column="2"
+        <Label Grid.Row="2" Grid.Column="1"
                FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation">
           <Label.FormattedText>
             <FormattedString>
-              <Span Text="{Binding HomeName}" />
+              <Span Text="{Binding HomeName}"
+                    TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
               <Span Text="{Binding NeutralIndicator}" FontSize="10"
                     TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
             </FormattedString>
           </Label.FormattedText>
+          <Label.GestureRecognizers>
+            <TapGestureRecognizer
+                  Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.NavigateToTeamCommand}"
+                  CommandParameter="{Binding HomeId}" />
+          </Label.GestureRecognizers>
         </Label>
-        <Label Grid.Row="1" Grid.Column="3"
+
+        <Label Grid.Row="2" Grid.Column="2" Text="{Binding HomeQ1}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="2" Grid.Column="3" Text="{Binding HomeQ2}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="2" Grid.Column="4" Text="{Binding HomeQ3}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="2" Grid.Column="5" Text="{Binding HomeQ4}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        <Label Grid.Row="2" Grid.Column="6" Text="{Binding HomeOT}"
+               FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+               TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}"
+               IsVisible="{Binding HasOvertime}" />
+
+        <Label Grid.Row="2" Grid.Column="7"
                FontSize="13" FontAttributes="Bold"
-               HorizontalOptions="End" VerticalOptions="Center"
+               HorizontalOptions="Center" VerticalOptions="Center"
                TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}">
           <Label.Text>
             <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
@@ -169,25 +221,44 @@
             </MultiBinding>
           </Label.Text>
         </Label>
-        <VerticalStackLayout Grid.Row="1" Grid.Column="4" Spacing="1"
+
+        <!-- ── Margin : O/U (one line) + GameTime/Status (line below) ──
+             Row-spanning across both team rows — one instance per card,
+             not per team, since neither value is team-specific. -->
+        <VerticalStackLayout Grid.Row="1" Grid.Column="8" Grid.RowSpan="2" Spacing="1"
                HorizontalOptions="End" VerticalOptions="Center">
-          <Label FontSize="11" HorizontalOptions="End"
-                 TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
-            <Label.Text>
-              <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
-                <Binding Path="DisplayOU" />
-                <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
-                <Binding Path="Year" />
-              </MultiBinding>
-            </Label.Text>
-          </Label>
-          <!-- Status/period/clock (2026-09-05) — empty string from
-               DisplayGameStatus until the API sends Status/Period/Clock;
-               StringNotEmptyConverter keeps the row collapsed until then. -->
-          <Label Text="{Binding DisplayGameStatus}"
+
+          <HorizontalStackLayout Spacing="2" HorizontalOptions="End">
+            <Label FontSize="10"
+                   TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
+              <Label.Text>
+                <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
+                  <Binding Path="DisplayMarginValue" />
+                  <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
+                  <Binding Path="Year" />
+                </MultiBinding>
+              </Label.Text>
+            </Label>
+            <Label Text=":" FontSize="10"
+                   TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />
+            <Label FontSize="10"
+                   TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}">
+              <Label.Text>
+                <MultiBinding Converter="{StaticResource ProjectionGateConverter}">
+                  <Binding Path="DisplayOUValue" />
+                  <Binding Source="{x:Reference ThisPage}" Path="BindingContext.HasSeasonPass" />
+                  <Binding Path="Year" />
+                </MultiBinding>
+              </Label.Text>
+            </Label>
+          </HorizontalStackLayout>
+
+          <!-- GameTime (scheduled) / DisplayGameStatus (in-progress or
+               final) combined — see GameResult.DisplayGameTimeOrStatus. -->
+          <Label Text="{Binding DisplayGameTimeOrStatus}"
                  FontSize="10" HorizontalOptions="End"
                  TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
-                 IsVisible="{Binding DisplayGameStatus, Converter={StaticResource StringNotEmptyConverter}}" />
+                 IsVisible="{Binding DisplayGameTimeOrStatus, Converter={StaticResource StringNotEmptyConverter}}" />
         </VerticalStackLayout>
 
       </Grid>

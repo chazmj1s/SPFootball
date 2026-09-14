@@ -220,6 +220,13 @@ namespace SaturdayPulse.ViewModels
             // My Teams' opponent-name navigation (2026-09-05) — MyTeamsViewModel
             // has no reference to this VM, so it asks via SharedNavigationStateService.
             _navState.TabChangeRequested += () => SelectedIndex = GamesTabIndex;
+
+            // Reverse direction (2026-09-13): Games'/Power Rankings' team-name
+            // tap. Separate event from TabChangeRequested above on purpose —
+            // that one is hardwired to GamesTabIndex for the opponent-name
+            // link and changing it to take a target tab would risk that
+            // existing behavior.
+            _navState.TeamPreviewRequested += _ => SelectedIndex = MyTeamsTabIndex;
         }
 
         private async void OnEntitlementChanged()

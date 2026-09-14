@@ -95,6 +95,19 @@ namespace SaturdayPulse.ViewModels
                 game.IsGameFavorited = _personalGameService.IsFavorited(game.AwayId, game.HomeId);
             });
 
+            // Team-name deep-link (2026-09-13) — bound per-side (AwayId/HomeId)
+            // rather than the whole GameResult, since the label doesn't know
+            // which side of itself was tapped. Mirrors MyTeamsViewModel.
+            // NavigateToGameCommand's shape for the reverse direction —
+            // ScheduleViewModel has no reference to MyTeamsViewModel, so
+            // this only raises the request; SharedNavigationStateService.
+            // TeamPreviewRequested is what MyTeamsViewModel actually acts on.
+            NavigateToTeamCommand = new Microsoft.Maui.Controls.Command<int>(teamId =>
+            {
+                if (teamId == 0) return;
+                _navState.RequestTeamPreview(teamId);
+            });
+
             ToggleDetailsCommand = new Microsoft.Maui.Controls.Command<GameResult>(game =>
             {
                 if (game == null) return;
@@ -255,6 +268,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand PreviousWeekCommand       { get; }
         public ICommand NextWeekCommand           { get; }
         public ICommand TogglePersonalGameCommand { get; }
+        public ICommand NavigateToTeamCommand     { get; }
         public ICommand ToggleDetailsCommand      { get; }
         public ICommand ToggleRivalryNotesCommand { get; }
         public ICommand SeasonPassCommand         { get; }

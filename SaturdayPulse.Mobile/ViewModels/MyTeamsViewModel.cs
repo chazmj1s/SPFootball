@@ -48,6 +48,9 @@ namespace SaturdayPulse.ViewModels
         private ObservableRangeCollection<MyTeamsGameRow> _selectedTeamGames = new();
         private ObservableRangeCollection<MyTeamsGameRow> _selectedTeamPostseasonGames = new();
         private int             _selectedTeamId;
+        private int?            _previewTeamId;
+        private int             _preSelectedTeamId;
+        private string          _previewTeamName = string.Empty;
         private TeamRanking?    _selectedTeamRanking;
         private bool            _isBusy;
         private bool            _isActive;
@@ -226,6 +229,7 @@ namespace SaturdayPulse.ViewModels
             _navState.PropertyChanged         += OnNavStateChanged;
             _gameCache.CacheUpdated           += OnSharedCacheUpdated;
             _rankingsCache.CacheUpdated       += OnSharedCacheUpdated;
+            _navState.TeamPreviewRequested    += OnTeamPreviewRequested;
 
             // Keeps HasSeasonPass/IsNotSeasonPass (and everything bound to
             // them in MyTeamsPage.xaml) live if entitlement changes while
@@ -281,6 +285,26 @@ namespace SaturdayPulse.ViewModels
             private set { _selectedTeamId = value; OnPropertyChanged(); }
         }
 
+        /// <summary>
+        /// True while showing a team the person hasn't followed — reached
+        /// via a team-name tap in Games or Power Rankings (see
+        /// OnTeamPreviewRequested). The chip strip is untouched by design;
+        /// MyTeamsPage.xaml shows a banner with a quick-follow affordance
+        /// instead. Ends when the person follows the team (OnTeamFollowChanged
+        /// below) or leaves My Teams (IsActive setter) — never persists
+        /// across a tab switch.
+        /// </summary>
+        public bool IsPreviewing => _previewTeamId.HasValue;
+
+        /// <summary>0 when not previewing — banner visibility is gated on IsPreviewing, not this.</summary>
+        public int PreviewTeamId => _previewTeamId ?? 0;
+
+        public string PreviewTeamName
+        {
+            get => _previewTeamName;
+            private set { _previewTeamName = value; OnPropertyChanged(); }
+        }
+
         public TeamRanking? SelectedTeamRanking
         {
             get => _selectedTeamRanking;
@@ -333,7 +357,11 @@ namespace SaturdayPulse.ViewModels
                 if (_isActive == value) return;
                 _isActive = value;
                 if (_isActive) StartAutoRefresh();
-                else StopAutoRefresh();
+                else
+                {
+                    StopAutoRefresh();
+                    RevertPreview();
+                }
             }
         }
 
@@ -390,8 +418,7 @@ namespace SaturdayPulse.ViewModels
             IsBusy = true;
             try
             {
-                await _teamCache.EnsureLoadedAsync();
-                BuildChips();
+                await BuildChipsAsync();
 
                 if (Chips.Count == 0)
                 {
@@ -607,8 +634,23 @@ namespace SaturdayPulse.ViewModels
 
         // ── Chip management ──────────────────────────────────────────────
 
-        private void BuildChips()
+        /// <summary>
+        /// Awaits TeamCacheService.EnsureLoadedAsync() before reading from
+        /// it — moved here from being each caller's responsibility after a
+        /// confirmed race: FollowService.InitializeAsync() can fire its
+        /// primary-team-changed event (→ OnPrimaryTeamChanged → this method)
+        /// before this ViewModel's own InitializeAsync has gotten far enough
+        /// to warm the team cache, or even before InitializeAsync has run at
+        /// all. When that happens every _teamCache.GetTeam(id) call below
+        /// returns null and the entire chip row silently disappears — not
+        /// just the affected team's chip. EnsureLoadedAsync no-ops
+        /// immediately once the cache is warm, so this is a no-op cost on
+        /// every call after the first.
+        /// </summary>
+        private async Task BuildChipsAsync()
         {
+            await _teamCache.EnsureLoadedAsync();
+
             Chips.Clear();
 
             var primaryId   = _followService.GetPrimaryTeamId();
@@ -694,9 +736,22 @@ namespace SaturdayPulse.ViewModels
             MainThread.BeginInvokeOnMainThread(ApplyTeamFilter);
         }
 
-        private void OnTeamFollowChanged(int teamId, bool isFollowed)
+        private async void OnTeamFollowChanged(int teamId, bool isFollowed)
         {
-            BuildChips();
+            // Following the currently-previewed team promotes it to a real,
+            // persistent chip — clear preview state first so the rebuild
+            // below and UpdateChipSelection() treat it as a normal chip
+            // instead of leaving a "previewing" banner up for a team that's
+            // now actually followed.
+            if (isFollowed && teamId == _previewTeamId)
+            {
+                _previewTeamId = null;
+                PreviewTeamName = string.Empty;
+                OnPropertyChanged(nameof(IsPreviewing));
+                OnPropertyChanged(nameof(PreviewTeamId));
+            }
+
+            await BuildChipsAsync();
 
             // If the currently-selected team lost its only chip (un-followed
             // and not primary), fall back to the first remaining chip.
@@ -710,7 +765,7 @@ namespace SaturdayPulse.ViewModels
 
         private async void OnPrimaryTeamChanged(int? teamId)
         {
-            BuildChips();
+            await BuildChipsAsync();
 
             // Per design: primary-team change is treated as a filter change —
             // re-point at the new team immediately.
@@ -733,6 +788,63 @@ namespace SaturdayPulse.ViewModels
                 else
                     await LoadForYearOrWeekChangeAsync();
             }
+        }
+
+        // ── Team preview (2026-09-13) ────────────────────────────────────
+        // Games'/Power Rankings' team-name tap → SharedNavigationStateService.
+        // RequestTeamPreview → here. Per design: chip strip stays exactly as
+        // the person's real followed teams; only the header card/schedule
+        // content swaps to the previewed team, plus a banner
+        // (MyTeamsPage.xaml, gated on IsPreviewing) with a quick-follow
+        // affordance. Ends on follow (OnTeamFollowChanged above) or on
+        // leaving My Teams (IsActive setter's RevertPreview call) — never
+        // persists across a tab switch.
+        private async void OnTeamPreviewRequested(int teamId)
+        {
+            if (teamId == 0 || teamId == SelectedTeamId) return;
+
+            // Already a real chip (followed or primary) — select it the
+            // normal way, no preview needed.
+            if (Chips.Any(c => c.TeamId == teamId))
+            {
+                SelectedTeamId = teamId;
+                UpdateChipSelection();
+                ApplyTeamFilter();
+                return;
+            }
+
+            await _teamCache.EnsureLoadedAsync();
+
+            // Remember the real selection once, even if the person previews
+            // a second team before returning — RevertPreview should restore
+            // whatever was actually selected before previewing started, not
+            // whatever the first preview happened to be.
+            if (!_previewTeamId.HasValue)
+                _preSelectedTeamId = SelectedTeamId;
+
+            _previewTeamId   = teamId;
+            PreviewTeamName  = _teamCache.GetTeam(teamId)?.TeamName ?? string.Empty;
+            OnPropertyChanged(nameof(IsPreviewing));
+            OnPropertyChanged(nameof(PreviewTeamId));
+
+            SelectedTeamId = teamId;
+            UpdateChipSelection(); // no chip matches teamId — correctly leaves the strip unselected
+            ApplyTeamFilter();     // no network call — both caches already warm, same as SelectTeamCommand
+        }
+
+        /// <summary>Ends team-preview mode and restores whichever real chip was selected before it started.</summary>
+        private void RevertPreview()
+        {
+            if (!_previewTeamId.HasValue) return;
+
+            _previewTeamId  = null;
+            PreviewTeamName = string.Empty;
+            OnPropertyChanged(nameof(IsPreviewing));
+            OnPropertyChanged(nameof(PreviewTeamId));
+
+            SelectedTeamId = _preSelectedTeamId;
+            UpdateChipSelection();
+            ApplyTeamFilter();
         }
     }
 

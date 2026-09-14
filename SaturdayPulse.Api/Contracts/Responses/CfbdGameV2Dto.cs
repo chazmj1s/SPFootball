@@ -51,5 +51,11 @@ namespace SaturdayPulse.Contracts
 
         [JsonPropertyName("awayPoints")]
         public int? AwayPoints { get; set; }
+
+        [JsonPropertyName("HomeLineScores")]
+        public List<int>? HomeLineScores { get; set; } = new();
+
+        [JsonPropertyName("AwayLineScores")]
+        public List<int>? AwayLineScores { get; set; } = new();
     }
 }

@@ -247,6 +247,8 @@ namespace SaturdayPulse.Repositories.Implementations
                     dbGame.KickoffTime    = game.KickoffTime;
                     dbGame.GameDate       = game.GameDate;
                     dbGame.GameDay        = game.GameDay;
+                    dbGame.HomeLineScores = game.HomeLineScores;
+                    dbGame.AwayLineScores = game.AwayLineScores;
                 }
                 else
                     _context.Games.Add(game);
