@@ -307,6 +307,16 @@ namespace SaturdayPulse.Services
         public event Action<int>? GameHighlightRequested;
         public void RequestGameHighlight(int gameId) => GameHighlightRequested?.Invoke(gameId);
 
+        // ── Cross-tab team preview (2026-09-13) ────────────────────────────
+        // Games' and Power Rankings' team-name tap needs to (a) switch to My
+        // Teams and (b) tell My Teams which team to preview — temporarily,
+        // without following it. Kept as its own event pair rather than
+        // reusing TabChangeRequested (which MainViewModel hardwires to the
+        // Games tab for the existing opponent-name link) so that link's
+        // behavior can't regress from this addition.
+        public event Action<int>? TeamPreviewRequested;
+        public void RequestTeamPreview(int teamId) => TeamPreviewRequested?.Invoke(teamId);
+
         // ── INotifyPropertyChanged ────────────────────────────────────────
 
         public event PropertyChangedEventHandler? PropertyChanged;

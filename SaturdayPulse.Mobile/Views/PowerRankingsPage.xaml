@@ -126,7 +126,14 @@
         <!-- Team + Conf · Tier -->
         <VerticalStackLayout Grid.Column="2" Spacing="0" VerticalOptions="Center">
           <Label Text="{Binding TeamName}"
-                 FontSize="13" LineBreakMode="TailTruncation"/>
+                 FontSize="13" LineBreakMode="TailTruncation"
+                 TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+            <Label.GestureRecognizers>
+              <TapGestureRecognizer
+                    Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.NavigateToTeamCommand}"
+                    CommandParameter="{Binding TeamID}" />
+            </Label.GestureRecognizers>
+          </Label>
           <Label Text="{Binding DisplayConferenceTier}"
                  FontSize="10" TextColor="{AppThemeBinding Light=#99000000, Dark=#99FFFFFF}" LineBreakMode="TailTruncation"/>
         </VerticalStackLayout>

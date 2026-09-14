@@ -16,8 +16,8 @@ namespace SaturdayPulse.ViewModels
         private ObservableCollection<TeamRanking> _filteredTeams = new();
         private bool          _isBusy;
         private RankingFilter _currentFilter         = RankingFilter.All;
-        private RankingSort   _currentSort           = RankingSort.Record;
-        private bool          _isSortAscending       = false;
+        private RankingSort   _currentSort           = RankingSort.Rank;
+        private bool          _isSortAscending       = true;
         private string        _selectedFilterDisplay = "All";
         private string        _statusMessage = "Loading...";
         private string        _emptyMessage = "Loading...";
@@ -170,6 +170,16 @@ namespace SaturdayPulse.ViewModels
                 _followService.Toggle(t.TeamID);
             });
 
+            // Team-name deep-link (2026-09-13) — mirrors ScheduleViewModel's
+            // command of the same name/shape. This ViewModel has no
+            // reference to MyTeamsViewModel, so it only raises the request
+            // via SharedNavigationStateService.TeamPreviewRequested.
+            NavigateToTeamCommand = new Microsoft.Maui.Controls.Command<int>(teamId =>
+            {
+                if (teamId == 0) return;
+                _navState.RequestTeamPreview(teamId);
+            });
+
             _navState.PropertyChanged += OnNavStateChanged;
             _followService.TeamFollowChanged += OnTeamFollowChanged;
             _rankingsCache.CacheUpdated += OnRankingsCacheUpdated;
@@ -276,6 +286,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand TogglePortalOutListCommand { get; }
         public ICommand ToggleScheduleExpandCommand { get; }
         public ICommand ToggleFollowCommand { get; }
+        public ICommand NavigateToTeamCommand { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
 

@@ -60,6 +60,7 @@ namespace SaturdayPulse.Models
                 OnPropertyChanged(nameof(DisplayHomeScore));
                 OnPropertyChanged(nameof(ActualMargin));
                 OnPropertyChanged(nameof(DisplayMargin));
+                OnPropertyChanged(nameof(DisplayMarginValue));
                 OnPropertyChanged(nameof(HomeIsWinner));
             }
         }
@@ -84,6 +85,7 @@ namespace SaturdayPulse.Models
                 OnPropertyChanged(nameof(DisplayVisitorScore));
                 OnPropertyChanged(nameof(ActualMargin));
                 OnPropertyChanged(nameof(DisplayMargin));
+                OnPropertyChanged(nameof(DisplayMarginValue));
                 OnPropertyChanged(nameof(HomeIsWinner));
             }
         }
@@ -115,6 +117,7 @@ namespace SaturdayPulse.Models
                 _status = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplayGameStatus));
+                OnPropertyChanged(nameof(DisplayGameTimeOrStatus));
                 OnPropertyChanged(nameof(IsFinal));
                 OnPropertyChanged(nameof(IsInProgress));
             }
@@ -130,6 +133,7 @@ namespace SaturdayPulse.Models
                 _period = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplayGameStatus));
+                OnPropertyChanged(nameof(DisplayGameTimeOrStatus));
             }
         }
 
@@ -143,8 +147,71 @@ namespace SaturdayPulse.Models
                 _clock = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplayGameStatus));
+                OnPropertyChanged(nameof(DisplayGameTimeOrStatus));
             }
         }
+
+        // ── Quarter-by-quarter line scores (2026-09-13) ─────────────────────
+        // Full properties (not auto-properties) — GameScorePollingService
+        // upserts these every ~2 minutes for an in-progress game (see
+        // GameScorePollingService.PollIfInWindowAsync), same live-refresh
+        // reasoning as HomePoints/AwayPoints/Status above. Null coalesced to
+        // an empty list on set so QN/OT accessors never need a null check.
+        // History coverage on these two columns is unconfirmed as of this
+        // change — QN/OT accessors below return "" for any missing index,
+        // which also covers older games that never had line scores recorded.
+        private List<int> _homeLineScores = new();
+        public List<int> HomeLineScores
+        {
+            get => _homeLineScores;
+            set
+            {
+                _homeLineScores = value ?? new List<int>();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HomeQ1));
+                OnPropertyChanged(nameof(HomeQ2));
+                OnPropertyChanged(nameof(HomeQ3));
+                OnPropertyChanged(nameof(HomeQ4));
+                OnPropertyChanged(nameof(HomeOT));
+                OnPropertyChanged(nameof(HasOvertime));
+            }
+        }
+
+        private List<int> _awayLineScores = new();
+        public List<int> AwayLineScores
+        {
+            get => _awayLineScores;
+            set
+            {
+                _awayLineScores = value ?? new List<int>();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AwayQ1));
+                OnPropertyChanged(nameof(AwayQ2));
+                OnPropertyChanged(nameof(AwayQ3));
+                OnPropertyChanged(nameof(AwayQ4));
+                OnPropertyChanged(nameof(AwayOT));
+                OnPropertyChanged(nameof(HasOvertime));
+            }
+        }
+
+        /// <summary>Returns "" for a quarter that hasn't been played/recorded yet rather than throwing on a short list.</summary>
+        private static string QuarterScoreAt(List<int> lineScores, int quarterIndex) =>
+            lineScores.Count > quarterIndex ? lineScores[quarterIndex].ToString(CultureInfo.InvariantCulture) : string.Empty;
+
+        public string AwayQ1 => QuarterScoreAt(AwayLineScores, 0);
+        public string AwayQ2 => QuarterScoreAt(AwayLineScores, 1);
+        public string AwayQ3 => QuarterScoreAt(AwayLineScores, 2);
+        public string AwayQ4 => QuarterScoreAt(AwayLineScores, 3);
+        public string AwayOT => QuarterScoreAt(AwayLineScores, 4);
+
+        public string HomeQ1 => QuarterScoreAt(HomeLineScores, 0);
+        public string HomeQ2 => QuarterScoreAt(HomeLineScores, 1);
+        public string HomeQ3 => QuarterScoreAt(HomeLineScores, 2);
+        public string HomeQ4 => QuarterScoreAt(HomeLineScores, 3);
+        public string HomeOT => QuarterScoreAt(HomeLineScores, 4);
+
+        /// <summary>True if either side's line scores carry a 5th (OT) entry — gates the OT column/header in XAML.</summary>
+        public bool HasOvertime => AwayLineScores.Count > 4 || HomeLineScores.Count > 4;
 
         /// <summary>
         /// "Final" when Status is "completed" (case-insensitive); "Halftime"
@@ -182,6 +249,19 @@ namespace SaturdayPulse.Models
                     : $"{Clock} {periodLabel}";
             }
         }
+
+        /// <summary>
+        /// Kickoff time when the game hasn't started (Status null/empty or
+        /// "scheduled"); DisplayGameStatus otherwise (which already resolves
+        /// to "Final" for completed games and clock/period for in-progress
+        /// ones). Lets one label occupy the space DisplayGameTime and
+        /// DisplayGameStatus used to split between them (2026-09-13 card
+        /// refactor).
+        /// </summary>
+        public string DisplayGameTimeOrStatus =>
+            string.IsNullOrEmpty(Status) || Status.Equals("scheduled", StringComparison.OrdinalIgnoreCase)
+                ? DisplayGameTime
+                : DisplayGameStatus;
 
         /// <summary>Matches "0:00" / "00:00" without a TimeSpan parse — CFBD's clock field is a plain "M:SS" string.</summary>
         private static bool IsClockZero(string? clock) =>
@@ -226,6 +306,19 @@ namespace SaturdayPulse.Models
         public string DisplayOU => IsPlayed
             ? $"O/U: {ActualOU} ({DisplayProjOU})"
             : $"O/U: ({DisplayProjOU})";
+
+        // ── Prefix-less margin/O-U (2026-09-13 card refactor) ───────────────
+        // Same values as DisplayMargin/DisplayOU but without the "Margin: "/
+        // "O/U: " label — the new combined-line layout carries that label in
+        // the card's column header instead ("Margin : O/U"), so repeating it
+        // per row would just eat width. DisplayMargin/DisplayOU are left
+        // in place above in case anything else still binds to them.
+        public string DisplayMarginValue => IsPlayed
+            ? $"{ActualMargin} ({DisplayProjMargin})"
+            : $"({DisplayProjMargin})";
+        public string DisplayOUValue => IsPlayed
+            ? $"{ActualOU} ({DisplayProjOU})"
+            : $"({DisplayProjOU})";
 
         public string NeutralIndicator => NeutralSite ? " (N)" : string.Empty;
 

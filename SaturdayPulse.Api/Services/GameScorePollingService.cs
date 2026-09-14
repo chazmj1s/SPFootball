@@ -31,7 +31,7 @@ namespace SaturdayPulse.Services
         IHttpClientFactory httpClientFactory,
         ILogger<GameScorePollingService> logger) : BackgroundService
     {
-        private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan PostKickoffMargin = TimeSpan.FromHours(5);
 
         // Must stay identical to GameDataService.LoadGamesAsync's
@@ -202,6 +202,8 @@ namespace SaturdayPulse.Services
                 game.Status = dto.Status;
                 game.Period = dto.Period;
                 game.Clock = dto.Clock;
+                game.HomeLineScores = dto.HomeTeam.LineScores == null ? string.Empty : string.Join(",", dto.HomeTeam.LineScores);
+                game.AwayLineScores = dto.AwayTeam.LineScores == null ? string.Empty : string.Join(",", dto.AwayTeam.LineScores);
 
                 await uow.Games.UpsertAsync(game, token);
                 updatedCount++;

@@ -302,6 +302,8 @@ namespace SaturdayPulse.Services
                     Status = g.Status,
                     Clock = g.Clock,
                     period = g.Period,
+                    homeLineScores = g.HomeLineScores,
+                    awayLineScores = g.AwayLineScores,
                     HomeName = g.HomeName,
                     HomeId = g.HomeId,
                     HomeConf = homeConfAbbr,
@@ -1137,6 +1139,7 @@ namespace SaturdayPulse.Services
                     return new
                     {
                         wr.TeamID,
+                        wr.Ranking,
                         RosterRank = rosterRank,
                         CombinedSOS = wr.CombinedSOS,
                         CompositeWinPct = compositeTotal > 0
@@ -1144,7 +1147,7 @@ namespace SaturdayPulse.Services
                             : 0.0
                     };
                 })
-                .OrderByDescending(x => x.CompositeWinPct)
+                .OrderByDescending(x => x.Ranking)
                 .ThenByDescending(x => (double?)x.CombinedSOS ?? double.MinValue)
                 .ThenBy(x => x.RosterRank ?? int.MaxValue)
                 .Select((x, i) => new { x.TeamID, Rank = i + 1 })
@@ -1242,7 +1245,7 @@ namespace SaturdayPulse.Services
                                     : 0.0
                             };
                         })
-                        .OrderByDescending(x => x.CompositeWinPct)
+                        .OrderByDescending(x => x.Weekly.Ranking)
                         .ThenByDescending(x => (double?)x.Weekly.CombinedSOS ?? double.MinValue)
                         .ThenBy(x => x.RosterRank ?? int.MaxValue)
                         .ToList();

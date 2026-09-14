@@ -78,6 +78,22 @@ namespace SaturdayPulse.ViewModels
         public bool IsLoading => _isBusy;
         public bool HasLoaded { get; private set; }
 
+        // ── Pull-to-refresh spinner ──────────────────────────────────────
+        // Deliberately separate from IsBusy - same reasoning as
+        // ScheduleViewModel's fix for the identical bug: RefreshView's
+        // IsRefreshing defaults to TwoWay, so binding it straight to IsBusy
+        // would let the native pull gesture set IsBusy=true before
+        // RefreshCommand's handler runs, tripping LoadDataAsync's own
+        // "if (IsBusy) return;" guard and leaving the spinner stuck
+        // permanently. Set/cleared explicitly by RefreshCommand below and
+        // bound OneWay in XAML.
+        private bool _isRefreshing;
+        public bool IsRefreshing
+        {
+            get => _isRefreshing;
+            private set { _isRefreshing = value; OnPropertyChanged(); }
+        }
+
         public string StatusMessage
         {
             get => _statusMessage;
@@ -699,7 +715,25 @@ namespace SaturdayPulse.ViewModels
             // rivalry fetch inside it is offloaded via Task.Run and the continuation
             // (ApplyTeamFilter / ApplyGamesFilter) returns to the main thread.
             LoadDataCommand = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
-            RefreshCommand  = new Microsoft.Maui.Controls.Command(() => _ = LoadDataAsync());
+
+            // Explicitly owns IsRefreshing rather than reusing IsBusy — see
+            // the property's doc comment above for why sharing IsBusy here
+            // would leave the spinner stuck. If LoadDataAsync no-ops because
+            // IsBusy is already true, this still clears IsRefreshing in the
+            // finally, so the spinner dismisses immediately rather than
+            // hanging.
+            RefreshCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                IsRefreshing = true;
+                try
+                {
+                    await LoadDataAsync();
+                }
+                finally
+                {
+                    IsRefreshing = false;
+                }
+            });
 
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {

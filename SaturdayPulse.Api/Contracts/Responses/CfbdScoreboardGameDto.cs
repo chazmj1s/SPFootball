@@ -44,5 +44,8 @@ namespace SaturdayPulse.Api.Contracts.Responses
 
         [JsonPropertyName("points")]
         public int? Points { get; set; }
+
+        [JsonPropertyName("lineScores")]
+        public List<int>? LineScores { get; set; }
     }
 }

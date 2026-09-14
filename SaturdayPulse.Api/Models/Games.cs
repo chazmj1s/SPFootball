@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace SaturdayPulse.Models
 {
@@ -37,5 +38,7 @@ namespace SaturdayPulse.Models
         public string? Status { get; set; }
         public int?    Period { get; set; }
         public string? Clock  { get; set; }
+        public string? HomeLineScores { get; set; }
+        public string? AwayLineScores { get; set; }
     }
 }

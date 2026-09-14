@@ -43,6 +43,9 @@ namespace SaturdayPulse.Models
         public string? Status { get; set; }
         public int?    Period { get; set; }
         public string? Clock  { get; set; }
+        public string? HomeLineScores { get; set; }
+        public string? AwayLineScores { get; set; }
+
 
         // Nested stats — deserialized as raw objects, mapped separately
         public GameTeamStatsDto? HomeStats    { get; set; }
