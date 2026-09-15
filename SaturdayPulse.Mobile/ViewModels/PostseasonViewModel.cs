@@ -12,6 +12,14 @@ namespace SaturdayPulse.ViewModels
     /// Drives the Postseason page — Title Games, Playoffs, and Bowls tabs.
     /// Title Games come from the championship qualifiers endpoint.
     /// Playoffs and Bowls are filtered out of the shared schedule cache.
+    ///
+    /// Playoffs tab has two states: before the real CFP games exist in the
+    /// schedule cache, it shows a projected 12-team seed table (Ranking-only,
+    /// no conference championship simulation — see PlayoffSeedingService on
+    /// the Api side). Once real "playoff" SeasonType games appear (the
+    /// committee's actual field, which is authoritative over our own
+    /// projection), it switches to the existing real-bracket view and the
+    /// seed table is dropped.
     /// </summary>
     public class PostseasonViewModel : BaseViewModel
     {
@@ -85,6 +93,9 @@ namespace SaturdayPulse.ViewModels
         public ObservableCollection<PlayoffRound>        PlayoffRounds { get; } = new();
         public ObservableCollection<BowlWeekendGroup>    BowlWeekends  { get; } = new();
 
+        /// <summary>Projected 12-team seed table — populated only when HasPlayoffData is false.</summary>
+        public ObservableCollection<PlayoffSeed>         PlayoffSeeds  { get; } = new();
+
         // ── Bindable properties ───────────────────────────────────────────
 
         public bool IsBusy
@@ -102,8 +113,19 @@ namespace SaturdayPulse.ViewModels
         /// loading off-screen; the lazy SyncPage path loads it on first visit.
         /// </summary>
         public bool IsActive        { get; set; }
+
+        /// <summary>True once the committee's real CFP games exist in the schedule cache.</summary>
         public bool HasPlayoffData  => PlayoffRounds.Any();
         public bool HasBowlData     => BowlWeekends.Any();
+
+        /// <summary>True once a projected seed table has been loaded.</summary>
+        public bool HasSeedingData  => PlayoffSeeds.Any();
+
+        /// <summary>Seed table is the thing to show: no real bracket yet, but we have a projection.</summary>
+        public bool IsSeedingView   => !HasPlayoffData && HasSeedingData;
+
+        /// <summary>Either the real bracket or the projected seed table has something to show.</summary>
+        public bool HasPlayoffOrSeedingData => HasPlayoffData || HasSeedingData;
 
         public string StatusMessage
         {
@@ -176,6 +198,13 @@ namespace SaturdayPulse.ViewModels
 
                 RebuildPostseasonFromCache();
 
+                // Real bracket takes precedence — only fetch/show the projected
+                // seed table when the committee hasn't set the field yet.
+                if (!HasPlayoffData)
+                    await LoadPlayoffSeedingAsync();
+                else
+                    ClearPlayoffSeeding();
+
                 StatusMessage = $"{_navState.SelectedYear} projections";
                 HasLoaded = true;
             }
@@ -189,6 +218,36 @@ namespace SaturdayPulse.ViewModels
                 IsBusy = false;
             }
         }
+
+        // ── Load projected playoff seed table ─────────────────────────────
+
+        private async Task LoadPlayoffSeedingAsync()
+        {
+            var field = await Task.Run(async () =>
+                await _apiService.GetPlayoffSeedingAsync(_navState.SelectedYear, _navState.SelectedWeek));
+
+            PlayoffSeeds.Clear();
+            if (field?.Field != null)
+            {
+                foreach (var seed in field.Field)
+                    PlayoffSeeds.Add(seed);
+            }
+
+            OnPropertyChanged(nameof(HasSeedingData));
+            OnPropertyChanged(nameof(IsSeedingView));
+            OnPropertyChanged(nameof(HasPlayoffOrSeedingData));
+        }
+
+        private void ClearPlayoffSeeding()
+        {
+            if (PlayoffSeeds.Count == 0) return;
+
+            PlayoffSeeds.Clear();
+            OnPropertyChanged(nameof(HasSeedingData));
+            OnPropertyChanged(nameof(IsSeedingView));
+            OnPropertyChanged(nameof(HasPlayoffOrSeedingData));
+        }
+
         // ── Build Bowls + Playoffs from cached schedule ───────────────────
 
         private void RebuildPostseasonFromCache()
@@ -200,6 +259,8 @@ namespace SaturdayPulse.ViewModels
                 BowlWeekends.Clear();
                 OnPropertyChanged(nameof(HasPlayoffData));
                 OnPropertyChanged(nameof(HasBowlData));
+                OnPropertyChanged(nameof(IsSeedingView));
+                OnPropertyChanged(nameof(HasPlayoffOrSeedingData));
                 return;
             }
 
@@ -233,6 +294,8 @@ namespace SaturdayPulse.ViewModels
             foreach (var round in playoffRounds)
                 PlayoffRounds.Add(round);
             OnPropertyChanged(nameof(HasPlayoffData));
+            OnPropertyChanged(nameof(IsSeedingView));
+            OnPropertyChanged(nameof(HasPlayoffOrSeedingData));
 
             // ── Bowls — grouped by weekend (Fri–Sun), then by day ─────────
             // SelectedConference now stores Abbreviation directly — no DisplayToAbbr needed
@@ -358,19 +421,30 @@ namespace SaturdayPulse.ViewModels
             {
                 case FilterChangeReason.Year:
                     // Full reload — new year means new schedule + new championships
+                    // (+ new seed table, if the new year's field isn't set yet)
                     await LoadDataAsync();
                     break;
 
                 case FilterChangeReason.Week:
-                    // Week change only matters for championship qualifiers (not bowls/playoffs)
+                    // Week change matters for championship qualifiers and, now,
+                    // playoff seeding (Ranking snapshot is as-of-week). Bowls and
+                    // the real playoff bracket are schedule-driven, not
+                    // week-driven, so neither needs a reload.
                     if (_selectedView != "Bowls" && _selectedView != "Playoffs")
+                    {
                         await LoadDataAsync();
+                    }
                     else
+                    {
                         ApplyConferenceFilter();
+                        if (_selectedView == "Playoffs" && !HasPlayoffData)
+                            await LoadPlayoffSeedingAsync();
+                    }
                     break;
 
                 case FilterChangeReason.Conference:
-                    // Conference/favorites — refilter cached data only
+                    // Conference/favorites — refilter cached data only.
+                    // Seeding is a national field, not conference-filtered.
                     ApplyConferenceFilter();
                     break;
             }

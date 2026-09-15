@@ -70,6 +70,7 @@ builder.Services.AddScoped<ProjectionAccuracyService>();
 builder.Services.AddScoped<ConferenceTierService>();
 builder.Services.AddScoped<RosterCapacityService>();
 builder.Services.AddScoped<UserProfileService>();
+builder.Services.AddScoped<IPlayoffSeedingService, PlayoffSeedingService>();
 
 
 // Content management (About/Privacy/Terms/etc.) — same Scoped lifetime as
