@@ -658,7 +658,18 @@ namespace SaturdayPulse.Services
                                                ConferenceLosses = c.GetProperty("conferenceLosses").GetInt32(),
                                                ActualConferenceWins = c.GetProperty("actualConferenceWins").GetInt32(),
                                                ActualConferenceLosses = c.GetProperty("actualConferenceLosses").GetInt32()
-                                           }).ToList()
+                                           }).ToList(),
+                    // Was never parsed before this — Game always came back null
+                    // regardless of what the Api sent, so the shared game card
+                    // never actually rendered for a real title game. Reuses
+                    // GameResultDto/ToGameResult() rather than hand-writing the
+                    // ~20-property mapping a second time in this file.
+                    Game             = r.TryGetProperty("game", out var g) && g.ValueKind != JsonValueKind.Null
+                                           ? JsonSerializer.Deserialize<GameResultDto>(g.GetRawText(), options)?.ToGameResult()
+                                           : null,
+                    ProjectedMatchup = r.TryGetProperty("projectedMatchup", out var pm) && pm.ValueKind != JsonValueKind.Null
+                                           ? ParseProjectedMatchup(pm)
+                                           : null,
                 }).ToList();
             }
             catch (Exception ex)
@@ -667,6 +678,18 @@ namespace SaturdayPulse.Services
                 return null;
             }
         }
+
+        private static ChampionshipProjectedMatchup ParseProjectedMatchup(JsonElement pm) => new()
+        {
+            HomeName       = pm.GetProperty("homeName").GetString(),
+            AwayName       = pm.GetProperty("awayName").GetString(),
+            HomeProjScore  = pm.GetProperty("homeProjScore").GetDouble(),
+            AwayProjScore  = pm.GetProperty("awayProjScore").GetDouble(),
+            ExpectedMargin = pm.GetProperty("expectedMargin").GetDouble(),
+            Confidence     = pm.TryGetProperty("confidence", out var c) && c.ValueKind != JsonValueKind.Null
+                                 ? c.GetString() : null,
+            Week           = pm.GetProperty("week").GetInt32(),
+        };
 
         private static ChampionshipQualifier ParseQualifier(JsonElement q) => new()
         {

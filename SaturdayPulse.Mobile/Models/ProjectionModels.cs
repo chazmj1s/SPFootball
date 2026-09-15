@@ -211,6 +211,27 @@ namespace SaturdayPulse.Models
         public string ActualConferenceRecord      => $"{ActualConferenceWins}-{ActualConferenceLosses}";
     }
 
+    // ── Championship projected matchup (no real game scheduled yet) ────────
+
+    /// <summary>
+    /// Hypothetical Qualifier1-vs-Qualifier2 score from the matchup engine,
+    /// shown only while there's no real Games row for the pairing yet —
+    /// once one exists, ChampionshipMatchup.Game takes over and this is moot.
+    /// </summary>
+    public class ChampionshipProjectedMatchup
+    {
+        public string  HomeName       { get; set; }
+        public string  AwayName       { get; set; }
+        public double  HomeProjScore  { get; set; }
+        public double  AwayProjScore  { get; set; }
+        public double  ExpectedMargin { get; set; }
+        public string? Confidence     { get; set; }
+        public int     Week           { get; set; }
+
+        public string DisplayHomeScore => $"({Math.Round(HomeProjScore):0})";
+        public string DisplayAwayScore => $"({Math.Round(AwayProjScore):0})";
+    }
+
     // ── Championship matchup ──────────────────────────────────────────────
 
     public class ChampionshipMatchup : INotifyPropertyChanged
@@ -228,6 +249,31 @@ namespace SaturdayPulse.Models
         public string                SimulatedThrough { get; set; }
         public List<ChampionshipContender> Contenders { get; set; } = new();
         public GameResult? Game { get; set; }
+
+        /// <summary>True until CFBD schedules the real pairing — gates the
+        /// Tiebreaker/Contenders toggles shown at this level so they never
+        /// duplicate the same toggles inside GameResultCard once Game exists.</summary>
+        public bool HasNoGame => Game == null;
+        public ChampionshipProjectedMatchup? ProjectedMatchup { get; set; }
+
+        /// <summary>Shown only while CFBD hasn't scheduled the real pairing yet.</summary>
+        public bool HasProjectedMatchup => Game == null && ProjectedMatchup != null;
+
+        /// <summary>Projected score for whichever qualifier matches this team name
+        /// in ProjectedMatchup — home/away there don't correspond to Qualifier1/2's
+        /// standings-based order, so this matches by name instead of position.</summary>
+        public string Qualifier1ProjectedScoreDisplay => ProjectedScoreFor(Qualifier1?.TeamName);
+        public string Qualifier2ProjectedScoreDisplay => ProjectedScoreFor(Qualifier2?.TeamName);
+
+        private string ProjectedScoreFor(string? teamName)
+        {
+            if (ProjectedMatchup == null || teamName == null) return string.Empty;
+            if (string.Equals(ProjectedMatchup.HomeName, teamName, StringComparison.OrdinalIgnoreCase))
+                return ProjectedMatchup.DisplayHomeScore;
+            if (string.Equals(ProjectedMatchup.AwayName, teamName, StringComparison.OrdinalIgnoreCase))
+                return ProjectedMatchup.DisplayAwayScore;
+            return string.Empty;
+        }
 
         public bool HasTiebreaker => TiebreakerLog.Any(l => l.Contains("applying"));
         public bool HasStubs      => StubsApplied.Any();

@@ -492,6 +492,50 @@ namespace SaturdayPulse.Models
 
         public bool HasStats => HomeStats != null && AwayStats != null;
 
+        // ── Conference championship qualifier data (title games only) ──────
+        // Populated only when this GameResult represents a conference title
+        // game — null/empty for Playoffs and Bowls, which is what "disabled"
+        // means here: the toggles below just don't show (Charlie, 2026-09-15).
+
+        private List<ChampionshipContender> _contenders = new();
+        public List<ChampionshipContender> Contenders
+        {
+            get => _contenders;
+            set { _contenders = value ?? new(); OnPropertyChanged(); OnPropertyChanged(nameof(HasContenders)); }
+        }
+
+        private List<string> _tiebreakerLog = new();
+        public List<string> TiebreakerLog
+        {
+            get => _tiebreakerLog;
+            set { _tiebreakerLog = value ?? new(); OnPropertyChanged(); OnPropertyChanged(nameof(HasTiebreaker)); OnPropertyChanged(nameof(TiebreakerSummary)); }
+        }
+
+        public bool HasContenders => Contenders.Any();
+
+        /// <summary>Same "applying" substring check as ChampionshipMatchup.HasTiebreaker.</summary>
+        public bool HasTiebreaker => TiebreakerLog.Any(l => l.Contains("applying"));
+
+        public string TiebreakerSummary => HasTiebreaker ? "Tiebreaker applied" : "Outright qualifiers";
+
+        private bool _isTiebreakerExpanded;
+        public bool IsTiebreakerExpanded
+        {
+            get => _isTiebreakerExpanded;
+            set { _isTiebreakerExpanded = value; OnPropertyChanged(); OnPropertyChanged(nameof(TiebreakerExpandIcon)); }
+        }
+
+        public string TiebreakerExpandIcon => _isTiebreakerExpanded ? "▲" : "▼";
+
+        private bool _isContendersExpanded;
+        public bool IsContendersExpanded
+        {
+            get => _isContendersExpanded;
+            set { _isContendersExpanded = value; OnPropertyChanged(); OnPropertyChanged(nameof(ContendersExpandIcon)); }
+        }
+
+        public string ContendersExpandIcon => _isContendersExpanded ? "▲" : "▼";
+
         // ── Inter-division / detail visibility ────────────────────────────
 
         /// <summary>True when only one team has stats — FBS vs FCS matchup.</summary>

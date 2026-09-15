@@ -52,6 +52,27 @@ namespace SaturdayPulse.Models
         public GameTeamStatsDto? AwayStats    { get; set; }
         public GameLinesDto?     VegasLines   { get; set; }
         public RivalryNotesDto?  RivalryNotes { get; set; }
+
+        // Conference championship qualifier data — populated only when this
+        // game is a title game (see BuildTitleGameObject on the Api side).
+        public List<ChampionshipContenderDto>? Contenders   { get; set; }
+        public List<string>?                   TiebreakerLog { get; set; }
+    }
+
+    /// <summary>
+    /// Mirrors ChampionshipContender's settable fields — the *Record display
+    /// strings are computed client-side on ChampionshipContender itself, not
+    /// carried over the wire a second time.
+    /// </summary>
+    public class ChampionshipContenderDto
+    {
+        public string? TeamName               { get; set; }
+        public int      ConferenceWins         { get; set; }
+        public int      ConferenceLosses       { get; set; }
+        public int      OverallWins            { get; set; }
+        public int      OverallLosses          { get; set; }
+        public int      ActualConferenceWins   { get; set; }
+        public int      ActualConferenceLosses { get; set; }
     }
 
     public class GameTeamStatsDto
