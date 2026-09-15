@@ -355,6 +355,32 @@ namespace SaturdayPulse.Services
         }
 
         /// <summary>
+        /// Gets the projected 12-team CFP field for a year/week, off WeeklyRankings'
+        /// Ranking field only (no conference championship simulation).
+        /// Maps to: GET /api/productiongamedata/playoff-seeding?year=X&amp;week=Y
+        /// </summary>
+        public async Task<PlayoffFieldResult?> GetPlayoffSeedingAsync(int year, int week)
+        {
+            try
+            {
+                var url = $"playoff-seeding?year={year}&week={week}";
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching playoff seeding: {url}");
+
+                var data = await _httpClient.GetFromJsonAsync<PlayoffFieldResult>(url);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Playoff seeding for {year} week {week}: {data?.Field?.Count ?? 0} team(s) returned");
+
+                return data;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error fetching playoff seeding: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Gets CFP playoff games (SeasonType == "playoff") for a given year.
         /// </summary>
         public async Task<List<Models.GameResult>?> GetPlayoffGamesAsync(int? year = null)

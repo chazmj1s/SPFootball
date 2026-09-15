@@ -400,12 +400,69 @@
       <ScrollView>
         <VerticalStackLayout Spacing="0">
 
-          <Label IsVisible="{Binding HasPlayoffData, Converter={StaticResource InvertedBoolConverter}}"
+          <!-- Neither a real bracket nor a projected seed table yet -->
+          <Label IsVisible="{Binding HasPlayoffOrSeedingData, Converter={StaticResource InvertedBoolConverter}}"
                  Text="{Binding StatusMessage}"
                  FontSize="13" Opacity="0.6" HorizontalOptions="Center"
                  Margin="0,40,0,0"
                  TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
 
+          <!-- ── Projected Seeding — shown before the committee sets the real field ── -->
+          <VerticalStackLayout IsVisible="{Binding IsSeedingView}" Spacing="0">
+
+            <Grid BackgroundColor="{AppThemeBinding Light=#6B4EAE, Dark=#2A2040}"
+                  Padding="12,8">
+              <Label Text="Projected Field — Rankings Only"
+                     FontSize="13" FontAttributes="Bold" TextColor="White" />
+            </Grid>
+            <Label Text="Seeded off current Ranking only — no conference championship simulation yet."
+                   FontSize="10" Opacity="0.6" Padding="12,6,12,6" />
+
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding PlayoffSeeds}" Spacing="0">
+              <BindableLayout.ItemTemplate>
+                <DataTemplate x:DataType="models:PlayoffSeed">
+                  <Grid ColumnDefinitions="28,*,64,52" Padding="10,6" ColumnSpacing="6">
+                    <Grid.Triggers>
+                      <DataTrigger TargetType="Grid" Binding="{Binding HasBye}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF3E0, Dark=#2A2013}" />
+                      </DataTrigger>
+                    </Grid.Triggers>
+
+                    <Label Grid.Column="0" Text="{Binding Seed}"
+                           FontSize="13" FontAttributes="Bold" VerticalOptions="Center" />
+
+                    <Label Grid.Column="1" FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="{Binding TeamName}" />
+                          <Span Text="{Binding AutoBidReason, StringFormat=' ({0})'}"
+                                FontSize="10"
+                                TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+
+                    <Label Grid.Column="2" Text="{Binding Ranking, StringFormat='{0:0.0000}'}"
+                           FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+
+                    <Label Grid.Column="3" HorizontalOptions="End" VerticalOptions="Center" FontSize="11">
+                      <Label.FormattedText>
+                        <FormattedString>
+                          <Span Text="{Binding Wins}" />
+                          <Span Text="-" />
+                          <Span Text="{Binding Losses}" />
+                        </FormattedString>
+                      </Label.FormattedText>
+                    </Label>
+                  </Grid>
+                </DataTemplate>
+              </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+          </VerticalStackLayout>
+
+          <!-- ── Real bracket — once CFBD posts the committee's actual games ── -->
           <VerticalStackLayout IsVisible="{Binding HasPlayoffData}"
                                BindableLayout.ItemsSource="{Binding PlayoffRounds}"
                                Spacing="0">

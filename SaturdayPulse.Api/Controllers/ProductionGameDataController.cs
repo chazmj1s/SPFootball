@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SaturdayPulse.Contracts.Requests;
+using SaturdayPulse.Interfaces;
 using SaturdayPulse.Services;
 
 namespace SaturdayPulse.Controllers
@@ -18,6 +19,7 @@ namespace SaturdayPulse.Controllers
     public class ProductionGameDataController(
         ProductionGameDataService gameDataService,
         RosterCapacityService rosterCapacityService,
+        IPlayoffSeedingService playoffSeedingService,
         ILogger<ProductionGameDataController> logger) : ControllerBase
     {
         #region Predictions
@@ -656,6 +658,30 @@ namespace SaturdayPulse.Controllers
             {
                 logger.LogError(ex, "Error computing V2 projected championship qualifiers");
                 return StatusCode(500, "An error occurred computing projected championship qualifiers.");
+            }
+        }
+
+        /// <summary>
+        /// Projected 12-team CFP field, off WeeklyRankings' Ranking field only —
+        /// no conference championship game simulation (deferred).
+        /// Example: GET /api/productiongamedata/playoff-seeding?year=2026&week=15
+        /// </summary>
+        [HttpGet("playoff-seeding")]
+        public async Task<IActionResult> GetPlayoffSeeding(
+            [FromQuery] int? year,
+            [FromQuery] int week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var result = await playoffSeedingService.GetProjectedFieldAsync(targetYear, week, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing playoff seeding for {Year} week {Week}", year, week);
+                return StatusCode(500, "An error occurred computing the projected playoff field.");
             }
         }
 
