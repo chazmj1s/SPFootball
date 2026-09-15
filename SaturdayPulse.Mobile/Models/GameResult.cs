@@ -1,6 +1,7 @@
 using Syncfusion.Licensing;
 using System.ComponentModel;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace SaturdayPulse.Models
@@ -174,6 +175,8 @@ namespace SaturdayPulse.Models
                 OnPropertyChanged(nameof(HomeQ4));
                 OnPropertyChanged(nameof(HomeOT));
                 OnPropertyChanged(nameof(HasOvertime));
+                OnPropertyChanged(nameof(OvertimeCount));
+                OnPropertyChanged(nameof(OvertimeHeaderText));
             }
         }
 
@@ -191,6 +194,8 @@ namespace SaturdayPulse.Models
                 OnPropertyChanged(nameof(AwayQ4));
                 OnPropertyChanged(nameof(AwayOT));
                 OnPropertyChanged(nameof(HasOvertime));
+                OnPropertyChanged(nameof(OvertimeCount));
+                OnPropertyChanged(nameof(OvertimeHeaderText));
             }
         }
 
@@ -198,20 +203,56 @@ namespace SaturdayPulse.Models
         private static string QuarterScoreAt(List<int> lineScores, int quarterIndex) =>
             lineScores.Count > quarterIndex ? lineScores[quarterIndex].ToString(CultureInfo.InvariantCulture) : string.Empty;
 
+        /// <summary>
+        /// CFBD gives each overtime period its own array slot (confirmed
+        /// against the 2018 Texas A&amp;M/LSU 7-OT game: 11-entry arrays,
+        /// index 4-10) but the card only has room for one OT column. Shown
+        /// as "{points before the deciding period} ({deciding period's
+        /// points})" — e.g. a 7-OT game with periods 3,7,8,3,6,8,6 renders
+        /// as "35 (6)". For the far more common single-OT case this
+        /// collapses to just the period's score ("6"), since "0 (6)" reads
+        /// oddly when there's nothing to sum before it. The authoritative
+        /// final score is always HomePoints/AwayPoints, not a sum of this
+        /// column — a game whose OT column undercounts due to a data gap
+        /// still shows the correct Total.
+        /// </summary>
+        private static string OvertimeDisplay(List<int> lineScores)
+        {
+            if (lineScores.Count <= 4) return string.Empty;
+
+            var otPeriods = lineScores.Skip(4).ToList();
+            var lastPeriod = otPeriods[^1];
+
+            return otPeriods.Count == 1
+                ? lastPeriod.ToString(CultureInfo.InvariantCulture)
+                : $"{otPeriods.Take(otPeriods.Count - 1).Sum()} ({lastPeriod})";
+        }
+
         public string AwayQ1 => QuarterScoreAt(AwayLineScores, 0);
         public string AwayQ2 => QuarterScoreAt(AwayLineScores, 1);
         public string AwayQ3 => QuarterScoreAt(AwayLineScores, 2);
         public string AwayQ4 => QuarterScoreAt(AwayLineScores, 3);
-        public string AwayOT => QuarterScoreAt(AwayLineScores, 4);
+        public string AwayOT => OvertimeDisplay(AwayLineScores);
 
         public string HomeQ1 => QuarterScoreAt(HomeLineScores, 0);
         public string HomeQ2 => QuarterScoreAt(HomeLineScores, 1);
         public string HomeQ3 => QuarterScoreAt(HomeLineScores, 2);
         public string HomeQ4 => QuarterScoreAt(HomeLineScores, 3);
-        public string HomeOT => QuarterScoreAt(HomeLineScores, 4);
+        public string HomeOT => OvertimeDisplay(HomeLineScores);
 
         /// <summary>True if either side's line scores carry a 5th (OT) entry — gates the OT column/header in XAML.</summary>
         public bool HasOvertime => AwayLineScores.Count > 4 || HomeLineScores.Count > 4;
+
+        /// <summary>
+        /// Number of overtime periods played, taken from whichever side's
+        /// list is longer (defensive against a mismatch — both sides should
+        /// always match in practice, since periods are played simultaneously).
+        /// 0 when there was no overtime.
+        /// </summary>
+        public int OvertimeCount => Math.Max(AwayLineScores.Count, HomeLineScores.Count) - 4 is var n && n > 0 ? n : 0;
+
+        /// <summary>Header label for the OT column — "OT (7)" for the Texas A&amp;M/LSU game, "OT (1)" for a normal single-OT game, empty (column hidden via HasOvertime) otherwise.</summary>
+        public string OvertimeHeaderText => HasOvertime ? $"OT ({OvertimeCount})" : string.Empty;
 
         /// <summary>
         /// "Final" when Status is "completed" (case-insensitive); "Halftime"
