@@ -575,13 +575,17 @@ namespace SaturdayPulse.Services
             // ── TeamId lookup per conference — needed to match the title game ─────
             // BuildQualifierResponse anonymous-types Qualifier1/2 and drops TeamId,
             // so we capture IDs here directly from standingsByConference.
-            var teamIdsByConference = standingsByConference
+            // Carries the full ConferenceStanding, not just TeamId, so the
+            // "higher seed hosts" projection below (for conferences with no
+            // real title game posted yet) has what it needs without a second
+            // standings lookup.
+            var qualifiersByConference = standingsByConference
                 .Where(kvp => kvp.Value.Count >= 2)
                 .Select(kvp => service.GetQualifiers(kvp.Key, kvp.Value))
                 .Where(r => r.Qualifier1 != null && r.Qualifier2 != null)
                 .ToDictionary(
                     r => r.Conference,
-                    r => (Q1: r.Qualifier1.TeamId, Q2: r.Qualifier2.TeamId));
+                    r => (Q1: r.Qualifier1, Q2: r.Qualifier2));
 
             // ── Supporting data for the game card — same lookups as GetScheduleV2Async ─
             var allGames = await _uow.Games.GetByYearAsync(targetYear, token);
@@ -614,14 +618,18 @@ namespace SaturdayPulse.Services
             // Find candidate title games up front (so we know which weeks to query
             // for stats and lines — typically just the conference championship week)
             var titleGamesByConf = new Dictionary<string, Games>();
-            foreach (var kvp in teamIdsByConference)
+            foreach (var kvp in qualifiersByConference)
             {
                 var (q1, q2) = kvp.Value;
                 var game = allGames.FirstOrDefault(g =>
-                    (g.HomeId == q1 && g.AwayId == q2) ||
-                    (g.HomeId == q2 && g.AwayId == q1));
+                    (g.HomeId == q1.TeamId && g.AwayId == q2.TeamId) ||
+                    (g.HomeId == q2.TeamId && g.AwayId == q1.TeamId));
                 if (game != null) titleGamesByConf[kvp.Key] = game;
             }
+
+            // Needed below for conferences with no real title game posted yet —
+            // computed once here rather than per-conference in the loop.
+            var championshipWeek = ChampionshipWeekCalculator.GetChampionshipWeek(targetYear, allGames);
 
             var titleGames = titleGamesByConf.Values.ToList();
             var titleGameWeeks = titleGames.Select(g => g.Week).Distinct().ToList();
@@ -675,11 +683,51 @@ namespace SaturdayPulse.Services
                 var conf = (string)r.Conference;
 
                 object? gameObj = null;
+                object? projectedMatchup = null;
 
                 if (titleGamesByConf.TryGetValue(conf, out var titleGame))
+                {
                     gameObj = BuildTitleGameObject(
                         titleGame, teams, allProjections, rankingsByWeek,
                         linesByGameId, LookupWeek, GetConfAbbr, GetTier);
+                }
+                else if (championshipWeek.HasValue && qualifiersByConference.TryGetValue(conf, out var pair))
+                {
+                    var (q1, q2) = pair;
+
+                    // Higher seed hosts — approximates most non-neutral-site
+                    // championship games; real venue data doesn't exist for a
+                    // game that isn't scheduled yet (Charlie, 2026-09-15).
+                    var (homeQ, awayQ) = q1.ConferenceWinPct >= q2.ConferenceWinPct
+                        ? (q1, q2) : (q2, q1);
+
+                    GamePrediction? pred = null;
+                    try
+                    {
+                        pred = await PredictMatchupAsync(
+                            targetYear, homeQ.TeamName, awayQ.TeamName, 'H', championshipWeek.Value, token);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Team name mismatch between ConferenceStanding.TeamName
+                        // and the Teams table for one pairing shouldn't fail the
+                        // whole response.
+                    }
+
+                    if (pred != null)
+                    {
+                        projectedMatchup = new
+                        {
+                            HomeName       = homeQ.TeamName,
+                            AwayName       = awayQ.TeamName,
+                            HomeProjScore  = Math.Round(pred.PredictedTeamScore, 1),
+                            AwayProjScore  = Math.Round(pred.PredictedOpponentScore, 1),
+                            ExpectedMargin = Math.Round(pred.ExpectedMargin, 1),
+                            Confidence     = pred.Confidence,
+                            Week           = championshipWeek.Value,
+                        };
+                    }
+                }
 
                 enriched.Add(new
                 {
@@ -694,6 +742,7 @@ namespace SaturdayPulse.Services
                     r.SimulatedThrough,
                     r.Contenders,
                     Game = gameObj,
+                    ProjectedMatchup = projectedMatchup,
                 });
             }
 
@@ -953,10 +1002,17 @@ namespace SaturdayPulse.Services
 
             var allGames = await _uow.Games.GetByYearAsync(year, token);
 
-            if (allGames.Any())
+            // Exclude championship-week conference games from the pool of
+            // "remaining regular season" games to project — standings decide
+            // who plays in the championship, so the championship game itself
+            // can't also be projected as a normal remaining conference game.
+            // Previously used the year's max Games.Week as a proxy for this,
+            // which broke as soon as bowls/playoffs (Week 20+) landed in the
+            // table for that year — see ChampionshipWeekCalculator remarks.
+            var championshipWeek = ChampionshipWeekCalculator.GetChampionshipWeek(year, allGames);
+            if (championshipWeek.HasValue)
             {
-                var maxWeek = allGames.Max(g => g.Week);
-                allGames = allGames.Where(g => g.Week < maxWeek).ToList();
+                allGames = allGames.Where(g => g.Week < championshipWeek.Value).ToList();
             }
 
             var confGames = allGames.Where(g => g.ConferenceGame == true).ToList();

@@ -51,6 +51,18 @@ namespace SaturdayPulse.Models
                 AwayStats     = dto.AwayStats?.ToGameTeamStats(),
                 VegasLines    = dto.VegasLines?.ToGameLines(),
                 RivalryNotes  = dto.RivalryNotes?.ToRivalryNotes(),
+
+                Contenders    = dto.Contenders?.Select(c => new ChampionshipContender
+                {
+                    TeamName               = c.TeamName ?? string.Empty,
+                    ConferenceWins         = c.ConferenceWins,
+                    ConferenceLosses       = c.ConferenceLosses,
+                    OverallWins            = c.OverallWins,
+                    OverallLosses          = c.OverallLosses,
+                    ActualConferenceWins   = c.ActualConferenceWins,
+                    ActualConferenceLosses = c.ActualConferenceLosses,
+                }).ToList() ?? new(),
+                TiebreakerLog = dto.TiebreakerLog ?? new(),
             };
         }
 

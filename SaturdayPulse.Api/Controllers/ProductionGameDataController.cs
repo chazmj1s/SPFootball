@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Interfaces;
+using SaturdayPulse.Contracts.Requests;
 using SaturdayPulse.Services;
 
 namespace SaturdayPulse.Controllers

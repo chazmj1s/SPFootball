@@ -1,0 +1,668 @@
+using Microsoft.Extensions.Caching.Memory;
+using SaturdayPulse.Contracts;
+using SaturdayPulse.Contracts.Requests;
+using SaturdayPulse.Contracts.Responses;
+using SaturdayPulse.Interfaces;
+using SaturdayPulse.Models;
+
+namespace SaturdayPulse.Services
+{
+    /// <summary>
+    /// Encapsulates all data-access and business logic for the production read-only
+    /// endpoints. All legacy methods removed 2026-05-19 — use V2 equivalents in
+    /// ProductionGameDataService_V2.cs.
+    ///
+    /// GetGameAsync (manual single-game refresh) lives in the
+    /// ProductionGameDataService.GameRefresh.cs partial — added here only to
+    /// extend the constructor with IGameDataService/IMemoryCache, which every
+    /// partial needs visible since C# primary-constructor parameters can only
+    /// be declared once, on this file.
+    /// </summary>
+    public partial class ProductionGameDataService(
+        IUnitOfWork uow,
+        IGameDataService cfbdLoadService,
+        GamePredictionService predictionService,
+        ProjectionCacheService projectionCache,
+        WeeklyRankingsService weeklyRankingsService,
+        RollingAverageService rollingAverageService,
+        ConferenceTierService tierService,
+        IMemoryCache memoryCache,
+        ILogger<ProductionGameDataService> logger)
+    {
+        private readonly IUnitOfWork _uow = uow;
+        private readonly IGameDataService _cfbdLoadService = cfbdLoadService;
+        private readonly GamePredictionService _predictionService = predictionService;
+        private readonly ProjectionCacheService _projectionCache = projectionCache;
+        private readonly WeeklyRankingsService _weeklyRankingsService = weeklyRankingsService;
+        private readonly RollingAverageService _rollingAverageService = rollingAverageService;
+        private readonly ConferenceTierService _tierService = tierService;
+        private readonly IMemoryCache _memoryCache = memoryCache;
+        private readonly ILogger<ProductionGameDataService> _logger = logger;
+
+        // ── Predictions ──────────────────────────────────────────────────────────
+
+        public Task<GamePrediction> PredictMatchupAsync(
+            int year, string teamName, string opponentName, char location, int week,
+            CancellationToken token = default)
+            => _predictionService.PredictMatchup(year, teamName, opponentName, location, week, token);
+
+        public Task<List<GamePrediction>> PredictMatchupsAsync(
+            int year, List<MatchupRequest> matchups, CancellationToken token = default, int? asOfWeek = null)
+            => _predictionService.PredictMatchups(
+                year, asOfWeek ?? matchups.FirstOrDefault()?.Week ?? 0, matchups, token);
+
+        public Task<GamePrediction> PredictSandboxMatchupAsync(
+            string teamName, int teamYear,
+            string opponentName, int opponentYear,
+            CancellationToken token = default)
+            => _predictionService.PredictSandboxMatchupAsync(
+                teamName, teamYear, opponentName, opponentYear, token);
+
+        public async Task<List<int>> GetTeamAvailableYearsAsync(
+            int teamId, CancellationToken token = default)
+        {
+            var years = await _uow.WeeklyRankings.GetDistinctYearWeeksAsync(token);
+            return years
+                .Where(yw => yw.Year >= 1965)
+                .Select(yw => yw.Year)
+                .Distinct()
+                .OrderByDescending(y => y)
+                .ToList();
+        }
+
+        // ── Diagnostics ──────────────────────────────────────────────────────────
+
+        public async Task<DiagnosticInfo> GetDiagnosticAsync(CancellationToken token = default)
+        {
+            var allTeams    = await _uow.Teams.GetAllAsync(token);
+            var yearRecords = await _uow.TeamRecords.GetSinceYearWithTeamsAsync(1960, token);
+            var totalGames  = (await _uow.Games.GetPlayedGamesSinceYearAsync(1960, token)).Count;
+
+            var totalTeams             = allTeams.Count;
+            var totalRecords           = yearRecords.Count;
+            var recordsWithPowerRating = yearRecords.Count(tr => tr.PowerRating.HasValue);
+
+            var years = yearRecords
+                .Where(tr => tr.PowerRating.HasValue)
+                .Select(tr => tr.Year)
+                .Distinct()
+                .OrderBy(y => y)
+                .ToList();
+
+            var yearStats = years.Select(y => (object)new
+            {
+                year              = y,
+                teamsWithRankings = yearRecords.Count(tr => tr.Year == y && tr.PowerRating.HasValue)
+            }).ToList();
+
+            return new DiagnosticInfo("Connected", totalTeams, totalGames, totalRecords,
+                recordsWithPowerRating, years.Select(y => (object)y).ToList(), yearStats);
+        }
+
+        // ── Queries ───────────────────────────────────────────────────────────────
+
+        public async Task<TeamRecordsQueryResult> QueryTeamRecordsAsync(
+            int? wins, int? losses, int? minWins, int? maxWins,
+            int? startYear, int? endYear,
+            decimal? minPowerRating, decimal? maxPowerRating,
+            int limit, CancellationToken token = default)
+        {
+            var results = await _uow.TeamRecords.QueryAsync(
+                wins, losses, minWins, maxWins, startYear, endYear,
+                minPowerRating, maxPowerRating, limit, token);
+
+            var mapped = results.Select(tr => (object)new
+            {
+                tr.Year,
+                TeamName          = tr.Teams!.TeamName,
+                Record            = $"{tr.Wins}-{tr.Losses}",
+                tr.Wins, tr.Losses, tr.PointsFor, tr.PointsAgainst,
+                PointDifferential = tr.PointsFor - tr.PointsAgainst,
+                tr.BaseSOS, tr.SubSOS, tr.CombinedSOS, tr.PowerRating
+            }).ToList();
+
+            var filters = (object)new { wins, losses, minWins, maxWins, startYear, endYear, minPowerRating, maxPowerRating, limit };
+            return new TeamRecordsQueryResult(mapped.Count, filters, mapped);
+        }
+
+        // ── Rolling Averages ─────────────────────────────────────────────────────
+
+        public async Task<RollingAveragesResult> GetRollingAveragesAsync(int? year, CancellationToken token = default)
+        {
+            var targetYear = year ?? DateTime.Now.Year;
+
+            var currentRecords = await _uow.TeamRecords.GetFbsByYearAsync(targetYear, token);
+            currentRecords = currentRecords
+                .Where(r => r.TrendRating != null || r.PedigreeRating != null)
+                .ToList();
+
+            if (!currentRecords.Any())
+                throw new KeyNotFoundException($"No rolling average data found for {targetYear}.");
+
+            var historicalRecords = await _uow.TeamRecords.GetHistoricalAsync(targetYear - 10, targetYear, token);
+            var historyByTeam     = historicalRecords
+                .GroupBy(tr => tr.TeamID)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Year).ToList());
+
+            // League-wide PowerRating distribution, needed to normalize PowerRating
+            // onto a comparable [0,1] scale the same way RollingAverageService does
+            // internally. FBS membership uses the current year's team list as a proxy
+            // for every historical year — same known simplification documented in
+            // RollingAverageService.BuildLeagueYearStats itself.
+            var teamsDictForStats = await _uow.Teams.GetByTeamIdsAsync(
+                currentRecords.Select(r => r.TeamID).ToList(), token);
+            var leagueStatsByYear = RollingAverageService.BuildLeagueYearStats(
+                historicalRecords.Concat(currentRecords), teamsDictForStats);
+
+            var results = currentRecords.Select(r =>
+            {
+                historyByTeam.TryGetValue(r.TeamID, out var history);
+                history ??= [];
+                var avg = _rollingAverageService.Compute(
+                    r, history, useLiveSwap: false, week: null, leagueStatsByYear);
+                return (object)new
+                {
+                    teamId          = r.TeamID,
+                    teamName        = r.Teams?.TeamName,
+                    conference      = r.Teams?.Conference?.Abbreviation,
+                    seedRating      = avg.SeedRating,
+                    trendRating     = avg.TrendRating,
+                    trendHistory    = avg.TrendHistory,
+                    pedigreeRating  = avg.PedigreeRating,
+                    pedigreeHistory = avg.PedigreeHistory
+                };
+            })
+            .OrderByDescending(r => ((dynamic)r).trendRating)
+            .ToList();
+
+            return new RollingAveragesResult(targetYear, results.Count, results);
+        }
+
+        public async Task<TeamRollingAveragesResult> GetTeamRollingAveragesAsync(
+            int teamId, int? startYear, CancellationToken token = default)
+        {
+            var team = await _uow.Teams.GetByTeamIdAsync(teamId, token)
+                       ?? throw new KeyNotFoundException($"Team {teamId} not found.");
+
+            var allRecords = await _uow.TeamRecords.GetByTeamAllYearsAsync(teamId, token);
+
+            if (!allRecords.Any())
+                throw new KeyNotFoundException($"No records found for team {teamId}.");
+
+            var history       = allRecords.OrderByDescending(r => r.Year).ToList();
+            var targetRecords = startYear.HasValue
+                ? allRecords.Where(r => r.Year >= startYear.Value).ToList()
+                : allRecords;
+
+            // This endpoint only ever loaded ONE team's records — no league-wide data
+            // was in scope before. Normalizing PowerRating correctly requires it, so
+            // this is a genuinely new query added here (not just a signature fix).
+            // Covers every year that could appear as a "current" or historical year
+            // across all target records being computed below.
+            var minYear = targetRecords.Min(r => r.Year) - 10;
+            var maxYearExclusive = targetRecords.Max(r => r.Year) + 1;
+            var leagueRecords = await _uow.TeamRecords.GetHistoricalAsync(minYear, maxYearExclusive, token);
+            var teamsDictForStats = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var leagueStatsByYear = RollingAverageService.BuildLeagueYearStats(leagueRecords, teamsDictForStats);
+
+            var results = targetRecords.Select(r =>
+            {
+                var priorRecords = history.Where(h => h.Year < r.Year).Take(10).ToList();
+                var avg          = _rollingAverageService.Compute(
+                    r, priorRecords, useLiveSwap: false, week: null, leagueStatsByYear);
+                return (object)new
+                {
+                    year            = (int)r.Year,
+                    wins            = (int)r.Wins,
+                    losses          = (int)r.Losses,
+                    seedRating      = avg.SeedRating,
+                    trendRating     = avg.TrendRating,
+                    trendHistory    = avg.TrendHistory,
+                    pedigreeRating  = avg.PedigreeRating,
+                    pedigreeHistory = avg.PedigreeHistory
+                };
+            }).ToList();
+
+            return new TeamRollingAveragesResult(team.TeamId, team.TeamName, team.Conference?.Abbreviation, results);
+        }
+
+        // ── Rivalries ────────────────────────────────────────────────────────────
+
+        public async Task<RivalriesResult> GetRivalriesAsync(
+            string? tier, int? minGames, double? minVarianceRatio, CancellationToken token = default)
+        {
+            var matchups = await _uow.Lookups.GetMatchupHistoriesAsync(token);
+
+            if (!string.IsNullOrEmpty(tier) && !tier.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                matchups = matchups.Where(m => m.RivalryTier == tier).ToList();
+            if (minGames.HasValue)
+                matchups = matchups.Where(m => m.GamesPlayed >= minGames.Value).ToList();
+
+            matchups = matchups.OrderByDescending(m => m.GamesPlayed).ToList();
+
+            var teamsById = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var asdList   = await _uow.Lookups.GetAvgScoreDeltasAsync(token);
+            var avgStDev  = asdList.Any() ? asdList.Average(a => (double)a.StDevP) : 15.0;
+
+            var results = new List<object>();
+            foreach (var m in matchups)
+            {
+                var team1         = teamsById.TryGetValue(m.Team1Id, out var t1) ? t1.TeamName : "Unknown";
+                var team2         = teamsById.TryGetValue(m.Team2Id, out var t2) ? t2.TeamName : "Unknown";
+                var varianceRatio = (double)m.StDevMargin / avgStDev;
+
+                if (minVarianceRatio.HasValue && varianceRatio < minVarianceRatio.Value) continue;
+
+                results.Add(new
+                {
+                    team1, team2,
+                    rivalryName   = m.RivalryName ?? "N/A",
+                    tier          = m.RivalryTier ?? "N/A",
+                    gamesPlayed   = m.GamesPlayed,
+                    avgMargin     = Math.Round((double)m.AvgMargin,   1),
+                    stDevMargin   = Math.Round((double)m.StDevMargin, 1),
+                    upsetRate     = Math.Round((double)m.UpsetRate,   3),
+                    varianceRatio = Math.Round(varianceRatio,         2),
+                    seriesAge     = m.LastPlayed - m.FirstPlayed,
+                    firstPlayed   = m.FirstPlayed,
+                    lastPlayed    = m.LastPlayed
+                });
+            }
+
+            return new RivalriesResult(results.Count, matchups.Count,
+                new { tier = tier ?? "ALL", minGames = minGames ?? 0, minVarianceRatio = minVarianceRatio ?? 0.0 },
+                results);
+        }
+
+        // ── Team History ─────────────────────────────────────────────────────────
+
+        public async Task<TeamHistoryResult> GetTeamHistoryAsync(
+            int teamId, int years, CancellationToken token = default)
+        {
+            var team = await _uow.Teams.GetByTeamIdAsync(teamId, token)
+                       ?? throw new KeyNotFoundException($"Team {teamId} not found.");
+
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+            confLookup.TryGetValue(team.ConferenceId ?? 0, out var conf);
+            var confAbbr = conf?.Abbreviation ?? string.Empty;
+
+            var cutoffYear = (short)(DateTime.Now.Year - years);
+            var records    = await _uow.TeamRecords.GetByTeamAllYearsAsync(teamId, token);
+            records = records.Where(r => r.Year >= cutoffYear).ToList();
+
+            var allYears    = records.Select(r => r.Year).Distinct().ToList();
+            var ranksByYear = new Dictionary<short, int>();
+            var tierByYear  = new Dictionary<short, string>();
+
+            foreach (var yr in allYears)
+            {
+                var allRanked = await _uow.TeamRecords.GetRankedByYearAsync(yr, token);
+                var idx       = allRanked.FindIndex(tr => tr.TeamID == teamId);
+                if (idx >= 0) ranksByYear[yr] = idx + 1;
+
+                // Year-specific tier, not the team's current conference — a team
+                // that changed conferences (Nebraska Big 12→Big Ten, Texas SWC→
+                // Big 12) must show the tier it actually held in yr, not today's.
+                // Uses GetConfDataBatchAsync directly (not GetConfDataAsync, whose
+                // own internal fallback is a hardcoded "Other") so a missing year
+                // falls back through GetTierStatic like every other call site.
+                var confDataForYear = await _tierService.GetConfDataBatchAsync(
+                    new[] { teamId }, yr, token);
+                tierByYear[yr] = confDataForYear.TryGetValue(teamId, out var cd)
+                    ? cd.Tier
+                    : ConferenceTierService.GetTierStatic(null, team.TeamName);
+            }
+
+            var history = records.Select(r => (object)new
+            {
+                Year        = (int)r.Year,
+                r.Wins,
+                r.Losses,
+                Record      = $"{r.Wins}-{r.Losses}",
+                PowerRating = r.Ranking,
+                BaseSOS     = r.BaseSOS,
+                CombinedSOS = r.CombinedSOS,
+                OverallRank = ranksByYear.GetValueOrDefault(r.Year, 0),
+                Tier        = tierByYear.GetValueOrDefault(r.Year, "Other")
+            }).ToList();
+
+            return new TeamHistoryResult(teamId, team.TeamName, team.Abbreviation ?? team.TeamName, confAbbr, history);
+        }
+
+        // ── Shared helpers (used by V2 partial) ──────────────────────────────────
+
+        internal IReadOnlyList<object> BuildQualifierResponse(
+            Dictionary<string, List<ConferenceStanding>> standingsByConference,
+            ConferenceChampionshipService service,
+            bool includeContenders, int? throughWeek = null)
+        {
+            return standingsByConference
+                .Where(kvp => kvp.Value.Count >= 2)
+                .Select(kvp => service.GetQualifiers(kvp.Key, kvp.Value))
+                .Where(r => r.Qualifier1 != null && r.Qualifier2 != null)
+                .OrderBy(r => RatingCalculator.ConferenceDisplayOrder(r.Conference))
+                .Select(r =>
+                {
+                    var q1 = new { r.Qualifier1.TeamName, r.Qualifier1.ConferenceWins, r.Qualifier1.ConferenceLosses, r.Qualifier1.ActualConferenceWins, r.Qualifier1.ActualConferenceLosses, r.Qualifier1.OverallWins, r.Qualifier1.OverallLosses, r.Qualifier1.Division };
+                    var q2 = new { r.Qualifier2.TeamName, r.Qualifier2.ConferenceWins, r.Qualifier2.ConferenceLosses, r.Qualifier2.ActualConferenceWins, r.Qualifier2.ActualConferenceLosses, r.Qualifier2.OverallWins, r.Qualifier2.OverallLosses, r.Qualifier2.Division };
+
+                    if (includeContenders)
+                        return (object)new
+                        {
+                            r.Conference, r.Format, Qualifier1 = q1, Qualifier2 = q2,
+                            Contenders = r.Contenders.Select(c => new { c.TeamName, c.ConferenceWins, c.ConferenceLosses, c.ConferenceRecord,c.OverallWins,c.OverallLosses, c.OverallRecord, c.ActualConferenceWins, c.ActualConferenceLosses, c.ActualConferenceRecord }).ToList(),
+                            r.Qualifier1Method, r.Qualifier2Method, r.TiebreakerLog, r.StubsApplied,
+                            SimulatedThrough = throughWeek.HasValue
+                                ? $"Week {throughWeek} (weeks {throughWeek + 1}-15 projected)"
+                                : "Full season actual results"
+                        };
+
+                    return (object)new
+                    {
+                        r.Conference, r.Format, Qualifier1 = q1, Qualifier2 = q2,
+                        r.Qualifier1Method, r.Qualifier2Method, r.TiebreakerLog, r.StubsApplied
+                    };
+                }).ToList();
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // Rivalry Notes — Scores + My Teams game card only. NOT the Sandbox footer
+        // (GamePredictionService.BuildConfidenceExplanation) — that one deliberately
+        // never names a rivalry, since Sandbox matchups are hypothetical and can pair
+        // any two team-seasons. This card is the opposite case: a real, scheduled game
+        // between two teams that actually are one of the 52 curated MatchupHistory
+        // pairs, so naming the rivalry here is the entire point.
+        //
+        // Grid fields map directly to MatchupHistory (Layer 1/2 backfill from earlier
+        // in this project): RivalryName, FirstPlayed, AvgMargin ("Average Spread"),
+        // AvgTotalPoints ("Average O/U"), UpsetRate ("Chance of upset").
+        //
+        // Blurb compares this specific game's actual result (if played) or current
+        // projection (if not) against the rivalry's historical averages — plain
+        // numbers side by side, no "closer than" / "notably higher" editorializing,
+        // since that would need a new threshold to decide what counts as "notable"
+        // and the numbers speak for themselves. Deliberately no superlative claims
+        // about any rivalry being the best/greatest/etc. — every curated pair gets
+        // the same neutral treatment.
+        // ════════════════════════════════════════════════════════════════════════
+
+        internal static object? BuildRivalryNotes(
+             MatchupHistory? rivalry,
+             bool isFinal,
+             bool isInProgress,
+             double? actualMargin,
+             double? actualTotal,
+             double? projectedMargin,
+             double? projectedTotal,
+             string team1,
+             string team2,
+             string winner)
+        {
+            if (rivalry == null) return null;
+
+            var avgMargin = (double)rivalry.AvgMargin;
+            var avgTotal = (double)rivalry.AvgTotalPoints;
+            var threshold = avgMargin * 0.25;
+
+            string blurb;
+            if (isFinal && actualMargin.HasValue && actualTotal.HasValue)
+            {
+                var margin = actualMargin.Value;
+                var total = actualTotal.Value;
+
+                if (margin < avgMargin - threshold)
+                {
+                    blurb =
+                        $"Closer than history suggested. {winner} won by {margin:F0} points " +
+                        $"on {total:F0} combined — tighter than the series norm of " +
+                        $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else if (margin > avgMargin + threshold)
+                {
+                    blurb =
+                        $"More decisive than history suggested. {winner} pulled away by " +
+                        $"{margin:F0} points on {total:F0} combined — wider than the " +
+                        $"series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else
+                {
+                    blurb =
+                        $"Right in line with history. {winner} won by {margin:F0} points " +
+                        $"on {total:F0} combined — consistent with the series norm of " +
+                        $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+            }
+            else if (isInProgress && actualMargin.HasValue && actualTotal.HasValue)
+            {
+                var margin = actualMargin.Value;
+                var total = actualTotal.Value;
+
+                blurb =
+                    $"In progress. {winner} currently leads by {margin:F0} points " +
+                    $"on {total:F0} combined so far — the series norm is " +
+                    $"{avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+            }
+            else if (!isFinal && !isInProgress && projectedMargin.HasValue && projectedTotal.HasValue)
+            {
+                var margin = projectedMargin.Value;
+                var total = projectedTotal.Value;
+
+                if (margin < avgMargin - threshold)
+                {
+                    blurb =
+                        $"Tighter than history suggests. {winner} is projected to win by " +
+                        $"{margin:F0} points on {total:F0} combined — below the " +
+                        $"series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else if (margin > avgMargin + threshold)
+                {
+                    blurb =
+                        $"More decisive than history suggests. {winner} is projected to win " +
+                        $"by {margin:F0} points on {total:F0} combined — wider than " +
+                        $"the series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+                else
+                {
+                    blurb =
+                        $"Right in line with history. {winner} is projected to win by " +
+                        $"{margin:F0} points on {total:F0} combined — consistent " +
+                        $"with the series norm of {avgMargin:F0}-point margins and {avgTotal:F0}-point totals.";
+                }
+            }
+            else
+            {
+                // No projection available and the game hasn't been played yet —
+                // fall back to a plain historical statement with no comparison.
+                blurb =
+                    $"This matchup has historically been decided by about {avgMargin:F0} " +
+                    $"points, with a total near {avgTotal:F0} and an upset in roughly " +
+                    $"{rivalry.UpsetRate:P0} of meetings.";
+            }
+
+            var favored = rivalry.Team1Wins > rivalry.Team2Wins ? team1 : team2;
+            return new
+            {
+                RivalryName = rivalry.RivalryName,
+                FirstPlayed = rivalry.FirstPlayed,
+                AverageSpread = Math.Round((double)rivalry.AvgMargin, 2),
+                AverageOverUnder = Math.Round((double)rivalry.AvgTotalPoints, 2),
+                UpsetChance = Math.Round((double)rivalry.UpsetRate, 2),
+                Blurb = blurb,
+                Series = $"Series: {Math.Max(rivalry.Team1Wins, rivalry.Team2Wins)} - {Math.Min(rivalry.Team1Wins, rivalry.Team2Wins)} - {rivalry.Ties}, {favored}"
+            };
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // Helper — builds a single game object in the same shape as
+        // GetScheduleV2Async's results. Used for the championship title game.
+        // Once the schedule method itself is refactored to call this helper,
+        // the duplication goes away.
+        // ════════════════════════════════════════════════════════════════════════
+
+        private object BuildTitleGameObject(
+            Games g,
+            IReadOnlyDictionary<int, Teams> teams,
+            IReadOnlyDictionary<int, GamePrediction> allProjections,
+            Dictionary<int, Dictionary<int, WeeklyRanking>> rankingsByWeek,
+            Dictionary<int, List<Lines>> linesByGameId,
+            Func<int, int> lookupWeek,
+            Func<Teams?, string> getConfAbbr,
+            Func<Teams?, string> getTier)
+        {
+            teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+            teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+
+            var homePoints = g.HomePoints ?? 0;
+            var awayPoints = g.AwayPoints ?? 0;
+            var isPlayed = homePoints > 0 || awayPoints > 0;
+            var actualOU = homePoints + awayPoints;
+            char location = g.NeutralSite == true ? 'N' : 'H';
+
+            double? projHome = null, projAway = null;
+            if (allProjections.TryGetValue(g.GameId, out var pred))
+            {
+                projHome = Math.Max(0, Math.Round(pred.PredictedTeamScore, 1));
+                projAway = Math.Max(0, Math.Round(pred.PredictedOpponentScore, 1));
+            }
+
+            var projOU = projHome.HasValue && projAway.HasValue
+                         ? (double?)Math.Round(projHome.Value + projAway.Value, 1) : null;
+
+            // ── Team stats ────────────────────────────────────────────────────
+            var snapshotWeek = lookupWeek(g.Week);
+            rankingsByWeek.TryGetValue(snapshotWeek, out var snapshot);
+
+            object? homeStats = null;
+            object? awayStats = null;
+            bool isWeek1 = g.Week == 1;
+
+            if (snapshot != null)
+            {
+                if (snapshot.TryGetValue(g.HomeId ?? 0, out var hwr))
+                    homeStats = new
+                    {
+                        TeamId = hwr.TeamID,
+                        TeamName = homeTeam?.TeamName ?? g.HomeName,
+                        OverallRank = isWeek1 ? 0 : hwr.OverallRank,
+                        Record = isWeek1 ? "0-0" : $"{hwr.Wins}-{hwr.Losses}",
+                        PowerRating = isWeek1 ? (double?)null : (double?)hwr.Ranking,
+                        CombinedSOS = isWeek1 ? (double?)null : (double?)hwr.CombinedSOS,
+                        OffensiveRank = isWeek1 ? (int?)null : hwr.OffensiveRank,
+                        AvgPointsScored = isWeek1 ? (double?)null : (double?)hwr.AvgPointsScored,
+                        OffensiveZScore = isWeek1 ? (double?)null : (double?)hwr.OffensiveZScore,
+                        DefensiveRank = isWeek1 ? (int?)null : hwr.DefensiveRank,
+                        AvgPointsAllowed = isWeek1 ? (double?)null : (double?)hwr.AvgPointsAllowed,
+                        DefensiveZScore = isWeek1 ? (double?)null : (double?)hwr.DefensiveZScore,
+                    };
+
+                if (snapshot.TryGetValue(g.AwayId ?? 0, out var awr))
+                    awayStats = new
+                    {
+                        TeamId = awr.TeamID,
+                        TeamName = awayTeam?.TeamName ?? g.AwayName,
+                        OverallRank = isWeek1 ? 0 : awr.OverallRank,
+                        Record = isWeek1 ? "0-0" : $"{awr.Wins}-{awr.Losses}",
+                        PowerRating = isWeek1 ? (double?)null : (double?)awr.Ranking,
+                        CombinedSOS = isWeek1 ? (double?)null : (double?)awr.CombinedSOS,
+                        OffensiveRank = isWeek1 ? (int?)null : awr.OffensiveRank,
+                        AvgPointsScored = isWeek1 ? (double?)null : (double?)awr.AvgPointsScored,
+                        OffensiveZScore = isWeek1 ? (double?)null : (double?)awr.OffensiveZScore,
+                        DefensiveRank = isWeek1 ? (int?)null : awr.DefensiveRank,
+                        AvgPointsAllowed = isWeek1 ? (double?)null : (double?)awr.AvgPointsAllowed,
+                        DefensiveZScore = isWeek1 ? (double?)null : (double?)awr.DefensiveZScore,
+                    };
+            }
+
+            // ── Vegas lines — average across providers ────────────────────────
+            object? vegasLines = null;
+            if (linesByGameId.TryGetValue(g.GameId, out var gameLines) && gameLines.Count > 0)
+            {
+                var spreads = gameLines.Where(l => l.Spread.HasValue).Select(l => l.Spread!.Value).ToList();
+                var spreadsOpen = gameLines.Where(l => l.SpreadOpen.HasValue).Select(l => l.SpreadOpen!.Value).ToList();
+                var ous = gameLines.Where(l => l.OverUnder.HasValue).Select(l => l.OverUnder!.Value).ToList();
+                var ousOpen = gameLines.Where(l => l.OverUnderOpen.HasValue).Select(l => l.OverUnderOpen!.Value).ToList();
+                var homeMoneylines = gameLines.Where(l => l.HomeMoneyline.HasValue).Select(l => l.HomeMoneyline!.Value).ToList();
+                var awayMoneylines = gameLines.Where(l => l.AwayMoneyline.HasValue).Select(l => l.AwayMoneyline!.Value).ToList();
+
+                vegasLines = new
+                {
+                    Spread = spreads.Count > 0 ? (decimal?)Math.Round(spreads.Average(), 1) : null,
+                    SpreadOpen = spreadsOpen.Count > 0 ? (decimal?)Math.Round(spreadsOpen.Average(), 1) : null,
+                    OverUnder = ous.Count > 0 ? (decimal?)Math.Round(ous.Average(), 1) : null,
+                    OverUnderOpen = ousOpen.Count > 0 ? (decimal?)Math.Round(ousOpen.Average(), 1) : null,
+                    HomeMoneyline = homeMoneylines.Count > 0 ? (int?)Math.Round(homeMoneylines.Average()) : null,
+                    AwayMoneyline = awayMoneylines.Count > 0 ? (int?)Math.Round(awayMoneylines.Average()) : null,
+                    ProviderCount = gameLines.Count,
+                };
+            }
+
+            // Shape matches GetScheduleV2Async exactly so the client deserialises
+            // into the same GameResult model with no special handling.
+            return new
+            {
+                Id = g.GameId,
+                g.Year,
+                g.Week,
+                GameDate = g.GameDate,
+                GameDay = g.GameDay,
+                HomeName = g.HomeName,
+                HomeId = g.HomeId,
+                HomeConf = getConfAbbr(homeTeam),
+                HomeTier = getTier(homeTeam),
+                HomePoints = homePoints,
+                HomeProjScore = projHome,
+                AwayName = g.AwayName,
+                AwayId = g.AwayId,
+                AwayConf = getConfAbbr(awayTeam),
+                AwayTier = getTier(awayTeam),
+                AwayPoints = awayPoints,
+                AwayProjScore = projAway,
+                Location = location,
+                IsPlayed = isPlayed,
+                ActualOU = actualOU,
+                ProjOU = projOU,
+                SeasonType = g.SeasonType,
+                HomeStats = homeStats,
+                AwayStats = awayStats,
+                VegasLines = vegasLines,
+
+                // Legacy fields — mirrors GetScheduleV2Async for binding consistency
+                WinnerName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
+                WinnerShortName = homePoints >= awayPoints ? g.HomeName : g.AwayName,
+                WinnerId = homePoints >= awayPoints ? g.HomeId : g.AwayId,
+                WinnerConf = homePoints >= awayPoints ? getConfAbbr(homeTeam) : getConfAbbr(awayTeam),
+                WPoints = homePoints >= awayPoints ? homePoints : awayPoints,
+                LoserName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
+                LoserShortName = homePoints >= awayPoints ? g.AwayName : g.HomeName,
+                LoserId = homePoints >= awayPoints ? g.AwayId : g.HomeId,
+            };
+        }
+
+
+        internal static void EnrichSOS(List<ConferenceStanding> standings)
+        {
+            // NOTE: this used to also set standing.CommonOpponentWinPct here,
+            // computed as each team's win% across its entire HeadToHeadResults
+            // dictionary — i.e. the same number as ConferenceWinPct. Since the
+            // tiebreaker engine only ever compares that field within a group
+            // already tied ON ConferenceWinPct, it could never separate
+            // anyone; the "common opponents" tiebreaker step was mathematically
+            // inert in every conference that reached it. That field has been
+            // removed from ConferenceStanding — "common opponents" win% is now
+            // computed live, per currently-tied pool, by CommonOpponentsStep,
+            // since the correct intersection of common opponents changes
+            // depending on who's currently tied and can't be precomputed
+            // per-team in isolation.
+
+            var recordById = standings.ToDictionary(r => r.TeamId);
+            foreach (var standing in standings)
+            {
+                var oppWinPcts = standing.HeadToHeadResults.Keys
+                    .Where(id => recordById.ContainsKey(id))
+                    .Select(id => recordById[id].ConferenceWinPct)
+                    .ToList();
+                standing.ConferenceOpponentWinPct = oppWinPcts.Any() ? oppWinPcts.Average() : 0.0;
+            }
+        }
+    }
+}

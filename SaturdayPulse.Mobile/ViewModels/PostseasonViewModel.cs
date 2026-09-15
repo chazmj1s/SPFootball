@@ -72,6 +72,18 @@ namespace SaturdayPulse.ViewModels
                 game.IsDetailsExpanded = !game.IsDetailsExpanded;
             });
 
+            ToggleCardTiebreakerCommand = new Microsoft.Maui.Controls.Command<GameResult>(game =>
+            {
+                if (game == null) return;
+                game.IsTiebreakerExpanded = !game.IsTiebreakerExpanded;
+            });
+
+            ToggleCardContendersCommand = new Microsoft.Maui.Controls.Command<GameResult>(game =>
+            {
+                if (game == null) return;
+                game.IsContendersExpanded = !game.IsContendersExpanded;
+            });
+
             // Section collapse toggles
             ToggleRoundExpandCommand = new Microsoft.Maui.Controls.Command<PlayoffRound>(round =>
             {
@@ -163,6 +175,8 @@ namespace SaturdayPulse.ViewModels
         public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
         public ICommand ToggleDetailsCommand          { get; }
+        public ICommand ToggleCardTiebreakerCommand   { get; }
+        public ICommand ToggleCardContendersCommand   { get; }
         public ICommand ToggleRoundExpandCommand      { get; }
         public ICommand ToggleWeekendExpandCommand    { get; }
 
@@ -364,6 +378,28 @@ namespace SaturdayPulse.ViewModels
 
         // ── Conference filter (Championship view only) ────────────────────
 
+        /// <summary>P4 (SEC, B1G, B12, ACC) first in that order, then G6,
+        /// then anything unrecognized last — Charlie, 2026-09-15.</summary>
+        private static readonly Dictionary<string, int> ConferenceDisplayOrder =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SEC"]  = 0,
+                ["B1G"]  = 1,
+                ["B12"]  = 2,
+                ["ACC"]  = 3,
+                ["MAC"]  = 4,
+                ["CUSA"] = 5,
+                ["MWC"]  = 6,
+                ["AAC"]  = 7,
+                ["PAC"]  = 8,
+                ["SBC"]  = 9,
+            };
+
+        private static int ConferenceDisplaySortKey(string? conference) =>
+            conference != null && ConferenceDisplayOrder.TryGetValue(conference, out var order)
+                ? order
+                : int.MaxValue;
+
         private void ApplyConferenceFilter()
         {
             Championships.Clear();
@@ -378,6 +414,10 @@ namespace SaturdayPulse.ViewModels
                 : _allChampionships.Where(c =>
                     c.Conference.Equals(confAbbr, StringComparison.OrdinalIgnoreCase))
                     .ToList();
+
+            filteredChamps = filteredChamps
+                .OrderBy(c => ConferenceDisplaySortKey(c.Conference))
+                .ToList();
 
             Championships.Clear();
             foreach (var c in filteredChamps)
