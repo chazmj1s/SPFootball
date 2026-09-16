@@ -1265,21 +1265,27 @@ namespace SaturdayPulse.ViewModels
             var isDark = Application.Current?.RequestedTheme
                 == Microsoft.Maui.ApplicationModel.AppTheme.Dark;
 
-            var textColor = isDark ? "#EAEAEA" : "#1A1A1A";
-            var linkColor = isDark ? "#B39DDB" : "#6A4FB3";
+            var textColor = isDark ? "#EEEEEE" : "#222222";   // TextPrimaryDark / TextPrimaryLight
+            var linkColor = isDark ? "#9B7EDE" : "#6B4EAE";   // AccentPrimaryDark / AccentPrimaryLight
 
             return "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
                  + "<style>"
                  + "html,body{margin:0;padding:8px 4px;background-color:transparent;"
                  + $"color:{textColor};font-family:-apple-system,Roboto,sans-serif;"
                  + "font-size:15px;line-height:1.4;}"
-                 + $"a{{color:{linkColor};}}"
-                 + $"h1,h2,h3{{color:{textColor};}}"
+                 // Admin content is Markdig output, sometimes pasted from Word/Google
+                 // Docs, which carries per-element inline style="color:...". Inline
+                 // styles beat the body{} rule above on CSS specificity, so force
+                 // every non-link descendant back to the theme color and strip any
+                 // inline background, or pasted spans render at whatever gray the
+                 // source doc had regardless of app theme.
+                 + $"body *:not(a){{color:{textColor} !important;background-color:transparent !important;}}"
+                 + $"a,a *{{color:{linkColor} !important;}}"
+                 + $"h1,h2,h3{{color:{textColor} !important;}}"
                  + "</style></head><body>"
                  + bodyHtml
                  + "</body></html>";
         }
-
         /// <summary>
         /// Builds the Season Pass panel's catalog view from the raw
         /// entitlement list: one row per distinct ProductKey actually held

@@ -23,7 +23,7 @@
             <converters:FollowGameColorConverter x:Key="FollowGameColorConverter"/>
 
             <!-- Follow Styles-->
-            <x:Double x:Key="TeamIconSize">16</x:Double>
+            <x:Double x:Key="TeamIconSize">14</x:Double>
             <x:Double x:Key="GameStarSize">16</x:Double>
 
         </ResourceDictionary>

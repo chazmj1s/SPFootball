@@ -493,11 +493,11 @@
 
             <Grid BackgroundColor="{AppThemeBinding Light=#6B4EAE, Dark=#2A2040}"
                   Padding="12,8">
-              <Label Text="Projected Field"
+              <Label Text="Projections"
                      FontSize="13" FontAttributes="Bold" TextColor="White" />
             </Grid>
 
-            <!-- Sub-tab: Projected Field | Bracket -->
+            <!-- Sub-tab: Seeded Field | Bracket -->
             <Grid ColumnDefinitions="*,*"
                   BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#181818}"
                   Padding="8,4">
