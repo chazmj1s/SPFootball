@@ -146,6 +146,53 @@ public static class MauiProgram
         builder.Services.AddSingleton<SandboxPage>();
         builder.Services.AddSingleton<MainPage>();
 
+        // Android: suppress WebView's automatic algorithmic dark-mode inversion,
+        // which overrides our own theme-matched CSS/background based on the
+        // OS-level dark mode setting rather than the app's UserAppTheme.
+        Microsoft.Maui.Handlers.WebViewHandler.Mapper.AppendToMapping("DisableForceDark", (handler, view) =>
+        {
+#if ANDROID
+    var settings = handler.PlatformView.Settings;
+    if (OperatingSystem.IsAndroidVersionAtLeast(33))
+    {
+        settings.AlgorithmicDarkeningAllowed = false;
+    }
+#endif
+        });
+
+        // iOS/Mac Catalyst: WKWebView doesn't reliably re-run LoadHtmlString when
+        // Source is swapped to a new HtmlWebViewSource on a recycled CollectionView
+        // cell (theme-change re-render of Content sections). Force it explicitly.
+        Microsoft.Maui.Handlers.WebViewHandler.Mapper.AppendToMapping(nameof(IWebView.Source), (handler, view) =>
+        {
+#if IOS || MACCATALYST
+    if (view.Source is HtmlWebViewSource htmlSource)
+    {
+        handler.PlatformView.LoadHtmlString(htmlSource.Html, baseUrl: null);
+    }
+#elif WINDOWS
+            // WebView2 defaults PreferredColorScheme to Auto (follows Windows OS
+            // dark mode), independent of Application.Current.UserAppTheme. Force it
+            // to match our own theme logic instead of the OS setting.
+            var isDark = Application.Current?.RequestedTheme
+                == Microsoft.Maui.ApplicationModel.AppTheme.Dark;
+            var scheme = isDark
+                ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
+                : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
+
+            void ApplyScheme()
+            {
+                if (handler.PlatformView.CoreWebView2 != null)
+                    handler.PlatformView.CoreWebView2.Profile.PreferredColorScheme = scheme;
+            }
+
+            if (handler.PlatformView.CoreWebView2 != null)
+                ApplyScheme();
+            else
+                handler.PlatformView.CoreWebView2Initialized += (_, _) => ApplyScheme();
+#endif
+        });
+
 #if DEBUG
         builder.Logging.AddDebug();
 #endif

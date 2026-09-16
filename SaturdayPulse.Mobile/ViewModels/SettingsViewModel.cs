@@ -12,15 +12,16 @@ namespace SaturdayPulse.ViewModels
 {
     public class SettingsViewModel : BaseViewModel
     {
-        private readonly GameDataApiService           _apiService;
-        private readonly PersonalGameService          _personalGameService;
-        private readonly SharedNavigationStateService _navState;
-        private readonly TeamCacheService              _teamCache;
-        private readonly UserApiService                _userApi;
-        private readonly AuthService                   _authService;
+        private readonly GameDataApiService             _apiService;
+        private readonly PersonalGameService            _personalGameService;
+        private readonly SharedNavigationStateService   _navState;
+        private readonly TeamCacheService               _teamCache;
+        private readonly UserApiService                 _userApi;
+        private readonly AuthService                    _authService;
         private readonly FeedbackService                _feedbackService;
-        private readonly EntitlementService              _entitlementService;
-        private readonly ContentApiService               _contentApi;
+        private readonly EntitlementService             _entitlementService;
+        private readonly ContentApiService              _contentApi;
+        private ApplicationContentDocument?             _lastContent;
 
         // ── Raw data ──────────────────────────────────────────────────────
         private List<TeamInfo>    _allTeams      = [];
@@ -709,7 +710,12 @@ namespace SaturdayPulse.ViewModels
             TierFilters.Add("🔥 Epic");
             TierFilters.Add("⭐ National");
             TierFilters.Add("🏠 Regional");
-            TierFilters.Add("• Meh");
+            TierFilters.Add("• State");
+
+            if (Application.Current != null)
+            {
+                Application.Current.RequestedThemeChanged += (_, _) => ApplyContent(_lastContent);
+            }
 
             // No outer Task.Run — LoadDataAsync runs on the main thread; the team +
             // rivalry fetch inside it is offloaded via Task.Run and the continuation
@@ -1221,6 +1227,7 @@ namespace SaturdayPulse.ViewModels
         /// every panel expand.</summary>
         private void ApplyContent(ApplicationContentDocument? content)
         {
+            _lastContent = content;
             SupportEmail = content?.SupportEmail ?? string.Empty;
 
             ContentSections.Clear();
@@ -1273,19 +1280,13 @@ namespace SaturdayPulse.ViewModels
                  + "html,body{margin:0;padding:8px 4px;background-color:transparent;"
                  + $"color:{textColor};font-family:-apple-system,Roboto,sans-serif;"
                  + "font-size:15px;line-height:1.4;}"
-                 // Admin content is Markdig output, sometimes pasted from Word/Google
-                 // Docs, which carries per-element inline style="color:...". Inline
-                 // styles beat the body{} rule above on CSS specificity, so force
-                 // every non-link descendant back to the theme color and strip any
-                 // inline background, or pasted spans render at whatever gray the
-                 // source doc had regardless of app theme.
-                 + $"body *:not(a){{color:{textColor} !important;background-color:transparent !important;}}"
-                 + $"a,a *{{color:{linkColor} !important;}}"
-                 + $"h1,h2,h3{{color:{textColor} !important;}}"
+                 + $"a{{color:{linkColor};}}"
+                 + $"h1,h2,h3{{color:{textColor};}}"
                  + "</style></head><body>"
                  + bodyHtml
                  + "</body></html>";
         }
+
         /// <summary>
         /// Builds the Season Pass panel's catalog view from the raw
         /// entitlement list: one row per distinct ProductKey actually held
