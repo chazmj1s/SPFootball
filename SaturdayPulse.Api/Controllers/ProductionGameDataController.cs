@@ -685,6 +685,32 @@ namespace SaturdayPulse.Controllers
             }
         }
 
+        /// <summary>
+        /// Full projected 12-team CFP bracket — First Round through the
+        /// National Championship, computed in order off the same field
+        /// playoff-seeding returns. No toggle; every round is computed and
+        /// returned together.
+        /// Example: GET /api/productiongamedata/playoff-bracket?year=2026&week=15
+        /// </summary>
+        [HttpGet("playoff-bracket")]
+        public async Task<IActionResult> GetPlayoffBracket(
+            [FromQuery] int? year,
+            [FromQuery] int week,
+            CancellationToken token = default)
+        {
+            try
+            {
+                var targetYear = year ?? DateTime.Now.Year;
+                var result = await playoffSeedingService.GetProjectedBracketAsync(targetYear, week, token);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error computing playoff bracket for {Year} week {Week}", year, week);
+                return StatusCode(500, "An error occurred computing the projected playoff bracket.");
+            }
+        }
+
         #endregion
 
         #region Team History

@@ -1,14 +1,22 @@
+using SaturdayPulse.Contracts.Requests;
+using SaturdayPulse.Contracts.Responses;
 using SaturdayPulse.Interfaces;
 using SaturdayPulse.Models;
 
 namespace SaturdayPulse.Services
 {
     /// <summary>
-    /// Projects the 12-team CFP field off current WeeklyRankings data only —
-    /// no conference championship game simulation (deferred, backlog item 2).
+    /// Projects the 12-team CFP field off current WeeklyRankings data.
     ///
-    /// Auto bids (per Charlie, 2026-09-14):
-    ///   - Highest-Ranking team in each of ACC, B1G, B12, SEC (proxy for conference champion)
+    /// Auto bids (per Charlie, 2026-09-14, P4 rule updated 2026-09-15):
+    ///   - The actual or projected CHAMPION of each of ACC, B1G, B12, SEC —
+    ///     real winner if that conference's title game has been played,
+    ///     otherwise the matchup engine's projected winner (see
+    ///     ProductionGameDataService.GetConferenceChampionsAsync). No manual
+    ///     rating adjustment for an unplayed/projected result — the champion's
+    ///     existing Ranking is used as-is; once a real title game is actually
+    ///     played, the normal weekly rating pipeline picks it up like any
+    ///     other game, same as always.
     ///   - Notre Dame ("Ind"), if inside the top 12 overall by Ranking
     ///   - Single highest-Ranking team across the Group of Six conferences
     ///     (MAC, CUSA, MWC, AAC, PAC, SBC)
@@ -50,25 +58,27 @@ namespace SaturdayPulse.Services
             var selected = new List<PowerRankingRowResponse>();
             var reasons  = new Dictionary<int, string>(); // TeamID -> AutoBidReason
 
-            // ── P4 auto bids: highest-Ranking team per conference ──────────
+            // ── P4 auto bids: actual/projected conference champion ─────────
+            var conferenceChampions = await _gameDataService.GetConferenceChampionsAsync(year, week, token);
+
             foreach (var conf in P4Conferences)
             {
-                var champ = pool
-                    .Where(r => string.Equals(r.ConferenceAbbr, conf, StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(r => r.Ranking)
-                    .ThenByDescending(WinPct)
-                    .ThenByDescending(r => r.CombinedSOS)
-                    .FirstOrDefault();
+                if (!conferenceChampions.TryGetValue(conf, out var championTeamId))
+                {
+                    result.Log.Add($"No resolvable champion for auto-bid conference {conf} — skipped.");
+                    continue;
+                }
 
+                var champ = pool.FirstOrDefault(r => r.TeamID == championTeamId);
                 if (champ == null)
                 {
-                    result.Log.Add($"No teams found for auto-bid conference {conf} — skipped.");
+                    result.Log.Add($"{conf} champion (TeamID {championTeamId}) not found in current rankings pool — skipped.");
                     continue;
                 }
 
                 selected.Add(champ);
                 reasons[champ.TeamID] = conf;
-                result.Log.Add($"{conf} auto bid: {champ.TeamName} (Ranking {champ.Ranking:0.0000}).");
+                result.Log.Add($"{conf} auto bid: {champ.TeamName} (conference champion, Ranking {champ.Ranking:0.0000}).");
             }
 
             // ── Overall order (for ND top-12 check and at-large fill) ──────
@@ -157,6 +167,135 @@ namespace SaturdayPulse.Services
         {
             var total = r.Wins + r.Losses;
             return total == 0 ? 0d : (double)r.Wins / total;
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // Projected bracket — First Round through National Championship,
+        // computed in order via the matchup engine. No toggle, no partial
+        // state (Charlie, 2026-09-15).
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Carries a team's bracket seed alongside its name through
+        /// each round — a team's seed doesn't change as it advances, but
+        /// which team occupies a given bracket slot does once upsets happen.</summary>
+        private class BracketTeam
+        {
+            public int    Seed     { get; set; }
+            public string TeamName { get; set; } = "";
+        }
+
+        public async Task<PlayoffBracketResult> GetProjectedBracketAsync(
+            int year, int week, CancellationToken token = default)
+        {
+            var result = new PlayoffBracketResult { Year = year, Week = week };
+
+            var field = await GetProjectedFieldAsync(year, week, token);
+            if (field.Field.Count < FieldSize)
+            {
+                result.Log.Add($"Field has only {field.Field.Count} of {FieldSize} teams — bracket not computed.");
+                return result;
+            }
+
+            var bySeed = field.Field.ToDictionary(s => s.Seed);
+            BracketTeam Bt(int seed) => new() { Seed = seed, TeamName = bySeed[seed].TeamName };
+
+            // ── First Round: 5v12, 6v11, 7v10, 8v9 — higher seed hosts ─────
+            var firstRoundPairs = new List<(BracketTeam Home, BracketTeam Away)>
+            {
+                (Bt(5), Bt(12)),
+                (Bt(6), Bt(11)),
+                (Bt(7), Bt(10)),
+                (Bt(8), Bt(9)),
+            };
+            var (firstRound, frWinners) = await PredictRoundAsync(
+                "First Round", year, week, firstRoundPairs, location: 'H', token);
+            result.Rounds.Add(firstRound);
+
+            // ── Quarterfinals: 1v8/9, 2v7/10, 3v6/11, 4v5/12 — neutral site ─
+            var qfPairs = new List<(BracketTeam Home, BracketTeam Away)>
+            {
+                (Bt(1), frWinners[3]), // winner of 8v9
+                (Bt(2), frWinners[2]), // winner of 7v10
+                (Bt(3), frWinners[1]), // winner of 6v11
+                (Bt(4), frWinners[0]), // winner of 5v12
+            };
+            var (qf, qfWinners) = await PredictRoundAsync(
+                "Quarterfinals", year, week, qfPairs, location: 'N', token);
+            result.Rounds.Add(qf);
+
+            // ── Semifinals: 1's path vs 4's path, 2's path vs 3's path ─────
+            var sfPairs = new List<(BracketTeam Home, BracketTeam Away)>
+            {
+                (qfWinners[0], qfWinners[3]),
+                (qfWinners[1], qfWinners[2]),
+            };
+            var (sf, sfWinners) = await PredictRoundAsync(
+                "Semifinals", year, week, sfPairs, location: 'N', token);
+            result.Rounds.Add(sf);
+
+            // ── National Championship ──────────────────────────────────────
+            var finalsPairs = new List<(BracketTeam Home, BracketTeam Away)>
+            {
+                (sfWinners[0], sfWinners[1]),
+            };
+            var (finals, _) = await PredictRoundAsync(
+                "National Championship", year, week, finalsPairs, location: 'N', token);
+            result.Rounds.Add(finals);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Predicts one round's matchups via the batch matchup engine and
+        /// resolves each game's winner. Matches predictions back to their
+        /// pairs by team name rather than assuming the engine preserves
+        /// input order.
+        /// </summary>
+        private async Task<(BracketRoundResult Round, List<BracketTeam> Winners)> PredictRoundAsync(
+            string roundLabel, int year, int week,
+            List<(BracketTeam Home, BracketTeam Away)> pairs,
+            char location, CancellationToken token)
+        {
+            var matchups = pairs.Select(p => new MatchupRequest
+            {
+                TeamName     = p.Home.TeamName,
+                OpponentName = p.Away.TeamName,
+                Location     = location,
+                Week         = week,
+            }).ToList();
+
+            var predictions = await _gameDataService.PredictMatchupsAsync(
+                year, matchups, token, asOfWeek: week);
+
+            var round   = new BracketRoundResult { RoundLabel = roundLabel };
+            var winners = new List<BracketTeam>();
+
+            foreach (var (home, away) in pairs)
+            {
+                var pred = predictions.FirstOrDefault(p =>
+                    p.TeamName == home.TeamName && p.OpponentName == away.TeamName);
+
+                // No prediction found (e.g. a team-name mismatch against the
+                // Teams table) — default to the higher seed advancing rather
+                // than dropping the matchup from the bracket entirely.
+                var homeWins = pred?.IsTeamProjectedWinner ?? true;
+                var winner   = homeWins ? home : away;
+                winners.Add(winner);
+
+                round.Matchups.Add(new BracketMatchupResult
+                {
+                    Team1Seed      = home.Seed,
+                    Team1Name      = home.TeamName,
+                    Team1ProjScore = pred != null ? Math.Round(pred.PredictedTeamScore, 1) : 0,
+                    Team2Seed      = away.Seed,
+                    Team2Name      = away.TeamName,
+                    Team2ProjScore = pred != null ? Math.Round(pred.PredictedOpponentScore, 1) : 0,
+                    WinnerSeed     = winner.Seed,
+                    WinnerName     = winner.TeamName,
+                });
+            }
+
+            return (round, winners);
         }
     }
 }

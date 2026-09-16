@@ -29,7 +29,8 @@ namespace SaturdayPulse.ViewModels
 
         private List<ChampionshipMatchup> _allChampionships = new();
         private bool   _isBusy;
-        private string _selectedView  = "Championship";
+        private string _selectedView          = "Championship";
+        private string _selectedPlayoffSubView = "Projected Field";
         private string _statusMessage = "Loading...";
         private string _emptyMessage = "Loading...";
 
@@ -54,6 +55,11 @@ namespace SaturdayPulse.ViewModels
             SelectViewCommand = new Microsoft.Maui.Controls.Command<string>(view =>
             {
                 SelectedView = view;
+            });
+
+            SelectPlayoffSubViewCommand = new Microsoft.Maui.Controls.Command<string>(subView =>
+            {
+                SelectedPlayoffSubView = subView;
             });
 
             ToggleMatchupExpandCommand = new Microsoft.Maui.Controls.Command<ChampionshipMatchup>(matchup =>
@@ -90,6 +96,11 @@ namespace SaturdayPulse.ViewModels
                 if (round != null) round.IsExpanded = !round.IsExpanded;
             });
 
+            ToggleBracketRoundExpandCommand = new Microsoft.Maui.Controls.Command<ProjectedBracketRound>(round =>
+            {
+                if (round != null) round.IsExpanded = !round.IsExpanded;
+            });
+
             ToggleWeekendExpandCommand = new Microsoft.Maui.Controls.Command<BowlWeekendGroup>(weekend =>
             {
                 if (weekend != null) weekend.IsExpanded = !weekend.IsExpanded;
@@ -107,6 +118,10 @@ namespace SaturdayPulse.ViewModels
 
         /// <summary>Projected 12-team seed table — populated only when HasPlayoffData is false.</summary>
         public ObservableCollection<PlayoffSeed>         PlayoffSeeds  { get; } = new();
+
+        /// <summary>Projected bracket, First Round through National Championship —
+        /// populated only when HasPlayoffData is false, alongside PlayoffSeeds.</summary>
+        public ObservableCollection<ProjectedBracketRound> BracketRounds { get; } = new();
 
         // ── Bindable properties ───────────────────────────────────────────
 
@@ -132,6 +147,9 @@ namespace SaturdayPulse.ViewModels
 
         /// <summary>True once a projected seed table has been loaded.</summary>
         public bool HasSeedingData  => PlayoffSeeds.Any();
+
+        /// <summary>True once the projected bracket has been loaded.</summary>
+        public bool HasBracketData  => BracketRounds.Any();
 
         /// <summary>Seed table is the thing to show: no real bracket yet, but we have a projection.</summary>
         public bool IsSeedingView   => !HasPlayoffData && HasSeedingData;
@@ -167,17 +185,36 @@ namespace SaturdayPulse.ViewModels
         public bool IsPlayoffsView     => _selectedView == "Playoffs";
         public bool IsBowlsView        => _selectedView == "Bowls";
 
+        /// <summary>Sub-tab within Playoffs, only relevant while IsSeedingView (no
+        /// real bracket yet) — "Projected Field" or "Bracket".</summary>
+        public string SelectedPlayoffSubView
+        {
+            get => _selectedPlayoffSubView;
+            set
+            {
+                _selectedPlayoffSubView = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsProjectedFieldSubView));
+                OnPropertyChanged(nameof(IsBracketSubView));
+            }
+        }
+
+        public bool IsProjectedFieldSubView => _selectedPlayoffSubView == "Projected Field";
+        public bool IsBracketSubView         => _selectedPlayoffSubView == "Bracket";
+
         // ── Commands ──────────────────────────────────────────────────────
 
         public ICommand LoadDataCommand               { get; }
         public ICommand RefreshCommand                { get; }
         public ICommand SelectViewCommand             { get; }
+        public ICommand SelectPlayoffSubViewCommand   { get; }
         public ICommand ToggleMatchupExpandCommand    { get; }
         public ICommand ToggleContendersExpandCommand { get; }
         public ICommand ToggleDetailsCommand          { get; }
         public ICommand ToggleCardTiebreakerCommand   { get; }
         public ICommand ToggleCardContendersCommand   { get; }
         public ICommand ToggleRoundExpandCommand      { get; }
+        public ICommand ToggleBracketRoundExpandCommand { get; }
         public ICommand ToggleWeekendExpandCommand    { get; }
 
         // ── Load ──────────────────────────────────────────────────────────
@@ -213,11 +250,17 @@ namespace SaturdayPulse.ViewModels
                 RebuildPostseasonFromCache();
 
                 // Real bracket takes precedence — only fetch/show the projected
-                // seed table when the committee hasn't set the field yet.
+                // seed table (and bracket) when the committee hasn't set the field yet.
                 if (!HasPlayoffData)
+                {
                     await LoadPlayoffSeedingAsync();
+                    await LoadPlayoffBracketAsync();
+                }
                 else
+                {
                     ClearPlayoffSeeding();
+                    ClearPlayoffBracket();
+                }
 
                 StatusMessage = $"{_navState.SelectedYear} projections";
                 HasLoaded = true;
@@ -260,6 +303,36 @@ namespace SaturdayPulse.ViewModels
             OnPropertyChanged(nameof(HasSeedingData));
             OnPropertyChanged(nameof(IsSeedingView));
             OnPropertyChanged(nameof(HasPlayoffOrSeedingData));
+        }
+
+        // ── Load projected bracket ─────────────────────────────────────────
+
+        private async Task LoadPlayoffBracketAsync()
+        {
+            var bracket = await Task.Run(async () =>
+                await _apiService.GetPlayoffBracketAsync(_navState.SelectedYear, _navState.SelectedWeek));
+
+            BracketRounds.Clear();
+            if (bracket?.Rounds != null)
+            {
+                foreach (var round in bracket.Rounds)
+                {
+                    for (int i = 0; i < round.Matchups.Count; i++)
+                        round.Matchups[i].IsOddRow = i % 2 == 1;
+
+                    BracketRounds.Add(new ProjectedBracketRound(round.RoundLabel, round.Matchups));
+                }
+            }
+
+            OnPropertyChanged(nameof(HasBracketData));
+        }
+
+        private void ClearPlayoffBracket()
+        {
+            if (BracketRounds.Count == 0) return;
+
+            BracketRounds.Clear();
+            OnPropertyChanged(nameof(HasBracketData));
         }
 
         // ── Build Bowls + Playoffs from cached schedule ───────────────────
@@ -478,7 +551,10 @@ namespace SaturdayPulse.ViewModels
                     {
                         ApplyConferenceFilter();
                         if (_selectedView == "Playoffs" && !HasPlayoffData)
+                        {
                             await LoadPlayoffSeedingAsync();
+                            await LoadPlayoffBracketAsync();
+                        }
                     }
                     break;
 
@@ -539,6 +615,34 @@ namespace SaturdayPulse.ViewModels
             DateLabel = dateLabel;
             Games     = games;
         }
+    }
+
+    /// <summary>One round of the PROJECTED bracket (no real Games rows yet —
+    /// matchups are BracketMatchupResult, not GameResult). Collapsible, same
+    /// as PlayoffRound.</summary>
+    public class ProjectedBracketRound : INotifyPropertyChanged
+    {
+        public string RoundLabel { get; }
+        public List<SaturdayPulse.Models.BracketMatchupResult> Matchups { get; }
+
+        private bool _isExpanded = true;
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set { _isExpanded = value; OnPropertyChanged(); OnPropertyChanged(nameof(ExpandIcon)); }
+        }
+
+        public string ExpandIcon => _isExpanded ? "▼" : "▶";
+
+        public ProjectedBracketRound(string label, List<SaturdayPulse.Models.BracketMatchupResult> matchups)
+        {
+            RoundLabel = label;
+            Matchups   = matchups;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
     /// <summary>One calendar day of bowl games within a weekend (not collapsible).</summary>
