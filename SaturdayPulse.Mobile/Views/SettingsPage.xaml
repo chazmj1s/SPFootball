@@ -1007,7 +1007,8 @@
                                         </Label>
                                     </Grid>
 
-                                    <WebView IsVisible="{Binding IsExpanded}" HeightRequest="320" Margin="0,4,0,8">
+                                    <WebView IsVisible="{Binding IsExpanded}" HeightRequest="320" Margin="0,4,0,8"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource PanelBackgroundLight}, Dark={StaticResource PanelBackgroundDark}}">
                                         <WebView.Source>
                                             <HtmlWebViewSource Html="{Binding Html}" />
                                         </WebView.Source>
