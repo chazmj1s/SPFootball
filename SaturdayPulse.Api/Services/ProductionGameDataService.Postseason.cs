@@ -42,6 +42,110 @@ namespace SaturdayPulse.Services
 
 
         /// <summary>
+        /// Resolves each P4 conference's champion — the real winner if that
+        /// conference's title game has been played, otherwise the projected
+        /// winner via the matchup engine (higher seed hosts). For
+        /// PlayoffSeedingService's P4 auto-bid: "conference champion", not
+        /// "highest Ranking in conference" (Charlie, 2026-09-15).
+        ///
+        /// Deliberately NOT sharing a pass with GetProjectedChampionshipQualifiersV2Async
+        /// below, even though the "find the real game, else project it" logic
+        /// is the same shape — that endpoint needs the full qualifier/
+        /// Contenders/TiebreakerLog response, this just needs a TeamId per
+        /// conference. Flagging as a known consolidation opportunity rather
+        /// than risking a shared refactor of an already-verified endpoint
+        /// tonight (ways-of-working: prove new logic in isolation first).
+        /// </summary>
+        public async Task<Dictionary<string, int>> GetConferenceChampionsAsync(
+            int year, int? throughWeek, CancellationToken token = default)
+        {
+            var standingsByConference = await BuildProjectedConferenceStandingsV2Async(year, throughWeek, token);
+            var service = new ConferenceChampionshipService();
+
+            var qualifiersByConference = standingsByConference
+                .Where(kvp => kvp.Value.Count >= 2)
+                .Select(kvp => service.GetQualifiers(kvp.Key, kvp.Value))
+                .Where(r => r.Qualifier1 != null && r.Qualifier2 != null)
+                .ToDictionary(r => r.Conference, r => (Q1: r.Qualifier1, Q2: r.Qualifier2));
+
+            var allGames = await _uow.Games.GetByYearAsync(year, token);
+            var teams = await _uow.Teams.GetDictionaryByTeamIdAsync(token);
+            var confLookup = await _uow.Conferences.GetDictionaryAsync(token);
+
+            string GetConfAbbr(Teams? t)
+            {
+                if (t?.ConferenceId == null) return string.Empty;
+                confLookup.TryGetValue(t.ConferenceId.Value, out var conf);
+                return conf?.Abbreviation ?? string.Empty;
+            }
+
+            var championshipWeek = ChampionshipWeekCalculator.GetChampionshipWeek(year, allGames);
+            var champions = new Dictionary<string, int>();
+
+            foreach (var kvp in qualifiersByConference)
+            {
+                var conf = kvp.Key;
+                var (q1, q2) = kvp.Value;
+
+                Games? realGame = null;
+                if (championshipWeek.HasValue)
+                {
+                    realGame = allGames.FirstOrDefault(g =>
+                    {
+                        if (g.Week != championshipWeek.Value) return false;
+                        teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+                        teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+                        return string.Equals(GetConfAbbr(homeTeam), conf, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(GetConfAbbr(awayTeam), conf, StringComparison.OrdinalIgnoreCase);
+                    });
+                }
+
+                bool isRealGamePlayed = realGame != null &&
+                    ((realGame.HomePoints ?? 0) > 0 || (realGame.AwayPoints ?? 0) > 0);
+
+                if (isRealGamePlayed)
+                {
+                    var winnerId = (realGame!.HomePoints ?? 0) >= (realGame.AwayPoints ?? 0)
+                        ? realGame.HomeId : realGame.AwayId;
+                    if (winnerId.HasValue)
+                    {
+                        champions[conf] = winnerId.Value;
+                        continue;
+                    }
+                }
+
+                // No real, played result yet — project it. Higher seed hosts,
+                // same rule as the Title Games qualifier projection.
+                var (homeQ, awayQ) = q1.ConferenceWinPct >= q2.ConferenceWinPct
+                    ? (q1, q2) : (q2, q1);
+
+                if (!championshipWeek.HasValue)
+                {
+                    // Can't project without a week to anchor ratings to —
+                    // best guess is the better-record qualifier.
+                    champions[conf] = homeQ.TeamId;
+                    continue;
+                }
+
+                try
+                {
+                    var pred = await PredictMatchupAsync(
+                        year, homeQ.TeamName, awayQ.TeamName, 'H', championshipWeek.Value, token);
+                    champions[conf] = pred.IsTeamProjectedWinner ? homeQ.TeamId : awayQ.TeamId;
+                }
+                catch (ArgumentException)
+                {
+                    // Team name mismatch between ConferenceStanding.TeamName
+                    // and the Teams table — fall back rather than leaving
+                    // this conference without a champion.
+                    champions[conf] = homeQ.TeamId;
+                }
+            }
+
+            return champions;
+        }
+
+        /// <summary>
         /// V2: Projected championship qualifiers from Games + TeamsConferenceHistory tables.
         /// Legacy equivalent: GetProjectedChampionshipQualifiersAsync().
         ///
@@ -111,14 +215,26 @@ namespace SaturdayPulse.Services
             var titleGamesByConf = new Dictionary<string, Games>();
             if (championshipWeek.HasValue)
             {
-                foreach (var kvp in qualifiersByConference)
+                // Matching by conference membership rather than the projected
+                // Q1/Q2 team-ID pair — for a season with real completed data,
+                // the *projected* pairing is a simulation and can differ from
+                // who actually played (Charlie, 2026-09-15: SEC's real title
+                // game wasn't found because the simulated qualifiers weren't
+                // the two teams who actually played it; B1G/B12 only matched
+                // by luck). Any real game at championship week between two
+                // teams from the same conference is that conference's title
+                // game — nothing else is scheduled intra-conference that week.
+                foreach (var conf in qualifiersByConference.Keys)
                 {
-                    var (q1, q2) = kvp.Value;
                     var game = allGames.FirstOrDefault(g =>
-                        g.Week == championshipWeek.Value &&
-                        ((g.HomeId == q1.TeamId && g.AwayId == q2.TeamId) ||
-                         (g.HomeId == q2.TeamId && g.AwayId == q1.TeamId)));
-                    if (game != null) titleGamesByConf[kvp.Key] = game;
+                    {
+                        if (g.Week != championshipWeek.Value) return false;
+                        teams.TryGetValue(g.HomeId ?? 0, out var homeTeam);
+                        teams.TryGetValue(g.AwayId ?? 0, out var awayTeam);
+                        return string.Equals(GetConfAbbr(homeTeam), conf, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(GetConfAbbr(awayTeam), conf, StringComparison.OrdinalIgnoreCase);
+                    });
+                    if (game != null) titleGamesByConf[conf] = game;
                 }
             }
             // If championshipWeek isn't known yet (rivalry week games not

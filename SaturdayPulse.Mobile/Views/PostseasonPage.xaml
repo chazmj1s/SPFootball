@@ -493,50 +493,191 @@
 
             <Grid BackgroundColor="{AppThemeBinding Light=#6B4EAE, Dark=#2A2040}"
                   Padding="12,8">
-              <Label Text="Projected Field — Rankings Only"
+              <Label Text="Projected Field"
                      FontSize="13" FontAttributes="Bold" TextColor="White" />
             </Grid>
-            <Label Text="Seeded off current Ranking only — no conference championship simulation yet."
-                   FontSize="10" Opacity="0.6" Padding="12,6,12,6" />
 
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding PlayoffSeeds}" Spacing="0">
+            <!-- Sub-tab: Projected Field | Bracket -->
+            <Grid ColumnDefinitions="*,*"
+                  BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#181818}"
+                  Padding="8,4">
+              <Border Grid.Column="0" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,4" StrokeThickness="0" BackgroundColor="Transparent">
+                <Border.GestureRecognizers>
+                  <TapGestureRecognizer Command="{Binding SelectPlayoffSubViewCommand}" CommandParameter="Projected Field" />
+                </Border.GestureRecognizers>
+                <Label Text="Projected Field" FontSize="12" FontAttributes="Bold">
+                  <Label.Triggers>
+                    <DataTrigger TargetType="Label" Binding="{Binding IsProjectedFieldSubView}" Value="True">
+                      <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                      <Setter Property="TextDecorations" Value="Underline" />
+                    </DataTrigger>
+                    <DataTrigger TargetType="Label" Binding="{Binding IsProjectedFieldSubView}" Value="False">
+                      <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                      <Setter Property="TextDecorations" Value="None" />
+                    </DataTrigger>
+                  </Label.Triggers>
+                </Label>
+              </Border>
+              <Border Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center" Padding="4,4" StrokeThickness="0" BackgroundColor="Transparent">
+                <Border.GestureRecognizers>
+                  <TapGestureRecognizer Command="{Binding SelectPlayoffSubViewCommand}" CommandParameter="Bracket" />
+                </Border.GestureRecognizers>
+                <Label Text="Bracket" FontSize="12" FontAttributes="Bold">
+                  <Label.Triggers>
+                    <DataTrigger TargetType="Label" Binding="{Binding IsBracketSubView}" Value="True">
+                      <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                      <Setter Property="TextDecorations" Value="Underline" />
+                    </DataTrigger>
+                    <DataTrigger TargetType="Label" Binding="{Binding IsBracketSubView}" Value="False">
+                      <Setter Property="TextColor" Value="{AppThemeBinding Light=#888888, Dark=#666666}" />
+                      <Setter Property="TextDecorations" Value="None" />
+                    </DataTrigger>
+                  </Label.Triggers>
+                </Label>
+              </Border>
+            </Grid>
+
+            <!-- Projected Field sub-view -->
+            <VerticalStackLayout IsVisible="{Binding IsProjectedFieldSubView}" Spacing="0">
+
+              <Label Text="*Seeded by calculated Team Rating which incorporates SOS and Record."
+                     FontSize="10" Opacity="0.6" Padding="12,6,12,6" />
+
+              <Grid ColumnDefinitions="28,*,64,55,52" Padding="10,2,10,4" ColumnSpacing="6">
+                <Label Grid.Column="0" Text="Seed" FontSize="9" FontAttributes="Bold" Opacity="0.5" />
+                <Label Grid.Column="1" Text="Team" FontSize="9" FontAttributes="Bold" Opacity="0.5" />
+                <Label Grid.Column="2" Text="Rating" FontSize="9" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+                <Label Grid.Column="3" Text="SOS" FontSize="9" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="Center" />
+                <Label Grid.Column="4" Text="Record" FontSize="9" FontAttributes="Bold" Opacity="0.5" HorizontalOptions="End" />
+              </Grid>
+
+              <VerticalStackLayout BindableLayout.ItemsSource="{Binding PlayoffSeeds}" Spacing="0">
+                <BindableLayout.ItemTemplate>
+                  <DataTemplate x:DataType="models:PlayoffSeed">
+                    <Grid ColumnDefinitions="28,*,64,55,52" Padding="10,6" ColumnSpacing="6">
+                      <Grid.Triggers>
+                        <DataTrigger TargetType="Grid" Binding="{Binding HasBye}" Value="True">
+                          <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF3E0, Dark=#2A2013}" />
+                        </DataTrigger>
+                      </Grid.Triggers>
+
+                      <Label Grid.Column="0" Text="{Binding Seed}"
+                             FontSize="13" FontAttributes="Bold" VerticalOptions="Center" />
+
+                      <Label Grid.Column="1" FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation">
+                        <Label.FormattedText>
+                          <FormattedString>
+                            <Span Text="{Binding TeamName}" />
+                            <Span Text="{Binding AutoBidReason, StringFormat=' ({0})'}"
+                                  FontSize="10"
+                                  TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
+                          </FormattedString>
+                        </Label.FormattedText>
+                      </Label>
+
+                      <Label Grid.Column="2" Text="{Binding Ranking, StringFormat='{0:0.0000}'}"
+                             FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
+                             TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+
+                      <Label Grid.Column="3" Text="{Binding CombinedSOS, StringFormat='{0:0.000}'}"
+                             FontSize="11" HorizontalOptions="Center" VerticalOptions="Center" />
+
+                      <Label Grid.Column="4" HorizontalOptions="End" VerticalOptions="Center" FontSize="11">
+                        <Label.FormattedText>
+                          <FormattedString>
+                            <Span Text="{Binding Wins}" />
+                            <Span Text="-" />
+                            <Span Text="{Binding Losses}" />
+                          </FormattedString>
+                        </Label.FormattedText>
+                      </Label>
+                    </Grid>
+                  </DataTemplate>
+                </BindableLayout.ItemTemplate>
+              </VerticalStackLayout>
+
+            </VerticalStackLayout>
+
+            <!-- Bracket sub-view -->
+            <VerticalStackLayout IsVisible="{Binding IsBracketSubView}" Spacing="0"
+                                 BindableLayout.ItemsSource="{Binding BracketRounds}">
               <BindableLayout.ItemTemplate>
-                <DataTemplate x:DataType="models:PlayoffSeed">
-                  <Grid ColumnDefinitions="28,*,64,52" Padding="10,6" ColumnSpacing="6">
-                    <Grid.Triggers>
-                      <DataTrigger TargetType="Grid" Binding="{Binding HasBye}" Value="True">
-                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFF3E0, Dark=#2A2013}" />
-                      </DataTrigger>
-                    </Grid.Triggers>
+                <DataTemplate x:DataType="vm:ProjectedBracketRound">
+                  <VerticalStackLayout Spacing="0">
 
-                    <Label Grid.Column="0" Text="{Binding Seed}"
-                           FontSize="13" FontAttributes="Bold" VerticalOptions="Center" />
+                    <!-- Round header — tappable to collapse/expand -->
+                    <Grid BackgroundColor="{AppThemeBinding Light=#6B4EAE, Dark=#2A2040}"
+                          Padding="12,8" ColumnDefinitions="*,Auto">
+                      <Label Grid.Column="0" Text="{Binding RoundLabel}"
+                             FontSize="13" FontAttributes="Bold" TextColor="White"
+                             VerticalOptions="Center" />
+                      <Label Grid.Column="1" Text="{Binding ExpandIcon}"
+                             FontSize="10" TextColor="White"
+                             VerticalOptions="Center" />
+                      <Grid.GestureRecognizers>
+                        <TapGestureRecognizer
+                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.ToggleBracketRoundExpandCommand}"
+                            CommandParameter="{Binding .}" />
+                      </Grid.GestureRecognizers>
+                    </Grid>
 
-                    <Label Grid.Column="1" FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation">
-                      <Label.FormattedText>
-                        <FormattedString>
-                          <Span Text="{Binding TeamName}" />
-                          <Span Text="{Binding AutoBidReason, StringFormat=' ({0})'}"
-                                FontSize="10"
-                                TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
-                        </FormattedString>
-                      </Label.FormattedText>
-                    </Label>
+                    <!-- Matchups — collapsible -->
+                    <VerticalStackLayout IsVisible="{Binding IsExpanded}"
+                                         BindableLayout.ItemsSource="{Binding Matchups}" Spacing="0">
+                      <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="models:BracketMatchupResult">
+                          <Grid ColumnDefinitions="*,Auto,*" Padding="12,8" ColumnSpacing="8">
+                            <Grid.Triggers>
+                              <DataTrigger TargetType="Grid" Binding="{Binding IsOddRow}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FAFAFA, Dark=#1C1C1C}" />
+                              </DataTrigger>
+                            </Grid.Triggers>
 
-                    <Label Grid.Column="2" Text="{Binding Ranking, StringFormat='{0:0.0000}'}"
-                           FontSize="11" HorizontalOptions="Center" VerticalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                            <Label Grid.Column="0" VerticalOptions="Center" FontSize="13" LineBreakMode="TailTruncation">
+                              <Label.FormattedText>
+                                <FormattedString>
+                                  <Span Text="{Binding Team1Seed, StringFormat='{0}. '}" FontAttributes="Bold" />
+                                  <Span Text="{Binding Team1Name}" />
+                                </FormattedString>
+                              </Label.FormattedText>
+                              <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding Team1Wins}" Value="True">
+                                  <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                                </DataTrigger>
+                              </Label.Triggers>
+                            </Label>
 
-                    <Label Grid.Column="3" HorizontalOptions="End" VerticalOptions="Center" FontSize="11">
-                      <Label.FormattedText>
-                        <FormattedString>
-                          <Span Text="{Binding Wins}" />
-                          <Span Text="-" />
-                          <Span Text="{Binding Losses}" />
-                        </FormattedString>
-                      </Label.FormattedText>
-                    </Label>
-                  </Grid>
+                            <Label Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center"
+                                   FontSize="13" FontAttributes="Bold">
+                              <Label.FormattedText>
+                                <FormattedString>
+                                  <Span Text="{Binding DisplayTeam1Score}" />
+                                  <Span Text=" - " />
+                                  <Span Text="{Binding DisplayTeam2Score}" />
+                                </FormattedString>
+                              </Label.FormattedText>
+                            </Label>
+
+                            <Label Grid.Column="2" HorizontalOptions="End" VerticalOptions="Center"
+                                   FontSize="13" LineBreakMode="TailTruncation">
+                              <Label.FormattedText>
+                                <FormattedString>
+                                  <Span Text="{Binding Team2Name}" />
+                                  <Span Text="{Binding Team2Seed, StringFormat=' .{0}'}" FontAttributes="Bold" />
+                                </FormattedString>
+                              </Label.FormattedText>
+                              <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding Team2Wins}" Value="True">
+                                  <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                                </DataTrigger>
+                              </Label.Triggers>
+                            </Label>
+                          </Grid>
+                        </DataTemplate>
+                      </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                  </VerticalStackLayout>
                 </DataTemplate>
               </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
@@ -701,14 +842,14 @@
                        FontSize="13" FontAttributes="Bold" TextColor="White" />
               </Grid>
 
-              <!-- Column header — Score only labeled while a projected score is
-                   actually shown (HasProjectedMatchup), matching the qualifier
-                   rows below; widths match those rows' *,50,120 columns. -->
-              <Grid ColumnDefinitions="*,50,120" Padding="12,4,16,2">
+              <!-- Column header — only while the qualifier rows below are
+                   showing (HasNoGame); once the real card renders it has its
+                   own layout and doesn't need these labels. -->
+              <Grid ColumnDefinitions="*,50,120" Padding="12,4,16,2" IsVisible="{Binding HasNoGame}">
                 <Label Grid.Column="0" Text="Teams" FontSize="9" FontAttributes="Bold" Opacity="0.5" />
                 <Label Grid.Column="1" Text="Score" FontSize="9" FontAttributes="Bold" Opacity="0.5"
                        HorizontalOptions="Center" IsVisible="{Binding HasProjectedMatchup}" />
-                <Label Grid.Column="2" Text="Conference Record" FontSize="9" FontAttributes="Bold" Opacity="0.5"
+                <Label Grid.Column="2" Text="Record" FontSize="9" FontAttributes="Bold" Opacity="0.5"
                        HorizontalOptions="End" />
               </Grid>
 
@@ -719,56 +860,58 @@
                                    BindableLayout.ItemsSource="{Binding GameList}"
                                    BindableLayout.ItemTemplate="{StaticResource GameResultCard}" />
 
-              <!-- Qualifier rows — projected score shown between team name and
-                   A:/P: record while there's no real game yet (HasProjectedMatchup);
-                   collapses away once Game exists, since the card shows the score. -->
-              <Grid ColumnDefinitions="*,50,120" Padding="12,6,16,3">
-                <Label Grid.Column="0" Text="{Binding Qualifier1.TeamName}"
-                       FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                <Label Grid.Column="1" Text="{Binding Qualifier1ProjectedScoreDisplay}"
-                       IsVisible="{Binding HasProjectedMatchup}"
-                       FontSize="13" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
-                <Label Grid.Column="2"
-                       FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}">
-                  <Label.FormattedText>
-                    <FormattedString>
-                      <Span Text="A: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier1.ActualConferenceRecord}" FontSize="11"
-                            TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
-                      <Span Text="  P: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier1.ConferenceRecord}" />
-                    </FormattedString>
-                  </Label.FormattedText>
-                </Label>
-              </Grid>
+              <!-- Qualifier rows — hidden entirely once a real game exists
+                   (HasNoGame); that data shows inside GameResultCard instead.
+                   Projected score column (middle) only while HasProjectedMatchup. -->
+              <VerticalStackLayout Spacing="0" IsVisible="{Binding HasNoGame}">
+                <Grid ColumnDefinitions="*,50,120" Padding="12,6,16,3">
+                  <Label Grid.Column="0" Text="{Binding Qualifier1.TeamName}"
+                         FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                  <Label Grid.Column="1" Text="{Binding Qualifier1ProjectedScoreDisplay}"
+                         IsVisible="{Binding HasProjectedMatchup}"
+                         FontSize="13" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center"
+                         TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                  <Label Grid.Column="2"
+                         FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+                         TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="A: " FontSize="9"
+                              TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
+                        <Span Text="{Binding Qualifier1.ActualConferenceRecord}" FontSize="11"
+                              TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                        <Span Text="  P: " FontSize="9"
+                              TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
+                        <Span Text="{Binding Qualifier1.ConferenceRecord}" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                </Grid>
 
-              <Grid ColumnDefinitions="*,50,120" Padding="12,3,16,6">
-                <Label Grid.Column="0" Text="{Binding Qualifier2.TeamName}"
-                       FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                <Label Grid.Column="1" Text="{Binding Qualifier2ProjectedScoreDisplay}"
-                       IsVisible="{Binding HasProjectedMatchup}"
-                       FontSize="13" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
-                <Label Grid.Column="2"
-                       FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}">
-                  <Label.FormattedText>
-                    <FormattedString>
-                      <Span Text="A: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier2.ActualConferenceRecord}" FontSize="11"
-                            TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
-                      <Span Text="  P: " FontSize="9"
-                            TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
-                      <Span Text="{Binding Qualifier2.ConferenceRecord}" />
-                    </FormattedString>
-                  </Label.FormattedText>
-                </Label>
-              </Grid>
+                <Grid ColumnDefinitions="*,50,120" Padding="12,3,16,6">
+                  <Label Grid.Column="0" Text="{Binding Qualifier2.TeamName}"
+                         FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                  <Label Grid.Column="1" Text="{Binding Qualifier2ProjectedScoreDisplay}"
+                         IsVisible="{Binding HasProjectedMatchup}"
+                         FontSize="13" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center"
+                         TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}" />
+                  <Label Grid.Column="2"
+                         FontSize="11" HorizontalOptions="End" VerticalOptions="Center"
+                         TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}">
+                    <Label.FormattedText>
+                      <FormattedString>
+                        <Span Text="A: " FontSize="9"
+                              TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
+                        <Span Text="{Binding Qualifier2.ActualConferenceRecord}" FontSize="11"
+                              TextColor="{AppThemeBinding Light=#444444, Dark=#BBBBBB}" />
+                        <Span Text="  P: " FontSize="9"
+                              TextColor="{AppThemeBinding Light={StaticResource TextDisabledLight}, Dark={StaticResource TextDisabledDark}}" />
+                        <Span Text="{Binding Qualifier2.ConferenceRecord}" />
+                      </FormattedString>
+                    </Label.FormattedText>
+                  </Label>
+                </Grid>
+              </VerticalStackLayout>
 
               <!-- Tiebreaker + Contenders toggles — only while there's no real
                    game yet (HasNoGame). Once Game exists, this same data shows

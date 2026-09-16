@@ -380,6 +380,27 @@ namespace SaturdayPulse.Services
             }
         }
 
+        public async Task<PlayoffBracketResult?> GetPlayoffBracketAsync(int year, int week)
+        {
+            try
+            {
+                var url = $"playoff-bracket?year={year}&week={week}";
+                System.Diagnostics.Debug.WriteLine($"[API] Fetching playoff bracket: {url}");
+
+                var data = await _httpClient.GetFromJsonAsync<PlayoffBracketResult>(url);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[API] Playoff bracket for {year} week {week}: {data?.Rounds?.Count ?? 0} round(s) returned");
+
+                return data;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[API] Error fetching playoff bracket: {ex.Message}");
+                return null;
+            }
+        }
+
         /// <summary>
         /// Gets CFP playoff games (SeasonType == "playoff") for a given year.
         /// </summary>
@@ -659,11 +680,9 @@ namespace SaturdayPulse.Services
                                                ActualConferenceWins = c.GetProperty("actualConferenceWins").GetInt32(),
                                                ActualConferenceLosses = c.GetProperty("actualConferenceLosses").GetInt32()
                                            }).ToList(),
-                    // Was never parsed before this — Game always came back null
-                    // regardless of what the Api sent, so the shared game card
-                    // never actually rendered for a real title game. Reuses
-                    // GameResultDto/ToGameResult() rather than hand-writing the
-                    // ~20-property mapping a second time in this file.
+                    // Was missing entirely until now — Game always came back
+                    // null and ProjectedMatchup was never parsed at all,
+                    // regardless of what the Api sent.
                     Game             = r.TryGetProperty("game", out var g) && g.ValueKind != JsonValueKind.Null
                                            ? JsonSerializer.Deserialize<GameResultDto>(g.GetRawText(), options)?.ToGameResult()
                                            : null,
