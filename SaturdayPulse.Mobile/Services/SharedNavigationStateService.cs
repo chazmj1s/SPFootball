@@ -269,10 +269,10 @@ namespace SaturdayPulse.Services
 
                     var weekStart = DateTime.Parse(x.Date);
 
-                    var daysSinceTuesday = ((int)weekStart.DayOfWeek - (int)DayOfWeek.Tuesday + 7) % 7;
-                    var weekTuesday = weekStart.AddDays(-daysSinceTuesday);
+                    var daysSinceThursday = ((int)weekStart.DayOfWeek - (int)DayOfWeek.Thursday + 7) % 7;
+                    var weekThursday = weekStart.AddDays(-daysSinceThursday);
 
-                    return weekTuesday <= today;
+                    return weekThursday <= today;
                 })
                 .Select(x => x.Week)
                 .DefaultIfEmpty(1)
