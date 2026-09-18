@@ -22,29 +22,38 @@ namespace SaturdayPulse.Services
     /// check that used to live entirely inside SettingsViewModel.SeasonPassCommand.
     /// Pulling it out here means the Settings button and the new gated
     /// Details paywall message (MyTeamsViewModel) share the exact same
-    /// login-check logic — when Stripe gets wired up for real, it only
-    /// needs to change in this one place.
+    /// login-check logic. PurchaseSeasonPassAsync is the matching single
+    /// entry point for the store purchase itself (RevenueCat).
     /// </summary>
     public class EntitlementService
     {
         private readonly AuthService _authService;
         private readonly UserApiService _userApi;
+        private readonly SeasonPassPurchaseService _purchaseService;
 
         private bool _isLoggedIn;
         private bool _hasSeasonPass;
         private bool _isAdmin;
+        private string? _userId;
 
         public bool IsLoggedIn => _isLoggedIn;
         public bool HasSeasonPass => _hasSeasonPass;
         public bool IsAdmin => _isAdmin;
 
+        /// <summary>The API-side UserId (JWT sub) of the logged-in account; null when logged out.</summary>
+        public string? UserId => _userId;
+
         /// <summary>Fires whenever IsLoggedIn, HasSeasonPass, or IsAdmin changes.</summary>
         public event Action? EntitlementChanged;
 
-        public EntitlementService(AuthService authService, UserApiService userApi)
+        public EntitlementService(
+            AuthService authService,
+            UserApiService userApi,
+            SeasonPassPurchaseService purchaseService)
         {
             _authService = authService;
             _userApi = userApi;
+            _purchaseService = purchaseService;
         }
 
         /// <summary>
@@ -62,6 +71,7 @@ namespace SaturdayPulse.Services
             _isLoggedIn = true;
             _hasSeasonPass = profile.IsEntitled;
             _isAdmin = profile.IsAdmin;
+            _userId = string.IsNullOrWhiteSpace(profile.UserId) ? null : profile.UserId;
 
             if (changed) EntitlementChanged?.Invoke();
         }
@@ -74,6 +84,7 @@ namespace SaturdayPulse.Services
             _isLoggedIn = false;
             _hasSeasonPass = false;
             _isAdmin = false;
+            _userId = null;
 
             if (changed) EntitlementChanged?.Invoke();
         }
@@ -82,12 +93,12 @@ namespace SaturdayPulse.Services
         /// Season Pass purchase entry point. If nobody's logged in, offers
         /// to log in first (same prompt SettingsViewModel's original
         /// SeasonPassCommand showed); returns whether the caller can proceed
-        /// to the (not-yet-built) purchase flow, plus the freshly-fetched
-        /// profile if a login just happened — callers that keep their own
-        /// local copy of profile fields (SettingsViewModel) should apply
-        /// FreshProfile themselves; callers that only read through this
-        /// service (MyTeamsViewModel) don't need to do anything else, since
-        /// ApplyProfile was already called internally.
+        /// to the purchase flow (PurchaseSeasonPassAsync), plus the
+        /// freshly-fetched profile if a login just happened — callers that
+        /// keep their own local copy of profile fields (SettingsViewModel)
+        /// should apply FreshProfile themselves; callers that only read
+        /// through this service (MyTeamsViewModel) don't need to do anything
+        /// else, since ApplyProfile was already called internally.
         /// </summary>
         public async Task<SeasonPassLoginResult> EnsureLoggedInForPurchaseAsync()
         {
@@ -108,6 +119,14 @@ namespace SaturdayPulse.Services
             ApplyProfile(profile);
             return new SeasonPassLoginResult(true, profile);
         }
+
+        /// <summary>
+        /// Runs the store purchase for the annual Season Pass. Call only
+        /// after EnsureLoggedInForPurchaseAsync returned CanProceed = true.
+        /// Does not throw; failures are reported in the result.
+        /// </summary>
+        public Task<SeasonPassPurchaseResult> PurchaseSeasonPassAsync()
+            => _purchaseService.PurchaseSeasonPassAsync(_userId ?? string.Empty);
     }
 
     /// <summary>Result of EnsureLoggedInForPurchaseAsync — CanProceed tells the

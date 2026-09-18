@@ -83,6 +83,7 @@ builder.Services.AddScoped<ContentService>();
 builder.Services.AddScoped<RatingBlendingService>();
 builder.Services.AddScoped<ExperimentalInertiaRatingService>();
 builder.Services.AddScoped<RatingComparisonService>();
+builder.Services.AddScoped<RevenueCatWebhookService>();
 
 builder.Services.AddSingleton<ProjectionCacheService>();
 
@@ -141,6 +142,8 @@ builder.Services.AddLogging(loggingBuilder =>
 
 builder.Services.Configure<CustomSettings>(builder.Configuration.GetSection("CustomSettings"));
 builder.Services.Configure<MetricsConfiguration>(builder.Configuration.GetSection("MetricsConfiguration"));
+builder.Services.Configure<RevenueCatSettings>(builder.Configuration.GetSection("RevenueCat"));
+
 
 builder.Services.AddCors();
 

@@ -17,6 +17,18 @@ namespace SaturdayPulse.Extensions
                 ? result
                 : 0m;
         }
+
+        public static int NormalizedScore(this double score)
+        {
+            return (int)Math.Round(score) switch
+            {
+                1 or 2 or 4 => 3,
+                5 => 6,
+                8 => 7,
+                11 => 10,
+                _ => (int)Math.Round(score)
+            };
+        }
     }
 }
     
