@@ -51,13 +51,28 @@ namespace SaturdayPulse.Controllers
 
         private bool IsAuthorized()
         {
-            var expected = settings.Value.WebhookAuthToken;
-            if (string.IsNullOrEmpty(expected)) return false;
+            var expected = settings.Value.WebhookAuthToken?.Trim() ?? string.Empty;
+            var provided = Request.Headers.Authorization.ToString().Trim();
 
-            var provided = Request.Headers.Authorization.ToString();
-            return CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(provided),
-                Encoding.UTF8.GetBytes(expected));
+            // Accept the secret bare, or with a "Bearer " prefix.
+            const string bearerPrefix = "Bearer ";
+            var hasBearerPrefix = provided.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase);
+            var candidate = hasBearerPrefix ? provided[bearerPrefix.Length..].Trim() : provided;
+
+            var authorized = expected.Length > 0 &&
+                CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(candidate),
+                    Encoding.UTF8.GetBytes(expected));
+
+            if (!authorized)
+            {
+                // Lengths and flags only - never log the secret or the header value.
+                logger.LogWarning(
+                    "RevenueCat webhook auth failed: headerPresent={HeaderPresent}, headerLength={HeaderLength}, bearerPrefix={BearerPrefix}, expectedConfigured={ExpectedConfigured}, expectedLength={ExpectedLength}",
+                    provided.Length > 0, candidate.Length, hasBearerPrefix, expected.Length > 0, expected.Length);
+            }
+
+            return authorized;
         }
     }
 }
