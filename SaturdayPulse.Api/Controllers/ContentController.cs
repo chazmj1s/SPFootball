@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SaturdayPulse.Core.Content;
+using SaturdayPulse.Filters;
 using SaturdayPulse.Services;
 
 namespace SaturdayPulse.Controllers
@@ -8,14 +9,15 @@ namespace SaturdayPulse.Controllers
     /// Serves and edits the single ApplicationContent document (About, Privacy
     /// Policy, Terms of Service, Season Pass, FAQ, Announcements, Release Notes).
     ///
-    /// GET is intentionally NOT behind [Authorize] - the mobile app needs to be
+    /// GET is intentionally NOT behind any auth - the mobile app needs to be
     /// able to show Terms of Service / Privacy Policy to someone who isn't
-    /// logged in yet (e.g. before they create an account). PUT has no separate
-    /// admin gate either for now, same trust boundary as DeveloperController -
-    /// there's no role/policy infrastructure beyond UserProfile.IsAdmin today,
-    /// and this endpoint isn't reachable by anything but the admin console and
-    /// whoever knows the URL. Revisit if/when this API is exposed beyond a
-    /// single admin's laptop.
+    /// logged in yet (e.g. before they create an account).
+    ///
+    /// PUT is gated by [AdminKey] (X-Admin-Key shared secret, same interim
+    /// boundary as DeveloperController). The API is publicly reachable, so an
+    /// ungated PUT would let anyone overwrite the Privacy Policy, Terms, and
+    /// support email. Swap for AdminOnlyAttribute when the console gets a
+    /// real login.
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
@@ -38,6 +40,7 @@ namespace SaturdayPulse.Controllers
         }
 
         [HttpPut]
+        [AdminKey]
         public async Task<IActionResult> Update(
             [FromBody] ApplicationContentDocument document, CancellationToken token = default)
         {

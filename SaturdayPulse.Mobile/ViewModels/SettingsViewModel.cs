@@ -647,6 +647,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand SelectViewCommand              { get; }
         public ICommand TogglePersonalCommand          { get; }
         public ICommand ToggleSectionCommand           { get; }
+        public ICommand OpenContentSectionCommand      { get; }
         public ICommand ToggleFollowCommand            { get; }
         public ICommand RefreshCommand                 { get; }
         public ICommand SelectDefaultWeekCommand       { get; }
@@ -666,6 +667,7 @@ namespace SaturdayPulse.ViewModels
         public ICommand DeleteAccountCommand           { get; }
         public ICommand SeasonPassCommand              { get; }
         public ICommand SetDevEntitlementCommand       { get; }
+        public ICommand RestorePurchasesCommand        { get; }
         public ICommand SubmitFeedbackCommand          { get; }
         public ICommand EmailSupportCommand            { get; }
         public ICommand CloseCommand                   { get; }
@@ -780,6 +782,30 @@ namespace SaturdayPulse.ViewModels
                 if (IsDebugLogExpanded && !wasDebugLogExpanded)
                     StartStatusAutoRefresh();
                 else if (!IsDebugLogExpanded && wasDebugLogExpanded)
+                    StopStatusAutoRefresh();
+            });
+
+            // Opens the Content panel AND expands one specific section inside
+            // it (e.g. "Privacy Policy" / "Terms of Service"), matched by the
+            // section's Key (the fixed fallback title), not its server-supplied
+            // display Title. Used by the links under the Season Pass details.
+            OpenContentSectionCommand = new Microsoft.Maui.Controls.Command<string>(key =>
+            {
+                var wasDebugLogExpanded = IsDebugLogExpanded;
+
+                _expandedSection = "Content";
+                foreach (var contentSection in ContentSections)
+                    contentSection.IsExpanded = string.Equals(contentSection.Key, key, StringComparison.OrdinalIgnoreCase);
+
+                OnPropertyChanged(nameof(IsUserProfileExpanded));
+                OnPropertyChanged(nameof(IsUserConfigExpanded));
+                OnPropertyChanged(nameof(IsFollowingExpanded));
+                OnPropertyChanged(nameof(IsSeasonPassExpanded));
+                OnPropertyChanged(nameof(IsContentExpanded));
+                OnPropertyChanged(nameof(IsFeedbackExpanded));
+                OnPropertyChanged(nameof(IsDebugLogExpanded));
+
+                if (wasDebugLogExpanded)
                     StopStatusAutoRefresh();
             });
 
@@ -1003,6 +1029,56 @@ namespace SaturdayPulse.ViewModels
                 {
                     await Shell.Current.DisplayAlert("Season Pass", purchase.Message, "OK");
                 }
+
+                if (purchase.Status == SeasonPassPurchaseStatus.Purchased)
+                {
+                    await RefreshProfileAfterPurchaseAsync();
+                }
+            });
+
+            // Restore Purchases (App Store requirement for auto-renewing
+            // subscriptions). Same login gate as purchase; on success the
+            // profile is re-fetched so the panel reflects the server row.
+            RestorePurchasesCommand = new Microsoft.Maui.Controls.Command(async () =>
+            {
+                const string restoringMessage = "Restoring purchases...";
+
+                try
+                {
+                    var result = await _entitlementService.EnsureLoggedInForPurchaseAsync();
+                    if (!result.CanProceed) return;
+
+                    if (result.FreshProfile != null)
+                    {
+                        ApplyProfile(result.FreshProfile);
+                        IsLoggedIn = true;
+                    }
+
+                    StatusMessage = restoringMessage;
+                    System.Diagnostics.Debug.WriteLine("[Restore] Starting restore.");
+
+                    var restore = await _entitlementService.RestoreSeasonPassAsync();
+                    System.Diagnostics.Debug.WriteLine($"[Restore] Finished: {restore.Status} - {restore.Message}");
+
+                    await Shell.Current.DisplayAlert("Restore Purchases", restore.Message, "OK");
+
+                    if (restore.Status == SeasonPassPurchaseStatus.Purchased)
+                    {
+                        await RefreshProfileAfterPurchaseAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Restore] Unexpected error: {ex}");
+                    await Shell.Current.DisplayAlert(
+                        "Restore Purchases",
+                        "Something went wrong restoring purchases. Please try again.",
+                        "OK");
+                }
+                finally
+                {
+                    if (StatusMessage == restoringMessage) StatusMessage = string.Empty;
+                }
             });
 
             // Admin-only dev toggle — replaces the "Get Season Pass" link in
@@ -1196,6 +1272,32 @@ namespace SaturdayPulse.ViewModels
             return true;
         }
 
+        /// <summary>
+        /// After a purchase or restore, the store confirms immediately but the
+        /// server entitlement row is written by the RevenueCat webhook a few
+        /// seconds later. Re-fetches the profile until a store-backed
+        /// entitlement shows as active (or attempts run out), applying each
+        /// result so the Season Pass panel updates as soon as the row lands.
+        /// </summary>
+        private async Task RefreshProfileAfterPurchaseAsync()
+        {
+            const int maxAttempts = 6;
+
+            for (var attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(2));
+
+                var profile = await _userApi.GetMeAsync();
+                if (profile == null) continue;
+
+                ApplyProfile(profile);
+
+                var storeBackedActive = profile.Entitlements.Any(e =>
+                    e.IsActive && e.Source is "apple" or "google" or "revenuecat-test");
+                if (storeBackedActive) return;
+            }
+        }
+
         /// <summary>Applies a fetched/created profile's fields — shared by
         /// LoadDataAsync (passive startup fetch), both auth actions above,
         /// and SetDevEntitlementCommand, so there's one place that knows how
@@ -1243,6 +1345,7 @@ namespace SaturdayPulse.ViewModels
                 ContentSections.Add(new ContentSectionViewModel
                 {
                     Title = string.IsNullOrWhiteSpace(section.Title) ? fallbackTitle : section.Title,
+                    Key = fallbackTitle,
                     Html = WrapContentHtml(Markdig.Markdown.ToHtml(section.Content))
                 });
             }
@@ -1678,6 +1781,10 @@ namespace SaturdayPulse.ViewModels
     {
         public required string Title { get; init; }
         public required string Html { get; init; }
+
+        /// <summary>Stable identifier (the fixed fallback title, e.g. "Privacy Policy"),
+        /// independent of the server-supplied display Title.</summary>
+        public string Key { get; init; } = string.Empty;
 
         private bool _isExpanded;
         public bool IsExpanded

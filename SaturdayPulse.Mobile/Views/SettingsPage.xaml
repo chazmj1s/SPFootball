@@ -927,6 +927,40 @@
                             </CollectionView.EmptyView>
                         </CollectionView>
 
+                        <!-- Subscription details + Restore (App Store 3.1.2) -->
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="J1S Season Pass — $12.95 per year"
+                                   FontSize="13" FontAttributes="Bold" />
+                            <Label FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#888888, Dark=#777777}"
+                                   Text="Auto-renewing annual subscription: scores, ratings, advanced metrics, and matchup tools. Payment is charged to your Apple ID or Google Play account when you confirm the purchase. The subscription renews each year at $12.95 unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your device's account settings." />
+                            <Label Text="Restore Purchases"
+                                   FontSize="12" FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding RestorePurchasesCommand}" />
+                                </Label.GestureRecognizers>
+                            </Label>
+                            <HorizontalStackLayout Spacing="8">
+                                <Label Text="Privacy Policy" FontSize="12"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding OpenContentSectionCommand}"
+                                                              CommandParameter="Privacy Policy" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Label Text="·" FontSize="12"
+                                       TextColor="{AppThemeBinding Light=#888888, Dark=#777777}" />
+                                <Label Text="Terms of Service" FontSize="12"
+                                       TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding OpenContentSectionCommand}"
+                                                              CommandParameter="Terms of Service" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+
                         <BoxView HeightRequest="1" Opacity="0.1"
                                  Color="{AppThemeBinding Light=Black, Dark=White}"
                                  IsVisible="{Binding IsAdmin}" />
@@ -962,7 +996,7 @@
                                                   CommandParameter="Content" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0"
-                               Text="Content"
+                               Text="About &amp; Legal"
                                FontSize="15" FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light={StaticResource AccentPrimaryLight}, Dark={StaticResource AccentPrimaryDark}}"
                                VerticalOptions="Center" />
@@ -981,10 +1015,9 @@
                         </Label>
                     </Grid>
 
-                    <CollectionView IsVisible="{Binding IsContentExpanded}"
-                                    ItemsSource="{Binding ContentSections}"
-                                    ItemSizingStrategy="MeasureAllItems">
-                        <CollectionView.ItemTemplate>
+                    <VerticalStackLayout IsVisible="{Binding IsContentExpanded}"
+                                        BindableLayout.ItemsSource="{Binding ContentSections}">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="viewmodels:ContentSectionViewModel">
                                 <VerticalStackLayout Spacing="0">
                                     <Grid ColumnDefinitions="*,20" Padding="16,8"
@@ -1015,11 +1048,11 @@
                                     </WebView>
                                 </VerticalStackLayout>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                        <CollectionView.EmptyView>
+                        </BindableLayout.ItemTemplate>
+                        <BindableLayout.EmptyView>
                             <Label Text="Nothing to show yet." FontSize="12" Opacity="0.6" Padding="16,10" />
-                        </CollectionView.EmptyView>
-                    </CollectionView>
+                        </BindableLayout.EmptyView>
+                    </VerticalStackLayout>
 
                     <!-- Divider -->
                     <BoxView HeightRequest="1" Opacity="0.1"
