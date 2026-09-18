@@ -34,7 +34,7 @@ namespace SaturdayPulse.Services
     public sealed class SeasonPassPurchaseService
     {
         private const string TestStoreApiKey = "test_yIOCSaMyXlYEJyFvJddUngPFqXi";
-        private const string AppleApiKey = "";
+        private const string AppleApiKey = "appl_eyorCHPCWfmAtfVANIhnOFhXOGw";
         private const string GoogleApiKey = "";
 
         private const string OfferingId = "default";
