@@ -25,10 +25,10 @@
 		<Nullable>enable</Nullable>
 
 		<!-- Display name -->
-		<ApplicationTitle>Saturday Pulse</ApplicationTitle>
+		<ApplicationTitle>J1s Football</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.SaturdayPulse</ApplicationId>
+		<ApplicationId>com.j1stx.j1sfootball</ApplicationId>
 
 		<!-- Versions -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -55,7 +55,7 @@
 
 	<PropertyGroup Condition="'$(TargetFramework)'=='net9.0-ios'">
 	  <CodesignKey>Apple Development: Created via API (AFX747474P)</CodesignKey>
-	  <CodesignProvision>VS: com.companyname.SaturdayPulse Development</CodesignProvision>
+	  <CodesignProvision>VS: com.j1stx.j1sfootball Development</CodesignProvision>
 	</PropertyGroup>
   
   <ItemGroup>

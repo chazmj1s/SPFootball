@@ -127,6 +127,13 @@ namespace SaturdayPulse.Services
         /// </summary>
         public Task<SeasonPassPurchaseResult> PurchaseSeasonPassAsync()
             => _purchaseService.PurchaseSeasonPassAsync(_userId ?? string.Empty);
+
+        /// <summary>
+        /// Restores previous store purchases for the logged-in account.
+        /// Does not throw; failures are reported in the result.
+        /// </summary>
+        public Task<SeasonPassPurchaseResult> RestoreSeasonPassAsync()
+            => _purchaseService.RestoreSeasonPassAsync(_userId ?? string.Empty);
     }
 
     /// <summary>Result of EnsureLoggedInForPurchaseAsync — CanProceed tells the
