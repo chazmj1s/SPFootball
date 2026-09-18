@@ -12,6 +12,7 @@ using SaturdayPulse.ViewModels;
 using SaturdayPulse.Views;
 using Syncfusion.Licensing;
 using Syncfusion.Maui.Core.Hosting;
+using Maui.RevenueCat.InAppBilling;
 
 namespace SaturdayPulse;
 
@@ -64,6 +65,9 @@ public static class MauiProgram
         // request time, so registration order here doesn't matter.
         builder.Services.AddSingleton<EntitlementService>();
         builder.Services.AddSingleton<ContentApiService>();
+
+        builder.Services.AddRevenueCatBilling();
+        builder.Services.AddSingleton<SeasonPassPurchaseService>();
 
         // Register Services
         var gameDataClientBuilder = builder.Services.AddHttpClient<GameDataApiService>(client =>

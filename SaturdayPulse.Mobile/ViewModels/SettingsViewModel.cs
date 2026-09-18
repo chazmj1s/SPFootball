@@ -998,8 +998,11 @@ namespace SaturdayPulse.ViewModels
                     IsLoggedIn = true;
                 }
 
-                await Shell.Current.DisplayAlert(
-                    "Season Pass", "Coming soon — payment isn't wired up yet.", "OK");
+                var purchase = await _entitlementService.PurchaseSeasonPassAsync();
+                if (purchase.Status != SeasonPassPurchaseStatus.Cancelled)
+                {
+                    await Shell.Current.DisplayAlert("Season Pass", purchase.Message, "OK");
+                }
             });
 
             // Admin-only dev toggle — replaces the "Get Season Pass" link in
