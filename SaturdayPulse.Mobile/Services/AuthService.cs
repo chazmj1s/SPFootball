@@ -28,6 +28,11 @@ namespace SaturdayPulse.Services
 
         private readonly Auth0Client _auth0Client;
 
+        // After a logout, the next login must ask for credentials. Without this,
+        // Auth0's browser session cookie can silently sign the same account
+        // straight back in, which makes Change Account look like it does nothing.
+        private bool _forcePromptOnNextLogin;
+
         public AuthService(Auth0Client auth0Client)
         {
             _auth0Client = auth0Client;
@@ -91,10 +96,18 @@ namespace SaturdayPulse.Services
 
             try
             {
-                if (isSignup)
-                    result = await _auth0Client.LoginAsync(new { audience = ApiConfiguration.Audience, screen_hint = "signup" });
-                else
-                    result = await _auth0Client.LoginAsync(new { audience = ApiConfiguration.Audience });
+                var forcePrompt = _forcePromptOnNextLogin;
+
+                object loginParameters = (isSignup, forcePrompt) switch
+                {
+                    (true, true)   => new { audience = ApiConfiguration.Audience, screen_hint = "signup", prompt = "login" },
+                    (true, false)  => new { audience = ApiConfiguration.Audience, screen_hint = "signup" },
+                    (false, true)  => new { audience = ApiConfiguration.Audience, prompt = "login" },
+                    (false, false) => new { audience = ApiConfiguration.Audience }
+                };
+
+                result = await _auth0Client.LoginAsync(loginParameters);
+                _forcePromptOnNextLogin = false;
 
 
                 if (result.IsError)
@@ -128,6 +141,7 @@ namespace SaturdayPulse.Services
         public async Task LogoutAsync()
         {
             await _auth0Client.LogoutAsync();
+            _forcePromptOnNextLogin = true;
             SecureStorage.Default.Remove(AccessTokenKey);
             SecureStorage.Default.Remove(RefreshTokenKey);
             SecureStorage.Default.Remove(ExpiresAtKey);
