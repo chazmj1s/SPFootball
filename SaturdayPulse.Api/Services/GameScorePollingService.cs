@@ -144,7 +144,7 @@ namespace SaturdayPulse.Services
             // today's earliest-kickoff-to-latest-kickoff span, which is what
             // was polling straight through the dead gap between, say, a noon
             // game ending and a primetime game starting.
-            var anyGameInProgress = kickoffTimes.Any(kt => now >= kt && now <= kt + PostKickoffMargin);
+            var anyGameInProgress = seasonGames.Any(g => g.Status == "in-Progress") || kickoffTimes.Any(kt => now >= kt && now <= kt + PostKickoffMargin);
 
             if (!anyGameInProgress)
             {
