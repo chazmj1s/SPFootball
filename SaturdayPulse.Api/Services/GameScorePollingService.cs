@@ -25,6 +25,16 @@ namespace SaturdayPulse.Services
     /// year/week the way /lines is), filtered locally to today's games.
     /// Confirmed against a real response spanning 2026-08-29 through
     /// 2026-09-07.
+    ///
+    /// TIME BASIS: every time in this service is Eastern wall-clock time,
+    /// because that is what Games.GameDate and Games.KickoffTime hold
+    /// (confirmed against live rows 2026-09-19: a 10 PM Eastern kickoff is
+    /// stored as 22:00:00). "Now" and "today" are therefore computed in
+    /// Eastern (America/New_York, DST-aware) from UtcNow - never from
+    /// DateTime.Now. The API runs in a UTC container, where DateTime.Now
+    /// put every window 4 hours early (5 after DST ends), so each game was
+    /// only polled until about an hour after kickoff and the last games of
+    /// the night froze mid-game.
     /// </summary>
     public class GameScorePollingService(
         IServiceScopeFactory scopeFactory,
@@ -41,6 +51,11 @@ namespace SaturdayPulse.Services
 
         // Same "cfbd" named client GameDataService/ProductionGameDataService use.
         private HttpClient CfbdClient => httpClientFactory.CreateClient("cfbd");
+
+        // Eastern wall-clock is the time basis of Games.GameDate/KickoffTime.
+        // Resolved once; null only if the environment has no tz database.
+        private static readonly Lazy<TimeZoneInfo?> EasternZone = new Lazy<TimeZoneInfo?>(ResolveEasternZone);
+        private bool _loggedEasternFallback;
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -82,10 +97,13 @@ namespace SaturdayPulse.Services
 
             var status = scope.ServiceProvider.GetRequiredService<PollingStatusService>();
 
-            var todayDate = DateTime.Now.Date;
+            // Eastern wall-clock, not DateTime.Now: the container runs in UTC
+            // but GameDate/KickoffTime are stored in Eastern (see class remarks).
+            var now = GetEasternNow();
+            var todayDate = now.Date;
             var today = todayDate.ToString("yyyy-MM-dd");
             var yesterday = todayDate.AddDays(-1).ToString("yyyy-MM-dd");
-            var yearNow = DateTime.Now.Year;
+            var yearNow = now.Year;
 
             // GetByYearAsync already exists and is proven elsewhere in this
             // service layer; a season is small enough (a few hundred rows)
@@ -137,14 +155,14 @@ namespace SaturdayPulse.Services
                 return;
             }
 
-            var now = DateTime.Now;
-
             // In progress means NOW falls inside at least one individual
             // game's own [kickoff, kickoff + PostKickoffMargin] window — NOT
             // today's earliest-kickoff-to-latest-kickoff span, which is what
             // was polling straight through the dead gap between, say, a noon
             // game ending and a primetime game starting.
-            var anyGameInProgress = seasonGames.Any(g => g.Status == "in-Progress") || kickoffTimes.Any(kt => now >= kt && now <= kt + PostKickoffMargin);
+            var anyGameInProgress =
+                seasonGames.Any(g => string.Equals(g.Status, "in_progress", StringComparison.OrdinalIgnoreCase))
+                || kickoffTimes.Any(kt => now >= kt && now <= kt + PostKickoffMargin);
 
             if (!anyGameInProgress)
             {
@@ -216,6 +234,50 @@ namespace SaturdayPulse.Services
                     "GameScorePollingService: refreshed {Count} of {Total} game(s) for {Today}.",
                     updatedCount, seasonGames.Count, today);
             }
+        }
+
+        private static TimeZoneInfo? ResolveEasternZone()
+        {
+            // IANA id on Linux/macOS (and Windows with ICU); Windows id as a fallback.
+            foreach (var id in new[] { "America/New_York", "Eastern Standard Time" })
+            {
+                try
+                {
+                    return TimeZoneInfo.FindSystemTimeZoneById(id);
+                }
+                catch (TimeZoneNotFoundException)
+                {
+                }
+                catch (InvalidTimeZoneException)
+                {
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Current Eastern wall-clock time (DST-aware), the same basis as
+        /// Games.GameDate/KickoffTime. Falls back to a fixed UTC-4 offset
+        /// (correct during daylight time, one hour off after it ends) only if
+        /// the environment has no time zone data, and logs that once.
+        /// </summary>
+        private DateTime GetEasternNow()
+        {
+            var utcNow = DateTime.UtcNow;
+            var zone = EasternZone.Value;
+
+            if (zone != null)
+                return TimeZoneInfo.ConvertTimeFromUtc(utcNow, zone);
+
+            if (!_loggedEasternFallback)
+            {
+                _loggedEasternFallback = true;
+                logger.LogWarning(
+                    "GameScorePollingService: no Eastern time zone data found in this environment; using a fixed UTC-4 offset (one hour off after DST ends). Install tzdata in the container.");
+            }
+
+            return utcNow.AddHours(-4);
         }
 
         /// <summary>
