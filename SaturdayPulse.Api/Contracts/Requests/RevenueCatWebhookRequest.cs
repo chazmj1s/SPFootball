@@ -17,7 +17,7 @@ namespace SaturdayPulse.Contracts.Requests
 
     public class RevenueCatWebhookEvent
     {
-        /// <summary>TEST, INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, ...</summary>
+        /// <summary>TEST, INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, TRANSFER, ...</summary>
         [JsonPropertyName("type")]
         public string? Type { get; set; }
 
@@ -55,5 +55,13 @@ namespace SaturdayPulse.Contracts.Requests
 
         [JsonPropertyName("transaction_id")]
         public string? TransactionId { get; set; }
+
+        /// <summary>TRANSFER only: App User IDs the subscription moved away from.</summary>
+        [JsonPropertyName("transferred_from")]
+        public List<string>? TransferredFrom { get; set; }
+
+        /// <summary>TRANSFER only: App User IDs the subscription moved to.</summary>
+        [JsonPropertyName("transferred_to")]
+        public List<string>? TransferredTo { get; set; }
     }
 }

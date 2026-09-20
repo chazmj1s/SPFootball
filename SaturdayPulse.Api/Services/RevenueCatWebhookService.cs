@@ -21,9 +21,12 @@ namespace SaturdayPulse.Services
     /// purchase date, not an access boundary.
     ///
     /// Handled: INITIAL_PURCHASE and RENEWAL (grant), CANCELLATION with reason
-    /// CUSTOMER_SUPPORT (refund - revoke the purchase-backed row). Everything
-    /// else is acknowledged and logged only: an ordinary cancel/expiry needs no
-    /// change because ExpiryDate already ends at the paid period's end.
+    /// CUSTOMER_SUPPORT (refund - revoke the purchase-backed row), and TRANSFER
+    /// (the same store account bought for a different App User ID, so
+    /// RevenueCat moved the subscription: move the purchase-backed rows to the
+    /// new user). Everything else is acknowledged and logged only: an ordinary
+    /// cancel/expiry needs no change because ExpiryDate already ends at the
+    /// paid period's end.
     /// </summary>
     public class RevenueCatWebhookService(
         IUnitOfWork uow,
@@ -48,6 +51,10 @@ namespace SaturdayPulse.Services
 
                 case "CANCELLATION" when evt.CancelReason == RefundCancelReason:
                     await RevokeAsync(evt, token);
+                    break;
+
+                case "TRANSFER":
+                    await TransferAsync(evt, token);
                     break;
 
                 default:
@@ -157,6 +164,128 @@ namespace SaturdayPulse.Services
                 "RevenueCat refund ({EventId}, {Environment}) revoked {ProductKey} for {UserId}.",
                 evt.Id, evt.Environment, seasonedKey, userId);
         }
+
+        /// <summary>
+        /// TRANSFER: RevenueCat moved a store subscription from one App User ID to
+        /// another (for example a sandbox Apple ID that already bought the pass
+        /// for one login is now used with a different login). The event carries no
+        /// product or dates, but the purchase-backed rows are already in our own
+        /// table, so they are moved from the old user(s) to the new one, keeping
+        /// their expiry. Only rows from the event's store that are still active are
+        /// moved; beta and manual-grant rows are never touched. If the destination
+        /// already has a row for the same product, the later expiry wins, the row
+        /// is marked purchase-backed, and the source row is ended. A redelivered
+        /// event finds nothing left to move and changes nothing.
+        /// </summary>
+        private async Task TransferAsync(RevenueCatWebhookEvent evt, CancellationToken token)
+        {
+            var fromIds = CleanUserIds(evt.TransferredFrom);
+            var toIds = CleanUserIds(evt.TransferredTo);
+
+            if (fromIds.Count == 0 || toIds.Count == 0)
+            {
+                _logger.LogInformation(
+                    "RevenueCat TRANSFER ({EventId}, {Environment}): no real source or destination user (from {FromCount}, to {ToCount}); no action.",
+                    evt.Id, evt.Environment, fromIds.Count, toIds.Count);
+                return;
+            }
+
+            string? destinationId = null;
+            foreach (var id in toIds)
+            {
+                if (await _uow.UserProfiles.GetByUserIdAsync(id, token) != null)
+                {
+                    destinationId = id;
+                    break;
+                }
+            }
+
+            if (destinationId == null)
+            {
+                _logger.LogWarning(
+                    "RevenueCat TRANSFER ({EventId}): no UserProfile for any destination user; ignored.",
+                    evt.Id);
+                return;
+            }
+
+            var source = MapSource(evt.Store);
+            var now = DateTime.UtcNow;
+            var destinationRows = await _uow.Entitlements.GetByUserIdAsync(destinationId, token);
+            var moved = 0;
+
+            foreach (var fromId in fromIds.Where(f => f != destinationId))
+            {
+                var sourceRows = await _uow.Entitlements.GetByUserIdAsync(fromId, token);
+                var movable = sourceRows
+                    .Where(e => e.Source == source &&
+                                e.ExpiryDate.HasValue && e.ExpiryDate.Value > now)
+                    .ToList();
+
+                foreach (var row in movable)
+                {
+                    var existing = destinationRows.FirstOrDefault(e => e.ProductKey == row.ProductKey);
+
+                    if (existing == null)
+                    {
+                        row.UserId = destinationId;
+                        destinationRows.Add(row);
+                    }
+                    else
+                    {
+                        existing.Source = row.Source;
+                        existing.PassYear = row.PassYear;
+                        if (!existing.ExpiryDate.HasValue || existing.ExpiryDate.Value < row.ExpiryDate!.Value)
+                            existing.ExpiryDate = row.ExpiryDate;
+
+                        row.ExpiryDate = now;
+                    }
+
+                    await _uow.AccountAuditLogs.AddAsync(new AccountAuditLog
+                    {
+                        UserId = fromId,
+                        EventType = "SeasonPassTransferOut",
+                        EventAt = now,
+                        ProductKey = row.ProductKey,
+                        PassYear = row.PassYear,
+                        Source = source
+                    }, token);
+
+                    await _uow.AccountAuditLogs.AddAsync(new AccountAuditLog
+                    {
+                        UserId = destinationId,
+                        EventType = "SeasonPassTransferIn",
+                        EventAt = now,
+                        ProductKey = row.ProductKey,
+                        PassYear = row.PassYear,
+                        Source = source
+                    }, token);
+
+                    moved++;
+                }
+            }
+
+            if (moved == 0)
+            {
+                _logger.LogInformation(
+                    "RevenueCat TRANSFER ({EventId}, {Environment}) to {UserId}: no active {Source} rows to move; no change.",
+                    evt.Id, evt.Environment, destinationId, source);
+                return;
+            }
+
+            await _uow.SaveChangesAsync(token);
+
+            _logger.LogInformation(
+                "RevenueCat TRANSFER ({EventId}, {Environment}) moved {Count} {Source} entitlement row(s) to {UserId}.",
+                evt.Id, evt.Environment, moved, source, destinationId);
+        }
+
+        /// <summary>Real App User IDs only: drops blanks and RevenueCat anonymous ids.</summary>
+        private static List<string> CleanUserIds(List<string>? ids) =>
+            (ids ?? [])
+                .Where(i => !string.IsNullOrWhiteSpace(i) &&
+                            !i.StartsWith(AnonymousIdPrefix, StringComparison.Ordinal))
+                .Distinct()
+                .ToList();
 
         /// <summary>
         /// Validates the event and derives the entitlement identity from it.
