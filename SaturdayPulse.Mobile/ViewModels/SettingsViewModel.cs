@@ -1481,6 +1481,8 @@ namespace SaturdayPulse.ViewModels
 
             try
             {
+                var stepFailed = false;
+
                 var teamsTask     = Task.Run(() => _apiService.GetTeamsAsync());
                 var rivalriesTask = Task.Run(() => _apiService.GetNamedRivalriesAsync());
                 var profileTask   = _userApi.GetMeAsync();
@@ -1516,7 +1518,7 @@ namespace SaturdayPulse.ViewModels
                         t.IsFollowed = _followService.IsFollowed(t.TeamID);
 
                     _allTeams = [.. teams.OrderBy(t => t.TeamName)];
-                    ApplyTeamFilter();
+                    stepFailed |= !RunLoadStep("ApplyTeamFilter", ApplyTeamFilter);
                 }
 
                 // IsLoggedIn is derived from "did GetMeAsync find a profile,"
@@ -1524,17 +1526,21 @@ namespace SaturdayPulse.ViewModels
                 // valid Auth0 token with no matching server-side profile is
                 // NOT logged in, from this ViewModel's perspective. Keeps
                 // this in lockstep with TryLoginAsync/TryCreateAccountAsync.
+                // GetMeAsync returns null for ANY failure (network, 5xx, token),
+                // so a null profile alone must not log the person out or leave
+                // half-cleared fields behind. Only mark logged out when there is
+                // no usable session at all.
                 if (profile != null)
                 {
-                    ApplyProfile(profile);
                     IsLoggedIn = true;
+                    stepFailed |= !RunLoadStep("ApplyProfile", () => ApplyProfile(profile));
                 }
-                else
+                else if (!await _authService.IsAuthenticatedAsync())
                 {
                     IsLoggedIn = false;
                 }
 
-                ApplyContent(content);
+                stepFailed |= !RunLoadStep("ApplyContent", () => ApplyContent(content));
 
                 var allRivalries = rivalries ?? [];
                 var followedIds  = _followService.GetFollowedIds();
@@ -1554,18 +1560,38 @@ namespace SaturdayPulse.ViewModels
 
                 _selectedTier = "♥ Personal";
                 OnPropertyChanged(nameof(SelectedTier));
-                ApplyGamesFilter();
+                stepFailed |= !RunLoadStep("ApplyGamesFilter", ApplyGamesFilter);
 
-                StatusMessage = string.Empty;
+                if (!stepFailed) StatusMessage = string.Empty;
                 HasLoaded = true;
             }
             catch (Exception ex)
             {
+                AppLogger.Log($"[Settings] LoadDataAsync failed: {ex}");
                 StatusMessage = $"Error: {ex.Message}";
             }
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        /// <summary>Runs one UI-touching step of LoadDataAsync so a failure in one
+        /// step (for example a native UIKit exception) is logged with its step
+        /// name and full stack, and does not abort the remaining steps or leave
+        /// the login state half-applied. Returns false if the step threw.</summary>
+        private bool RunLoadStep(string step, Action action)
+        {
+            try
+            {
+                action();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"[Settings] LoadDataAsync step '{step}' failed: {ex}");
+                StatusMessage = $"Error ({step}): {ex.Message}";
+                return false;
             }
         }
 
