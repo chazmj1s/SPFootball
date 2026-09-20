@@ -1205,14 +1205,19 @@ namespace SaturdayPulse.ViewModels
         // ── Auth actions ──────────────────────────────────────────────────
 
         /// <summary>
-        /// Login flow: Auth0 auth, then a fetch-only profile lookup (never
-        /// creates — see UserApiService.GetMeAsync / UserController.GetMe).
-        /// A successful Auth0 login with no matching profile is surfaced as
-        /// "no account found," not silently treated as logged in — that's
-        /// the whole point of splitting Login from Create Account. Shared by
-        /// LoginCommand and the Season Pass "log in first" prompt so both
-        /// have identical no-account handling. Returns true only if an
-        /// actual account was found and IsLoggedIn is now true.
+        /// Login flow: Auth0 auth, then a profile lookup. Auth0's hosted page
+        /// serves Apple, Google, and email/password from one screen and cannot
+        /// tell a first-time social login from a returning one, so a login with
+        /// no matching profile is treated as a first login: the profile is
+        /// created here with the same call Create Account uses
+        /// (UserApiService.CreateAccountAsync -> POST /user/me). The server's
+        /// email-uniqueness check still prevents duplicate accounts. If creation
+        /// is refused with a conflict (for example the email already belongs to
+        /// a different account), the Auth0 session is ended so the next attempt
+        /// asks for credentials instead of silently reusing an identity that
+        /// can't be used. Shared by LoginCommand and ChangeAccountCommand.
+        /// Returns true only if an account was found or created and IsLoggedIn
+        /// is now true.
         /// </summary>
         private async Task<bool> TryLoginAsync()
         {
@@ -1226,8 +1231,35 @@ namespace SaturdayPulse.ViewModels
             var profile = await _userApi.GetMeAsync();
             if (profile == null)
             {
-                StatusMessage = "No account found for that login. Try again, or tap Create Account.";
-                return false;
+                var outcome = await _userApi.CreateAccountAsync(_authService.LastLoginEmail);
+
+                if (outcome.IsSuccess && outcome.Profile != null)
+                {
+                    profile = outcome.Profile;
+                }
+                else
+                {
+                    // GetMeAsync returns null for any failure, not only a 404, so a
+                    // conflict here can mean the account already exists and the first
+                    // lookup simply failed. Re-check once before treating it as real.
+                    profile = await _userApi.GetMeAsync();
+
+                    if (profile == null)
+                    {
+                        if (outcome.IsConflict)
+                        {
+                            await _authService.LogoutAsync();
+                            var reason = (outcome.ConflictMessage ?? "That account can't be used.").Trim('"');
+                            StatusMessage = $"{reason} Log in with the sign-in method you used originally.";
+                        }
+                        else
+                        {
+                            StatusMessage = "Couldn't reach the server — check your connection and try again.";
+                        }
+
+                        return false;
+                    }
+                }
             }
 
             ApplyProfile(profile);

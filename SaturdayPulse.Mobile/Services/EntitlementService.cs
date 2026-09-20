@@ -113,8 +113,49 @@ namespace SaturdayPulse.Services
             var authOk = await _authService.LoginAsync(isSignup: false);
             if (!authOk) return new SeasonPassLoginResult(false, null);
 
+            // Same first-login handling as SettingsViewModel.TryLoginAsync: Auth0's
+            // hosted page can't tell a first-time Apple/Google login from a
+            // returning one, so a login with no profile creates one (the server's
+            // email-uniqueness check still blocks duplicates).
             var profile = await _userApi.GetMeAsync();
-            if (profile == null) return new SeasonPassLoginResult(false, null);
+            if (profile == null)
+            {
+                var outcome = await _userApi.CreateAccountAsync(_authService.LastLoginEmail);
+
+                if (outcome.IsSuccess && outcome.Profile != null)
+                {
+                    profile = outcome.Profile;
+                }
+                else
+                {
+                    // GetMeAsync returns null for any failure, not only a 404, so a
+                    // conflict can mean the account exists and the first lookup
+                    // failed. Re-check once before treating it as a real conflict.
+                    profile = await _userApi.GetMeAsync();
+
+                    if (profile == null)
+                    {
+                        if (outcome.IsConflict)
+                        {
+                            await _authService.LogoutAsync();
+                            var reason = (outcome.ConflictMessage ?? "That account can't be used.").Trim('"');
+                            await Shell.Current.DisplayAlert(
+                                "Season Pass",
+                                $"{reason} Log in with the sign-in method you used originally.",
+                                "OK");
+                        }
+                        else
+                        {
+                            await Shell.Current.DisplayAlert(
+                                "Season Pass",
+                                "Couldn't reach the server — check your connection and try again.",
+                                "OK");
+                        }
+
+                        return new SeasonPassLoginResult(false, null);
+                    }
+                }
+            }
 
             ApplyProfile(profile);
             return new SeasonPassLoginResult(true, profile);

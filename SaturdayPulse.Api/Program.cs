@@ -143,6 +143,7 @@ builder.Services.AddLogging(loggingBuilder =>
 builder.Services.Configure<CustomSettings>(builder.Configuration.GetSection("CustomSettings"));
 builder.Services.Configure<MetricsConfiguration>(builder.Configuration.GetSection("MetricsConfiguration"));
 builder.Services.Configure<RevenueCatSettings>(builder.Configuration.GetSection("RevenueCat"));
+builder.Services.Configure<FeedbackSettings>(builder.Configuration.GetSection("Feedback"));
 
 
 builder.Services.AddCors();
