@@ -81,6 +81,13 @@ public partial class App : Application
         {
             var entry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{source}] {ex?.ToString() ?? fallback ?? "unknown exception"}";
 
+            // Also visible in Console.app / Xcode device console when the phone is
+            // connected to the Mac (no debugger needed, so it works for TestFlight builds).
+            Console.Error.WriteLine($"[MAUI_CRASH] {entry}");
+#if IOS
+            AppleLogger.LogToMacConsole(entry);
+#endif
+
             var path = CrashFilePath;
             var existing = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
             var combined = existing.Length == 0 ? entry : existing + Environment.NewLine + entry;
@@ -109,7 +116,7 @@ public partial class App : Application
             File.Delete(path);
 
             if (!string.IsNullOrWhiteSpace(text))
-                AppLogger.Log($"[Crash] Recorded from a previous session:{Environment.NewLine}{text}");
+                AppLogger.Log($"[Crash] Recorded from a previous session:{Environment.NewLine}{text}", SaturdayPulse.Helpers.LogLevel.Error);
         }
         catch (Exception ex)
         {

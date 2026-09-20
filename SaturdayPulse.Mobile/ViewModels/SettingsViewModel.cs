@@ -1567,7 +1567,7 @@ namespace SaturdayPulse.ViewModels
             }
             catch (Exception ex)
             {
-                AppLogger.Log($"[Settings] LoadDataAsync failed: {ex}");
+                AppLogger.Log($"[Settings] LoadDataAsync failed: {ex}", SaturdayPulse.Helpers.LogLevel.Error);
                 StatusMessage = $"Error: {ex.Message}";
             }
             finally
@@ -1589,7 +1589,7 @@ namespace SaturdayPulse.ViewModels
             }
             catch (Exception ex)
             {
-                AppLogger.Log($"[Settings] LoadDataAsync step '{step}' failed: {ex}");
+                AppLogger.Log($"[Settings] LoadDataAsync step '{step}' failed: {ex}", SaturdayPulse.Helpers.LogLevel.Error);
                 StatusMessage = $"Error ({step}): {ex.Message}";
                 return false;
             }
