@@ -146,6 +146,9 @@ namespace SaturdayPulse.Services
                         }
                         else
                         {
+                            // End the Auth0 session so the next attempt asks for credentials
+                            // instead of silently reusing this identity and failing again.
+                            await _authService.LogoutAsync();
                             await Shell.Current.DisplayAlert(
                                 "Season Pass",
                                 "Couldn't reach the server — check your connection and try again.",

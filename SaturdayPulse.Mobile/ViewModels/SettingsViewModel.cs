@@ -1256,6 +1256,9 @@ namespace SaturdayPulse.ViewModels
                         }
                         else
                         {
+                            // End the Auth0 session too: otherwise the next Login silently
+                            // reuses this same identity and fails the same way (a loop).
+                            await _authService.LogoutAsync();
                             StatusMessage = "Couldn't reach the server — check your connection and try again.";
                             await ShowAuthAlertAsync("Can't sign in",
                                 "Couldn't reach the server — check your connection and try again.");
@@ -1293,6 +1296,7 @@ namespace SaturdayPulse.ViewModels
             if (outcome.IsConflict)
             {
                 var conflict = (outcome.ConflictMessage ?? "That account already exists.").Trim('"');
+                await _authService.LogoutAsync();
                 StatusMessage = conflict;
                 await ShowAuthAlertAsync("Can't create account", conflict);
                 return false;
@@ -1300,6 +1304,7 @@ namespace SaturdayPulse.ViewModels
 
             if (!outcome.IsSuccess || outcome.Profile == null)
             {
+                await _authService.LogoutAsync();
                 StatusMessage = "Couldn't create account — try again.";
                 await ShowAuthAlertAsync("Can't create account", "Couldn't create account — try again.");
                 return false;
