@@ -1251,10 +1251,14 @@ namespace SaturdayPulse.ViewModels
                             await _authService.LogoutAsync();
                             var reason = (outcome.ConflictMessage ?? "That account can't be used.").Trim('"');
                             StatusMessage = $"{reason} Log in with the sign-in method you used originally.";
+                            await ShowAuthAlertAsync("Can't sign in",
+                                $"{reason}\n\nLog in with the sign-in method you used originally.");
                         }
                         else
                         {
                             StatusMessage = "Couldn't reach the server — check your connection and try again.";
+                            await ShowAuthAlertAsync("Can't sign in",
+                                "Couldn't reach the server — check your connection and try again.");
                         }
 
                         return false;
@@ -1288,13 +1292,16 @@ namespace SaturdayPulse.ViewModels
 
             if (outcome.IsConflict)
             {
-                StatusMessage = outcome.ConflictMessage ?? "That account already exists.";
+                var conflict = (outcome.ConflictMessage ?? "That account already exists.").Trim('"');
+                StatusMessage = conflict;
+                await ShowAuthAlertAsync("Can't create account", conflict);
                 return false;
             }
 
             if (!outcome.IsSuccess || outcome.Profile == null)
             {
                 StatusMessage = "Couldn't create account — try again.";
+                await ShowAuthAlertAsync("Can't create account", "Couldn't create account — try again.");
                 return false;
             }
 
@@ -1574,6 +1581,17 @@ namespace SaturdayPulse.ViewModels
             {
                 IsBusy = false;
             }
+        }
+
+        /// <summary>Shows a blocking alert for sign-in / sign-up failures. The bottom
+        /// status bar (10pt, half opacity, one line) is too easy to miss for these.</summary>
+        private static async Task ShowAuthAlertAsync(string title, string message)
+        {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                if (Shell.Current != null)
+                    await Shell.Current.DisplayAlert(title, message, "OK");
+            });
         }
 
         /// <summary>Runs one UI-touching step of LoadDataAsync so a failure in one
