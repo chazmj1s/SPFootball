@@ -59,7 +59,6 @@ public static class MauiProgram
         builder.Services.AddSingleton<RankingsCacheService>();
         builder.Services.AddSingleton<TeamCacheService>();
         builder.Services.AddSingleton<AuthService>();
-        builder.Services.AddSingleton<FeedbackService>();
         // EntitlementService depends on AuthService + UserApiService (both
         // registered elsewhere in this method) — DI resolves the graph at
         // request time, so registration order here doesn't matter.
@@ -111,8 +110,18 @@ public static class MauiProgram
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
 
+        // Beta feedback goes to POST api/feedback (authenticated, Season Pass
+        // gated); the API holds the Discord webhook URL, not the app.
+        var feedbackClientBuilder = builder.Services.AddHttpClient<FeedbackService>(client =>
+        {
+            client.BaseAddress = new Uri(ApiConfiguration.ApiRootUrl);
+            client.Timeout = TimeSpan.FromSeconds(20);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
 #if DEBUG && ANDROID
         userApiClientBuilder.ConfigurePrimaryHttpMessageHandler(GetInsecureAndroidHandler);
+        feedbackClientBuilder.ConfigurePrimaryHttpMessageHandler(GetInsecureAndroidHandler);
 #endif
 
         // Auth0 login (Windows + iOS wired first — see MainPage/Settings for

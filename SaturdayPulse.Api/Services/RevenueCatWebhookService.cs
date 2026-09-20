@@ -7,16 +7,23 @@ namespace SaturdayPulse.Services
     /// <summary>
     /// Turns RevenueCat webhook events into UserEntitlement rows.
     ///
-    /// Grants are computed deterministically from the event's purchase date
-    /// (SeasonPassExpiryCalculator.GetNextExpiry with no current expiry), NOT
-    /// from the user's current entitlement, so a redelivered event is a no-op
-    /// instead of extending the pass a second time. Row identity is
-    /// (UserId, seasoned ProductKey), e.g. "cfb-season-pass-2026".
+    /// The pass is an annual subscription: access lasts until the end of the
+    /// period the store says was paid for (the event's expiration_at_ms).
+    /// Grants are computed deterministically from the event itself (its
+    /// purchase and expiration dates), NOT from the user's current entitlement,
+    /// so a redelivered event is a no-op instead of extending the pass a second
+    /// time. The season-aligned date (7/31 after the season the purchase falls
+    /// in, via SeasonPassExpiryCalculator) is kept only as a FLOOR: the later of
+    /// the two wins. In production the store period always ends later, so the
+    /// floor matters only for sandbox/test renewals that run on an accelerated
+    /// clock. Row identity is (UserId, seasoned ProductKey), e.g.
+    /// "cfb-season-pass-2026"; the season in the key is a label taken from the
+    /// purchase date, not an access boundary.
     ///
     /// Handled: INITIAL_PURCHASE and RENEWAL (grant), CANCELLATION with reason
     /// CUSTOMER_SUPPORT (refund - revoke the purchase-backed row). Everything
     /// else is acknowledged and logged only: an ordinary cancel/expiry needs no
-    /// change because the season-aligned ExpiryDate already bounds access.
+    /// change because ExpiryDate already ends at the paid period's end.
     /// </summary>
     public class RevenueCatWebhookService(
         IUnitOfWork uow,
@@ -197,8 +204,23 @@ namespace SaturdayPulse.Services
             }
 
             var purchasedAt = DateTimeOffset.FromUnixTimeMilliseconds(evt.PurchasedAtMs.Value).UtcDateTime;
-            var expiry = SeasonPassExpiryCalculator.GetNextExpiry(BaseProductKey, null, purchasedAt);
-            var season = expiry.Year - 1;
+
+            // Season-aligned floor. The row label (season) always comes from this
+            // date, never from the final expiry, so a January purchase whose paid
+            // year runs into the next calendar year is still labeled with the
+            // season it was bought in.
+            var seasonEnd = SeasonPassExpiryCalculator.GetNextExpiry(BaseProductKey, null, purchasedAt);
+            var season = seasonEnd.Year - 1;
+
+            // Access runs to the end of the paid period when the store reports one
+            // that is later than the floor.
+            var expiry = seasonEnd;
+            if (evt.ExpirationAtMs is { } expirationMs)
+            {
+                var storeExpiry = DateTimeOffset.FromUnixTimeMilliseconds(expirationMs).UtcDateTime;
+                if (storeExpiry > expiry)
+                    expiry = storeExpiry;
+            }
 
             return (userId, $"{BaseProductKey}-{season}", season, expiry, MapSource(evt.Store));
         }
